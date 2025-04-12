@@ -2,53 +2,53 @@
 Usage
 	Drop the lib folder containing this file into your project folder
 	At the top of your script file add 
-		local controllersModule = require("libs/controllers")
+		local controllers = require("libs/controllers")
 		
 	In your code call function like this
-		controllersModule.destroyControllers()
+		controllers.destroyControllers()
 		
 	In all of the functions, controllerID=0 is the left controller, controllerID=1 is the right controller and controllerID=2 is the hmd controller
 	
 	Available functions:
 	
-	controllersModule.onLevelChange() - call this function when there is a level change to clean up any allocated resources
+	controllers.onLevelChange() - call this function when there is a level change to clean up any allocated resources
 		
-	controllersModule.createController(controllerID) - creates the left controller (controllerID=0), right controller (controllerID=1) or hmd controller (controllerID=2)		
+	controllers.createController(controllerID) - creates the left controller (controllerID=0), right controller (controllerID=1) or hmd controller (controllerID=2)		
 		example:
 			function on_level_change(level)
 				print("Level changed\n")
-				controllersModule.onLevelChange()
-				controllersModule.createController(0)
-				controllersModule.createController(1)
-				controllersModule.createController(2) 
+				controllers.onLevelChange()
+				controllers.createController(0)
+				controllers.createController(1)
+				controllers.createController(2) 
 			end
 			
-	controllersModule.createHMDController() - same as calling controllersModule.createController(2)
+	controllers.createHMDController() - same as calling controllers.createController(2)
 	
-	controllersModule.getController(controllerID) - returns the component associated with the controllerID. 
+	controllers.getController(controllerID) - returns the component associated with the controllerID. 
 		For controllerIDs 0 and 1 this is a "Class /Script/HeadMountedDisplay.MotionControllerComponent" class. 
 		For controllerID 2 this is a "Class /Script/Engine.SceneComponent" class
 		example:
-			local hmdComponent = controllersModule.getController(2)
+			local hmdComponent = controllers.getController(2)
 			
-	controllersModule.getHMDController()  - same as calling controllersModule.getController(2)
+	controllers.getHMDController()  - same as calling controllers.getController(2)
 	
-	controllersModule.controllerExists(controllerID) - returns true if the given controllerID is already created. 
-		Same as calling controllersModule.getController(controllerID) ~= nil
+	controllers.controllerExists(controllerID) - returns true if the given controllerID is already created. 
+		Same as calling controllers.getController(controllerID) ~= nil
 		example:
-			local hmdExists = controllersModule.controllerExists(2)
+			local hmdExists = controllers.controllerExists(2)
 			
-	controllersModule.hmdControllerExists() - same as calling controllersModule.controllerExists(2)
+	controllers.hmdControllerExists() - same as calling controllers.controllerExists(2)
 	
-	controllersModule.destroyController(controllerID) - deallocate the resources associated the given controllerID
+	controllers.destroyController(controllerID) - deallocate the resources associated the given controllerID
 		example:
-			controllersModule.destroyController(2)
+			controllers.destroyController(2)
 	
-	controllersModule.destroyControllers() - deallocate the resources associated with all controllers
+	controllers.destroyControllers() - deallocate the resources associated with all controllers
 		example:
-			controllersModule.destroyControllers()
+			controllers.destroyControllers()
 			
-	controllersModule.attachComponentToController(controllerID, childComponent, (optional)socketName, (optional)attachType, (optional)weld) - attach an 
+	controllers.attachComponentToController(controllerID, childComponent, (optional)socketName, (optional)attachType, (optional)weld) - attach an 
 		element derived from a component class to the given controller.
 		Returns true if successful
 		example:
@@ -59,24 +59,24 @@ Usage
 					meshComponent:DetachFromParent(false,false)
 					meshComponent:SetVisibility(true, true)
 					meshComponent:SetHiddenInGame(false, true)
-					weaponConnected = controllersModule.attachComponentToController(1, meshComponent)
+					weaponConnected = controllers.attachComponentToController(1, meshComponent)
 					uevrUtils.set_component_relative_transform(meshComponent, {X=0,Y=0,Z=0}, {Pitch=0,Yaw=0,Roll=0})
 				end
 			end
 
-	controllersModule.getControllerLocation(controllerID) - gets the current position FVector in world space of the given controller or nil if none found
+	controllers.getControllerLocation(controllerID) - gets the current position FVector in world space of the given controller or nil if none found
 		example:
-			local rightLocation = controllersModule.getControllerLocation(1)
+			local rightLocation = controllers.getControllerLocation(1)
 			print("X is", rightLocation.X)
 
-	controllersModule.getControllerRotation(controllerID) - gets the current rotation FRotator in world space of the given controller or nil if none found
+	controllers.getControllerRotation(controllerID) - gets the current rotation FRotator in world space of the given controller or nil if none found
 		example:
-			local rightRotation = controllersModule.getControllerRotation(1)
+			local rightRotation = controllers.getControllerRotation(1)
 			print("Yaw is", rightRotation.Yaw)
 
-	controllersModule.getControllerDirection(controllerID) - gets the current forward vector FVector of the given controller or nil if none found
+	controllers.getControllerDirection(controllerID) - gets the current forward vector FVector of the given controller or nil if none found
 		example:
-			local hmdDirection = controllersModule.getControllerDirection(2)
+			local hmdDirection = controllers.getControllerDirection(2)
 			print("Forward Vector is", hmdDirection.X, hmdDirection.Y, hmdDirection.Z)
 
 ]]--

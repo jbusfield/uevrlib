@@ -218,11 +218,11 @@ Usage
 		end
 		
 		--callback for uevr.sdk.callbacks.on_pre_engine_tick
-		function uevr.sdk.callbacks.on_pre_engine_tick(engine, delta)
+		function on_pre_engine_tick(engine, delta)
 		end
 
 		--callback for uevr.sdk.callbacks.on_post_engine_tick
-		function uevr.sdk.callbacks.on_post_engine_tick(engine, delta)
+		function on_post_engine_tick(engine, delta)
 		end
 
 		-- function that gets called once per second for things you want to do at a slower interval than every tick
@@ -264,7 +264,7 @@ Statics = nil
 kismet_system_library = nil
 kismet_math_library = nil
 kismet_string_library = nil 
-
+uevr = nil
 -------------------------------
 
 local M = {}
@@ -272,37 +272,9 @@ local M = {}
 local classCache = {}
 local structCache = {}
 local uevrCallbacks = {}
+local keyBindList = {}
+local isDebugOn = false
 
-function M.initUEVR(UEVR)
-	local params = UEVR.params
-	print("UEVR loaded " .. tostring(params.version.major) .. "." .. tostring(params.version.minor) .. "." .. tostring(params.version.patch))
-	
-	pawn = UEVR.api:get_local_pawn(0)
-
-	temp_vec3 = Vector3d.new(0, 0, 0)
-	temp_vec3f = Vector3f.new(0, 0, 0)
-	temp_quatf = Quaternionf.new(0, 0, 0, 0)
-	
-	kismet_system_library = M.find_default_instance("Class /Script/Engine.KismetSystemLibrary")
-	kismet_math_library = M.find_default_instance("Class /Script/Engine.KismetMathLibrary")
-	kismet_string_library = M.find_default_instance("Class /Script/Engine.KismetStringLibrary")
-	Statics = M.find_default_instance("Class /Script/Engine.GameplayStatics")
-	
-	game_engine = M.find_first_of("Class /Script/Engine.GameEngine")
-	
-	static_mesh_component_c = M.get_class("Class /Script/Engine.StaticMeshComponent")
-	motion_controller_component_c = M.get_class("Class /Script/HeadMountedDisplay.MotionControllerComponent")			 
-	scene_component_c = M.get_class("Class /Script/Engine.SceneComponent")
-	actor_c = M.get_class("Class /Script/Engine.Actor")
-	
-	zero_color = M.get_reuseable_struct_object("ScriptStruct /Script/CoreUObject.LinearColor")
-	reusable_hit_result = M.get_reuseable_struct_object("ScriptStruct /Script/Engine.HitResult")
-	temp_transform = M.get_reuseable_struct_object("ScriptStruct /Script/CoreUObject.Transform")
-	
-	if UEVRReady ~= nil then UEVRReady(UEVR) end
-end
-
-keyBindList = {}
 function register_key_bind(keyName, callbackFunc)
 	keyBindList[keyName] = {}
 	keyBindList[keyName].func = callbackFunc
@@ -343,7 +315,9 @@ local function updateDelay(delta)
 	for i = #delayList, 1, -1 do
 		delayList[i]["countDown"] = delayList[i]["countDown"] - delta
 		if delayList[i]["countDown"] < 0 then
-			delayList[i]["func"]()
+			if delayList[i]["func"] ~= nil then
+				delayList[i]["func"]()
+			end
 			table.remove(delayList, i)
 		end
 	end
@@ -412,50 +386,98 @@ local function executeUEVRCallbacks(callbackName)
 	end
 end
 
-uevr.sdk.callbacks.on_xinput_get_state(function(retval, user_index, state)
-	if on_xinput_get_state ~= nil then
-		on_xinput_get_state(retval, user_index, state)
-	end
+local isInitialized = false
+function M.initUEVR(UEVR)
+	if isInitialized == true then return end
+	isInitialized = true
 	
-	executeUEVRCallbacks("onInputGetState")
-end)
-
-uevr.sdk.callbacks.on_pre_calculate_stereo_view_offset(function(device, view_index, world_to_meters, position, rotation, is_double)
-	if on_pre_calculate_stereo_view_offset ~= nil then
-		on_pre_calculate_stereo_view_offset(device, view_index, world_to_meters, position, rotation, is_double)
+	if UEVR == nil then
+		UEVR = require("LuaVR")
 	end
-	
-	executeUEVRCallbacks("preCalculateStereoView")
-end)
 
-uevr.sdk.callbacks.on_post_calculate_stereo_view_offset(function(device, view_index, world_to_meters, position, rotation, is_double)
-	if on_post_calculate_stereo_view_offset ~= nil then
-		on_post_calculate_stereo_view_offset(device, view_index, world_to_meters, position, rotation, is_double)
-	end
+	uevr = UEVR
+	local params = uevr.params
+	print("UEVR loaded " .. tostring(params.version.major) .. "." .. tostring(params.version.minor) .. "." .. tostring(params.version.patch))
 	
-	executeUEVRCallbacks("postCalculateStereoView")
-end)
-
-uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
 	pawn = uevr.api:get_local_pawn(0)
-	updateCurrentLevel()
-	updateDelay(delta)
-	updateLazyPoll(delta)
-	updateKeyPress()
-	if on_pre_engine_tick ~= nil then
-		on_pre_engine_tick(engine, delta)
-	end
-	
-	executeUEVRCallbacks("preEngineTick")
-end)
 
-uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
-	if on_post_engine_tick ~= nil then
-		on_post_engine_tick(engine, delta)
-	end
+	temp_vec3 = Vector3d.new(0, 0, 0)
+	temp_vec3f = Vector3f.new(0, 0, 0)
+	temp_quatf = Quaternionf.new(0, 0, 0, 0)
+	
+	kismet_system_library = M.find_default_instance("Class /Script/Engine.KismetSystemLibrary")
+	kismet_math_library = M.find_default_instance("Class /Script/Engine.KismetMathLibrary")
+	kismet_string_library = M.find_default_instance("Class /Script/Engine.KismetStringLibrary")
+	Statics = M.find_default_instance("Class /Script/Engine.GameplayStatics")
+	
+	game_engine = M.find_first_of("Class /Script/Engine.GameEngine")
+	
+	static_mesh_component_c = M.get_class("Class /Script/Engine.StaticMeshComponent")
+	motion_controller_component_c = M.get_class("Class /Script/HeadMountedDisplay.MotionControllerComponent")			 
+	scene_component_c = M.get_class("Class /Script/Engine.SceneComponent")
+	actor_c = M.get_class("Class /Script/Engine.Actor")
+	
+	zero_color = M.get_reuseable_struct_object("ScriptStruct /Script/CoreUObject.LinearColor")
+	reusable_hit_result = M.get_reuseable_struct_object("ScriptStruct /Script/Engine.HitResult")
+	temp_transform = M.get_reuseable_struct_object("ScriptStruct /Script/CoreUObject.Transform")
+	
+	uevr.sdk.callbacks.on_xinput_get_state(function(retval, user_index, state)
+		if on_xinput_get_state ~= nil then
+			on_xinput_get_state(retval, user_index, state)
+		end
 		
-	executeUEVRCallbacks("postEngineTick")
-end)
+		executeUEVRCallbacks("onInputGetState")
+	end)
+
+	uevr.sdk.callbacks.on_pre_calculate_stereo_view_offset(function(device, view_index, world_to_meters, position, rotation, is_double)
+		if on_pre_calculate_stereo_view_offset ~= nil then
+			on_pre_calculate_stereo_view_offset(device, view_index, world_to_meters, position, rotation, is_double)
+		end
+		
+		executeUEVRCallbacks("preCalculateStereoView")
+	end)
+
+	uevr.sdk.callbacks.on_post_calculate_stereo_view_offset(function(device, view_index, world_to_meters, position, rotation, is_double)
+		if on_post_calculate_stereo_view_offset ~= nil then
+			on_post_calculate_stereo_view_offset(device, view_index, world_to_meters, position, rotation, is_double)
+		end
+		
+		executeUEVRCallbacks("postCalculateStereoView")
+	end)
+
+	uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
+		pawn = uevr.api:get_local_pawn(0)
+		updateCurrentLevel()
+		updateDelay(delta)
+		updateLazyPoll(delta)
+		updateKeyPress()
+		if on_pre_engine_tick ~= nil then
+			on_pre_engine_tick(engine, delta)
+		end
+		
+		executeUEVRCallbacks("preEngineTick")
+	end)
+
+	uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
+		if on_post_engine_tick ~= nil then
+			on_post_engine_tick(engine, delta)
+		end
+			
+		executeUEVRCallbacks("postEngineTick")
+	end)
+
+	if UEVRReady ~= nil then UEVRReady(uevr) end
+end
+
+function M.enableDebug(val)
+	isDebugOn = val
+end
+
+function M.print(str)
+	if isDebugOn then
+		print(str .. "\n")
+	end
+end
 
 function M.registerOnInputGetStateCallback(func)
 	registerUEVRCallback("onInputGetState", func)
@@ -569,6 +591,10 @@ function M.set_component_relative_transform(component, position, rotation, scale
 	end
 end
 
+function M.PositiveIntegerMask(text)
+    return text:gsub("[^%-%d]", "")
+end
+
 function M.get_reuseable_struct_object(structClassName)
 	if structCache[structClassName] == nil then
 		local class = M.get_class(structClassName)
@@ -647,14 +673,23 @@ function M.spawn_object(objClassName, outer)
 	return nil
 end
 
-function M.create_component_of_class(className, manualAttachment, relativeTransform, deferredFinish)
+-- namespace EAttachLocation {
+    -- enum Type {
+        -- KeepRelativeOffset = 0,
+        -- KeepWorldPosition = 1,
+        -- SnapToTarget = 2,
+        -- SnapToTargetIncludingScale = 3,
+        -- EAttachLocation_MAX = 4,
+    -- };
+-- }
+function M.create_component_of_class(className, manualAttachment, relativeTransform, deferredFinish, parent)
 	if manualAttachment == nil then manualAttachment = true end
 	if relativeTransform == nil then relativeTransform = M.get_transform() end
 	if deferredFinish == nil then deferredFinish = false end
-	local baseActor = M.spawn_actor( nil, 1, nil)
+	local baseActor = parent
+	if baseActor == nil then baseActor = M.spawn_actor( nil, 1, nil) end
 	local component = baseActor:AddComponentByClass(M.get_class(className), manualAttachment, relativeTransform, deferredFinish)
 	component:SetVisibility(true)
-	component:SetHiddenInGame(false)
 	component:SetHiddenInGame(false)
 	if component.SetCollisionEnabled ~= nil then
 		component:SetCollisionEnabled(0)	
@@ -757,29 +792,50 @@ end
 
 -- float values from 0.0 to 1.0
 function color_from_rgba(r,g,b,a)
-	--color_c = M.find_required_object("ScriptStruct /Script/CoreUObject.LinearColor")
+	local color = M.get_reuseable_struct_object("ScriptStruct /Script/CoreUObject.LinearColor") --StructObject.new(M.get_class("ScriptStruct /Script/CoreUObject.LinearColor"))
 	--zero_color = StructObject.new(color_c)
-	zero_color.R = r
-	zero_color.G = g
-	zero_color.B = b
-	zero_color.A = a
-	return zero_color
+	color.R = r
+	color.G = g
+	if color["B"] == nil then
+		color.b = b
+	else
+		color.B = b
+	end
+	color.A = a
+	return color
 end
 function M.color_from_rgba(r,g,b,a)
 	return color_from_rgba(r,g,b,a)
 end
 -- int values from 0 to 255
 function color_from_rgba_int(r,g,b,a)
-	local color = StructObject.new(M.get_class("ScriptStruct /Script/CoreUObject.Color"))
+	local color = M.get_reuseable_struct_object("ScriptStruct /Script/CoreUObject.Color") --StructObject.new(M.get_class("ScriptStruct /Script/CoreUObject.Color"))
 	color.R = r
 	color.G = g
-	color.B = b
+	if color["B"] == nil then
+		color.b = b
+	else
+		color.B = b
+	end
 	color.A = a
 	return color
 end
 function M.color_from_rgba_int(r,g,b,a)
 	return color_from_rgba_int(r,g,b,a)
 end
+
+function M.splitStr(inputstr, sep)
+   if sep == nil then
+      sep = '%s'
+   end
+   local t={}
+   for str in string.gmatch(inputstr, '([^'..sep..']+)') 
+   do
+     table.insert(t, str)
+   end
+   return t
+end
+
 
 function M.isButtonPressed(state, button)
     return state.Gamepad.wButtons & button ~= 0
@@ -801,8 +857,11 @@ end
 
 local fadeHardLock = false
 local fadeSoftLock = false
+function M.isFadeHardLocked()
+	return fadeHardLock
+end
 function M.fadeCamera(rate, hardLock, softLock, overrideHardLock, overrideSoftLock)
-	print("fadeCamera called", rate, hardLock, softLock, overrideHardLock, overrideSoftLock, fadeHardLock, fadeSoftLock, "\n")
+	--print("fadeCamera called", rate, hardLock, softLock, overrideHardLock, overrideSoftLock, fadeHardLock, fadeSoftLock, "\n")
 
 	if hardLock == nil then hardLock = false end
 	if softLock == nil then softLock = false end
@@ -823,10 +882,10 @@ function M.fadeCamera(rate, hardLock, softLock, overrideHardLock, overrideSoftLo
 	
 	fadeHardLock = hardLock
 	fadeSoftLock = softLock	
-	print("fadeCamera executed",rate,"\n")
+	--print("fadeCamera executed",rate,"\n")
 
 	local camMan = M.find_first_of("Class /Script/Engine.PlayerCameraManager")
-	print("Camera Manager was",camMan:get_full_name(),"\n")
+	--print("Camera Manager was",camMan:get_full_name(),"\n")
 	if uevr ~= nil and camMan ~= nil and UEVR_UObjectHook.exists(camMan) then
 		--(FromAlpha, ToAlpha, Duration, Color, bShouldFadeAudio, bHoldWhenFinished)
 		camMan:StartCameraFade(0.999, 1.0, rate, color_from_rgba(0.0, 0.0, 0.0, 1.0), false, fadeHardLock)
@@ -901,10 +960,42 @@ function M.set_2D_mode(state, delay_msec)
 	end
 end
 
+function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent)
+	M.print("Creating PoseableMeshComponent from" .. skeletalMeshComponent:get_full_name())
+	local poseableComponent = nil
+	if skeletalMeshComponent ~= nil then
+		poseableComponent = M.create_component_of_class("Class /Script/Engine.PoseableMeshComponent", false)
+		if poseableComponent ~= nil then
+			M.print("Created poseablemeshcomponent" .. poseableComponent:get_full_name())
+			poseableComponent.SkeletalMesh = skeletalMeshComponent.SkeletalMesh		
+			--force initial update
+			poseableComponent:SetMasterPoseComponent(skeletalMeshComponent, true)
+			poseableComponent:SetMasterPoseComponent(nil, false)
+			M.print("Master pose updated")
+
+			-- local materials = skeletalMeshComponent:GetMaterials()
+			-- print("found",#materials,"materials")
+			-- for i, material in ipairs(materials) do				
+				-- poseableComponent:SetMaterial(i, material)
+				-- if i == 1 then break end
+			-- end
+			
+			pcall(function()
+				poseableComponent:CopyPoseFromSkeletalComponent(skeletalMeshComponent)	
+				--M.print("Pose copied")
+			end)	
+
+		else 
+			print("PoseableMeshComponent could not be created")
+		end
+	end
+	return poseableComponent
+end
 
 function M.createStaticMeshComponent(meshName)
 	local component = M.create_component_of_class("Class /Script/Engine.StaticMeshComponent")
 	if component ~= nil then
+		component:SetCollisionEnabled(false,false)
 		--various ways of finding a StaticMesh
 		--local staticMesh = uevrUtils.find_required_object("StaticMesh /Engine/EngineMeshes/Sphere.Sphere") --no caching so performance could suffer
 		--local staticMesh = uevrUtils.get_class("StaticMesh /Engine/EngineMeshes/Sphere.Sphere") --has caching but call is ideally meant for classes not other types
@@ -918,6 +1009,22 @@ function M.createStaticMeshComponent(meshName)
 		end
 	else
 		print("StaticMeshComponent not created\n")
+	end
+	return component
+end
+
+function M.createSkeletalMeshComponent(meshName, parent)
+	local component = M.create_component_of_class("Class /Script/Engine.SkeletalMeshComponent", nil, nil, nil, parent)
+	if component ~= nil then
+		component:SetCollisionEnabled(false,false)
+		local skeletalMesh = M.find_instance_of("Class /Script/Engine.SkeletalMesh", meshName) 
+		if skeletalMesh ~= nil then
+			component:SetSkeletalMesh(skeletalMesh)				
+		else
+			print("Skeletal Mesh not found\n")
+		end
+	else
+		print("SkeletalMeshComponent not created\n")
 	end
 	return component
 end
