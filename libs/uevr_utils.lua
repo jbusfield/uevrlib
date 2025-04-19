@@ -22,7 +22,7 @@ Usage
 				print("after one second delay")
 			end)
 
-	uevrUtils.vector_2(x, y) - returns a CoreUObject.Vector2D structure with the given params
+	uevrUtils.vector_2(x, y, reuseable) - returns a CoreUObject.Vector2D structure with the given params
 		example:
 			print("X value is",uevrUtils.vector_2(3, 4).X)
 			
@@ -38,13 +38,20 @@ Usage
 		example:
 			print("Z value is",uevrUtils.quatf(3, 4, 5, 1).Z)
 	
-	uevrUtils.quat(x, y, z, w) - returns a CoreUObject.Quat structure with the given params
+	uevrUtils.quat(x, y, z, w, reuseable) - returns a CoreUObject.Quat structure with the given params.
+		If reuseable is true a cached struct is returned. This is faster but if you need two instances for the same function call this would not work
 		example:
 			print("Z value is",uevrUtils.quat(3, 4, 5, 1).Z)
 	
-	uevrUtils.rotator(pitch, yaw, roll) - returns a CoreUObject.Rotator with the given params
+	uevrUtils.rotator(pitch, yaw, roll, reuseable) - returns a CoreUObject.Rotator with the given params
+		If reuseable is true a cached struct is returned. This is faster but if you need two instances for the same function call this would not work
 		example:
 			print("Yaw value is",uevrUtils.rotator(30, 40, 50).Yaw)
+	
+	uevrUtils.vector(x, y, z, reuseable) - returns a CoreUObject.Vector with the given params
+		If reuseable is true a cached struct is returned. This is faster but if you need two instances for the same function call this would not work
+		example:
+			print("X value is",uevrUtils.vector(30, 40, 50).X)
 	
 	
 	uevrUtils.rotatorFromQuat(x, y, z, w) - returns CoreUObject.Rotator given the x,y,z and w values from a quaternion
@@ -64,6 +71,10 @@ Usage
 			uevrUtils.set_component_relative_transform(meshComponent) -- position and rotation are set to 0s, scale is set to 1
 			uevrUtils.set_component_relative_transform(meshComponent, {X=10, Y=10, Z=10}, {Pitch=0, Yaw=90, Roll=0})
 	
+	uevrUtils.get_struct_object(structClassName, (optional)reuseable) - get a structure object that can optionally be reuseable
+		example:
+			local vector = uevrUtils.get_struct_object("ScriptStruct /Script/CoreUObject.Vector2D")
+			
 	uevrUtils.get_reuseable_struct_object(structClassName) - gets a structure that can be reused in the way temp_transform was used but for any structure class
 		The structure is cached so repeated calls to this function for the same class incur no penalty
 		example:
@@ -88,8 +99,8 @@ Usage
 		example:
 			uevrUtils.destroy_actor(actor)
 		
-	uevrUtils.create_component_of_class(className, (optional)manualAttachment, (optional)relativeTransform, (optional)deferredFinish) - creates and 
-		initializes a component based object of the desired class
+	uevrUtils.create_component_of_class(className, (optional)manualAttachment, (optional)relativeTransform, (optional)deferredFinish, (optional)parent) - creates and 
+		initializes a component based object of the desired class. If parent is provided then parent is used as the component's actor rather than create a new actor
 		example:
 			local component = create_component_of_class("Class /Script/Engine.StaticMeshComponent")
 	
@@ -126,11 +137,13 @@ Usage
 		example:
 			local fname = uevrUtils.fname_from_string("Mesh")
 			
-	uevrUtils.color_from_rgba(r,g,b,a) or color_from_rgba(r,g,b,a) - returns a CoreUObject.LinearColor struct with the given params in the range of 0.0 to 1.0
+	uevrUtils.color_from_rgba(r,g,b,a,reuseable) or color_from_rgba(r,g,b,a,reuseable) - returns a CoreUObject.LinearColor struct with the given params in the range of 0.0 to 1.0
+		If reuseable is true a cached struct is returned. This is faster but if you need two instances for the same function call this would not work
 		example:
 			local color = uevrUtils.color_from_rgba(1.0, 0.0, 0.0, 1.0)
 			
-	uevrUtils.color_from_rgba_int(r,g,b,a) or color_from_rgba_int(r,g,b,a) - returns a CoreUObject.Color struct with the given params in the range of 0 to 255
+	uevrUtils.color_from_rgba_int(r,g,b,a,reuseable) or color_from_rgba_int(r,g,b,a,reuseable) - returns a CoreUObject.Color struct with the given params in the range of 0 to 255
+		If reuseable is true a cached struct is returned. This is faster but if you need two instances for the same function call this would not work
 		example:
 			uevr.api:get_player_controller(0):ClientSetCameraFade(false, color_from_rgba_int(0,0,0,0), vector_2(0, 1), 1.0, false, false)
 
@@ -159,6 +172,31 @@ Usage
 			uevrUtils.set_cvar_int("r.VolumetricFog", 0)
 			
 	uevrUtils.PrintInstanceNames(class_to_search) - Print all instance names of a class to debug console
+	
+	uevrUtils.getAssetDataFromPath(pathStr) - converts a path string into an AssetData structure
+		example:
+			local fAssetData = uevrUtils.getAssetDataFromPath("StaticMesh /Game/Environment/Hogwarts/Meshes/Statues/SM_HW_Armor_Sword.SM_HW_Armor_Sword")
+			
+	uevrUtils.getLoadedAsset(pathStr) - get an object even if it's not already loaded into the system
+		example:
+			local staticMesh = uevrUtils.getLoadedAsset("StaticMesh /Game/Environment/Hogwarts/Meshes/Statues/SM_HW_Armor_Sword.SM_HW_Armor_Sword")
+
+	uevrUtils.copyMaterials(fromComponent, toComponent) - Copy Materials from one component to another
+		example:
+			uevrUtils.copyMaterials(wand.SK_Wand, component)
+	
+	uevrUtils.getChildComponent(parent, name) - gets a child component of a given parent component (from AttachChildren param) using partial name
+		example:
+			local referenceGlove = uevrUtils.getChildComponent(pawn.Mesh, "Gloves")
+	
+	uevrUtils.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, (optional)parent) - creates a skeletal mesh component (PoseableMeshComponent) that can be 
+		manually manipulated and is a copy of the passed in skeletalMeshComponent. If parent is provided then parent is used as the component's actor rather 
+		than create a new actor
+		example:
+			poseableComponent = uevrUtils.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent)
+	
+	uevrUtils.createSkeletalMeshComponent(meshName, (optional)parent) - creates a skeletal mesh component and assigns a mesh to it with the given name. 
+		Can use short name. If parent is provided then parent is used as the component's actor rather than create a new actor
 	
 	uevrUtils.createStaticMeshComponent(meshName) - creates a static mesh component and assigns a mesh to it with the given name. Can use short name
 		example:
@@ -499,16 +537,16 @@ function M.registerPostCalculateStereoViewCallback(func)
 	registerUEVRCallback("postCalculateStereoView", func)
 end
 
-function vector_2(x, y)
-	local vector = M.get_reuseable_struct_object("ScriptStruct /Script/CoreUObject.Vector2D")
+function vector_2(x, y, reuseable)
+	local vector = M.get_struct_object("ScriptStruct /Script/CoreUObject.Vector2D", reuseable)
 	if vector ~= nil then
 		vector.X = x
 		vector.Y = y
 	end
 	return vector
 end
-function M.vector_2(x, y)
-	return vector_2(x, y)
+function M.vector_2(x, y, reuseable)
+	return vector_2(x, y, reuseable)
 end
 
 function vector_3(x, y, z)
@@ -535,16 +573,26 @@ function M.quatf(x, y, z, w)
 	return quatf(x, y, z, w)
 end
 
-function M.quat(x, y, z, w)
-	local quat = M.get_reuseable_struct_object("ScriptStruct /Script/CoreUObject.Quat")
+function M.vector(x, y, z, reuseable)
+	local vector = M.get_struct_object("ScriptStruct /Script/CoreUObject.Vector", reuseable)
+	if vector ~= nil then
+		vector.X = x
+		vector.Y = y
+		vector.Z = z
+	end
+	return vector
+end
+
+function M.quat(x, y, z, w, reuseable)
+	local quat = M.get_struct_object("ScriptStruct /Script/CoreUObject.Quat", reuseable)
 	if quat ~= nil then
 		kismet_math_library:Quat_SetComponents(quat, x, y, z, w)
 	end
 	return quat
 end
 
-function M.rotator(pitch, yaw, roll)
-	local rotator = M.get_reuseable_struct_object("ScriptStruct /Script/CoreUObject.Rotator")
+function M.rotator(pitch, yaw, roll, reuseable)
+	local rotator = M.get_struct_object("ScriptStruct /Script/CoreUObject.Rotator", reuseable)
 	if rotator ~= nil then
 		rotator.Pitch = pitch
 		rotator.Yaw = yaw
@@ -557,10 +605,10 @@ function M.rotatorFromQuat(x, y, z, w)
 	return kismet_math_library:Quat_Rotator(M.quat(x, y, z, w))
 end
 
-function M.get_transform(position, rotation, scale)
+function M.get_transform(position, rotation, scale, reuseable)
 	if position == nil then position = {X=0.0, Y=0.0, Z=0.0} end 
 	if scale == nil then scale = {X=1.0, Y=1.0, Z=1.0} end
-	local transform = M.get_reuseable_struct_object("ScriptStruct /Script/CoreUObject.Transform")
+	local transform = M.get_struct_object("ScriptStruct /Script/CoreUObject.Transform", reuseable)
 	transform.Translation = vector_3f(position.X, position.Y, position.Z)
 	if rotation == nil then
 		transform.Rotation.X = 0.0
@@ -603,6 +651,17 @@ function M.get_reuseable_struct_object(structClassName)
 		end
 	end
 	return structCache[structClassName]
+end
+
+function M.get_struct_object(structClassName, reuseable)
+	if reuseable == true then
+		return M.get_reuseable_struct_object(structClassName)
+	end
+	local class = M.get_class(structClassName)
+	if class ~= nil then
+		return StructObject.new(class)
+	end
+	return nil
 end
 
 function M.get_world()
@@ -687,12 +746,12 @@ function M.create_component_of_class(className, manualAttachment, relativeTransf
 	if relativeTransform == nil then relativeTransform = M.get_transform() end
 	if deferredFinish == nil then deferredFinish = false end
 	local baseActor = parent
-	if baseActor == nil then baseActor = M.spawn_actor( nil, 1, nil) end
+	if baseActor == nil or baseActor.AddComponentByClass == nil then baseActor = M.spawn_actor( nil, 1, nil) end
 	local component = baseActor:AddComponentByClass(M.get_class(className), manualAttachment, relativeTransform, deferredFinish)
 	component:SetVisibility(true)
 	component:SetHiddenInGame(false)
 	if component.SetCollisionEnabled ~= nil then
-		component:SetCollisionEnabled(0)	
+		component:SetCollisionEnabled(0, false)	
 	end
 	return component
 end
@@ -791,8 +850,8 @@ function M.fname_from_string(str)
 end
 
 -- float values from 0.0 to 1.0
-function color_from_rgba(r,g,b,a)
-	local color = M.get_reuseable_struct_object("ScriptStruct /Script/CoreUObject.LinearColor") --StructObject.new(M.get_class("ScriptStruct /Script/CoreUObject.LinearColor"))
+function color_from_rgba(r,g,b,a, reuseable)
+	local color = M.get_struct_object("ScriptStruct /Script/CoreUObject.LinearColor", reuseable) --StructObject.new(M.get_class("ScriptStruct /Script/CoreUObject.LinearColor"))
 	--zero_color = StructObject.new(color_c)
 	color.R = r
 	color.G = g
@@ -804,12 +863,12 @@ function color_from_rgba(r,g,b,a)
 	color.A = a
 	return color
 end
-function M.color_from_rgba(r,g,b,a)
-	return color_from_rgba(r,g,b,a)
+function M.color_from_rgba(r,g,b,a, reuseable)
+	return color_from_rgba(r,g,b,a, reuseable)
 end
 -- int values from 0 to 255
-function color_from_rgba_int(r,g,b,a)
-	local color = M.get_reuseable_struct_object("ScriptStruct /Script/CoreUObject.Color") --StructObject.new(M.get_class("ScriptStruct /Script/CoreUObject.Color"))
+function color_from_rgba_int(r,g,b,a, reuseable)
+	local color = M.get_struct_object("ScriptStruct /Script/CoreUObject.Color", reuseable) --StructObject.new(M.get_class("ScriptStruct /Script/CoreUObject.Color"))
 	color.R = r
 	color.G = g
 	if color["B"] == nil then
@@ -820,8 +879,8 @@ function color_from_rgba_int(r,g,b,a)
 	color.A = a
 	return color
 end
-function M.color_from_rgba_int(r,g,b,a)
-	return color_from_rgba_int(r,g,b,a)
+function M.color_from_rgba_int(r,g,b,a, reuseable)
+	return color_from_rgba_int(r,g,b,a, reuseable)
 end
 
 function M.splitStr(inputstr, sep)
@@ -960,11 +1019,85 @@ function M.set_2D_mode(state, delay_msec)
 	end
 end
 
-function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent)
+--there should be a better way to do this with the asset registry
+function M.getAssetDataFromPath(pathStr)
+	local fAssetData = uevrUtils.get_struct_object("ScriptStruct /Script/CoreUObject.AssetData")
+	local arr = uevrUtils.splitStr(pathStr, " ")
+	fAssetData.AssetClass = uevrUtils.fname_from_string(arr[1]) 
+	fAssetData.ObjectPath = uevrUtils.fname_from_string(arr[2])
+	arr = uevrUtils.splitStr(arr[2], "/")
+	local arr2 = uevrUtils.splitStr(arr[#arr], ".")
+	fAssetData.AssetName = uevrUtils.fname_from_string(arr2[2])
+	local packagePath = table.concat(arr, "/", 1, #arr - 1)
+	fAssetData.PackagePath = packagePath
+	fAssetData.PackageName = packagePath .. "/" .. arr2[1]
+	return fAssetData
+end
+
+function M.getLoadedAsset(pathStr)
+	local fAssetData = getAssetDataFromPath(pathStr)
+	local assetRegistryHelper = uevrUtils.find_first_of("Class /Script/AssetRegistry.AssetRegistryHelpers",  true)
+	if not assetRegistryHelper:IsAssetLoaded(fAssetData) then
+		local fSoftObjectPath = assetRegistryHelper:ToSoftObjectPath(fAssetData);
+		kismet_system_library:LoadAsset_Blocking(fSoftObjectPath)
+	end
+	
+	return assetRegistryHelper:GetAsset(fAssetData) 
+end
+
+function M.copyMaterials(fromComponent, toComponent)
+	if fromComponent ~= nil and toComponent ~= nil then
+		local materials = fromComponent:GetMaterials()
+		if materials ~= nil then
+			M.print("Copying materials. Found " .. #materials .. " materials on fromComponent")
+			for i = 1 , #materials do
+				toComponent:SetMaterial(i - 1, materials[i])
+				M.print("Material index " .. i .. ": " .. materials[i]:get_full_name())
+			end
+		end
+	end
+end
+
+function M.getChildComponent(parent, name)
+	local childComponent = nil
+	if M.validate_object(parent) ~= nil and name ~= nil then
+		local children = parent.AttachChildren
+		for i, child in ipairs(children) do
+			if  string.find(child:get_full_name(), name) then
+				childComponent = child
+			end
+		end
+	end
+	return childComponent
+end
+
+function M.detachAndDestroyComponent(component, destroyOwner)
+	if component ~= nil then
+		M.print("Detaching " .. component:get_full_name())
+		component:DetachFromParent(true,false)
+		M.print("Component detached")
+		pcall(function()
+			M.print("Getting component owner")
+			local actor = component:GetOwner()
+			if actor ~= nil and actor.K2_DestroyComponent ~= nil then
+				M.print("Got component owner " .. actor:get_full_name())
+				actor:K2_DestroyComponent(component)
+				M.print("Destroyed component " .. component:get_full_name())
+				if destroyOwner == nil then destroyOwner = false end
+				if destroyOwner then
+					actor:K2_DestroyActor()
+				end
+			end
+		end)	
+	end
+end
+
+function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, parent)
 	M.print("Creating PoseableMeshComponent from" .. skeletalMeshComponent:get_full_name())
 	local poseableComponent = nil
 	if skeletalMeshComponent ~= nil then
-		poseableComponent = M.create_component_of_class("Class /Script/Engine.PoseableMeshComponent", false)
+		poseableComponent = M.create_component_of_class("Class /Script/Engine.PoseableMeshComponent", false, nil, nil, parent)
+		--poseableComponent:SetCollisionEnabled(0, false)
 		if poseableComponent ~= nil then
 			M.print("Created poseablemeshcomponent" .. poseableComponent:get_full_name())
 			poseableComponent.SkeletalMesh = skeletalMeshComponent.SkeletalMesh		
@@ -972,21 +1105,15 @@ function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent)
 			poseableComponent:SetMasterPoseComponent(skeletalMeshComponent, true)
 			poseableComponent:SetMasterPoseComponent(nil, false)
 			M.print("Master pose updated")
-
-			-- local materials = skeletalMeshComponent:GetMaterials()
-			-- print("found",#materials,"materials")
-			-- for i, material in ipairs(materials) do				
-				-- poseableComponent:SetMaterial(i, material)
-				-- if i == 1 then break end
-			-- end
 			
 			pcall(function()
 				poseableComponent:CopyPoseFromSkeletalComponent(skeletalMeshComponent)	
-				--M.print("Pose copied")
+				M.print("Pose copied")
 			end)	
-
+		
+			M.copyMaterials(skeletalMeshComponent, poseableComponent)
 		else 
-			print("PoseableMeshComponent could not be created")
+			M.print("PoseableMeshComponent could not be created")
 		end
 	end
 	return poseableComponent
@@ -995,7 +1122,7 @@ end
 function M.createStaticMeshComponent(meshName)
 	local component = M.create_component_of_class("Class /Script/Engine.StaticMeshComponent")
 	if component ~= nil then
-		component:SetCollisionEnabled(false,false)
+		--component:SetCollisionEnabled(false,false)
 		--various ways of finding a StaticMesh
 		--local staticMesh = uevrUtils.find_required_object("StaticMesh /Engine/EngineMeshes/Sphere.Sphere") --no caching so performance could suffer
 		--local staticMesh = uevrUtils.get_class("StaticMesh /Engine/EngineMeshes/Sphere.Sphere") --has caching but call is ideally meant for classes not other types
@@ -1016,7 +1143,7 @@ end
 function M.createSkeletalMeshComponent(meshName, parent)
 	local component = M.create_component_of_class("Class /Script/Engine.SkeletalMeshComponent", nil, nil, nil, parent)
 	if component ~= nil then
-		component:SetCollisionEnabled(false,false)
+		--component:SetCollisionEnabled(false,false)
 		local skeletalMesh = M.find_instance_of("Class /Script/Engine.SkeletalMesh", meshName) 
 		if skeletalMesh ~= nil then
 			component:SetSkeletalMesh(skeletalMesh)				

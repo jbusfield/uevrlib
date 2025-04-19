@@ -2,7 +2,7 @@
 local uevrUtils = require("libs/uevr_utils")
 
 local M = {}
-M.msecTimer = 10000
+M.msecTimer = 5000
 
 local flickerFixerComponent = nil
 local isTriggered = false
@@ -20,7 +20,7 @@ local function createFlickerFixerComponent(fov, rt)
 end
 
 function triggerFlickerFixer()
-	if flickerFixerComponent ~= nil then
+	if uevrUtils.validate_object(flickerFixerComponent) ~= nil then
 		flickerFixerComponent:SetVisibility(true)
 		--print("Fixer on")
 		delay(1000, function()
