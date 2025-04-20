@@ -1027,22 +1027,28 @@ end
 
 --there should be a better way to do this with the asset registry
 function M.getAssetDataFromPath(pathStr)
-	local fAssetData = uevrUtils.get_struct_object("ScriptStruct /Script/CoreUObject.AssetData")
-	local arr = uevrUtils.splitStr(pathStr, " ")
-	fAssetData.AssetClass = uevrUtils.fname_from_string(arr[1]) 
-	fAssetData.ObjectPath = uevrUtils.fname_from_string(arr[2])
-	arr = uevrUtils.splitStr(arr[2], "/")
-	local arr2 = uevrUtils.splitStr(arr[#arr], ".")
-	fAssetData.AssetName = uevrUtils.fname_from_string(arr2[2])
+	local fAssetData = M.get_struct_object("ScriptStruct /Script/CoreUObject.AssetData")
+	local arr = M.splitStr(pathStr, " ")
+	if fAssetData.ObjectPath ~= nil then
+		fAssetData.AssetClass = M.fname_from_string(arr[1]) 
+		fAssetData.ObjectPath = M.fname_from_string(arr[2])
+	end
+	if fAssetData.AssetClassPath ~= nil then
+		fAssetData.AssetClassPath.PackageName = M.fname_from_string("/Script/Engine")
+		fAssetData.AssetClassPath.AssetName = M.fname_from_string(arr[1]) 
+	end
+	arr = M.splitStr(arr[2], "/")
+	local arr2 = M.splitStr(arr[#arr], ".")
+	fAssetData.AssetName = M.fname_from_string(arr2[2])
 	local packagePath = table.concat(arr, "/", 1, #arr - 1)
-	fAssetData.PackagePath = packagePath
-	fAssetData.PackageName = packagePath .. "/" .. arr2[1]
+	fAssetData.PackagePath = "/" .. packagePath
+	fAssetData.PackageName = "/" .. packagePath .. "/" .. arr2[1]
 	return fAssetData
 end
 
 function M.getLoadedAsset(pathStr)
 	local fAssetData = getAssetDataFromPath(pathStr)
-	local assetRegistryHelper = uevrUtils.find_first_of("Class /Script/AssetRegistry.AssetRegistryHelpers",  true)
+	local assetRegistryHelper = M.find_first_of("Class /Script/AssetRegistry.AssetRegistryHelpers",  true)
 	if not assetRegistryHelper:IsAssetLoaded(fAssetData) then
 		local fSoftObjectPath = assetRegistryHelper:ToSoftObjectPath(fAssetData);
 		kismet_system_library:LoadAsset_Blocking(fSoftObjectPath)
