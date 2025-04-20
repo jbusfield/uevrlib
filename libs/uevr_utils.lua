@@ -302,7 +302,7 @@ Statics = nil
 kismet_system_library = nil
 kismet_math_library = nil
 kismet_string_library = nil 
-uevr = nil
+--uevr = nil
 -------------------------------
 
 local M = {}
@@ -311,7 +311,8 @@ local classCache = {}
 local structCache = {}
 local uevrCallbacks = {}
 local keyBindList = {}
-local isDebugOn = false
+local isDebugOn = true
+local usingLuaVR = false
 
 function register_key_bind(keyName, callbackFunc)
 	keyBindList[keyName] = {}
@@ -431,6 +432,7 @@ function M.initUEVR(UEVR)
 	
 	if UEVR == nil then
 		UEVR = require("LuaVR")
+		usingLuaVR = true
 	end
 
 	uevr = UEVR
@@ -513,7 +515,11 @@ end
 
 function M.print(str)
 	if isDebugOn then
-		print(str .. "\n")
+		if usingLuaVR then
+			print(str .. "\n")
+		else
+			print(str)
+		end
 	end
 end
 
@@ -1093,7 +1099,7 @@ function M.detachAndDestroyComponent(component, destroyOwner)
 end
 
 function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, parent)
-	M.print("Creating PoseableMeshComponent from" .. skeletalMeshComponent:get_full_name())
+	M.print("Creating PoseableMeshComponent from " .. skeletalMeshComponent:get_full_name())
 	local poseableComponent = nil
 	if skeletalMeshComponent ~= nil then
 		poseableComponent = M.create_component_of_class("Class /Script/Engine.PoseableMeshComponent", false, nil, nil, parent)
