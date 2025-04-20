@@ -30,7 +30,9 @@ end
 -- boneName - the name of the bone that will serve as the root of the hand. It could be the hand bone or the forearm bone
 -- hideBoneName - if showing the right hand then you would hide the left shoulder and vice versa
 -- M.initPoseableComponent(poseableComponent, "RightForeArm", "LeftShoulder", location, rotation, scale)
-function M.initPoseableComponent(poseableComponent, boneName, hideBoneName, location, rotation, scale, rootBoneName)
+-- because we hide parts of the mesh using scale, the end of a mesh will taper to a point. We can adjust the location of that
+-- point with taperOffset. For example to make a hollow arm we could use taperOffset = uevrUtils.vector(0, 0, 15)
+function M.initPoseableComponent(poseableComponent, boneName, shoulderBoneName, hideBoneName, location, rotation, scale, rootBoneName, taperOffset)
 	if uevrUtils.validate_object(poseableComponent) ~= nil then
 		if rootBoneName == nil then 
 			rootBoneName = poseableComponent:GetBoneName(1) 
@@ -41,15 +43,17 @@ function M.initPoseableComponent(poseableComponent, boneName, hideBoneName, loca
 
 		local parentTransform = poseableComponent:GetBoneTransformByName(rootBoneName, boneSpace)
 				
-		--scale the hidden bone (eg the shoulder bone) to almost 0 so it and its children dont display
-		local localTransform = kismet_math_library:MakeTransform(uevrUtils.vector(0,0,0), uevrUtils.rotator(0,0,0), uevrUtils.vector(0.001, 0.001, 0.001))
-		M.setBoneSpaceLocalTransform(poseableComponent, uevrUtils.fname_from_string(hideBoneName), localTransform, boneSpace, parentTransform)
+		if taperOffset == nil then taperOffset = uevrUtils.vector(0, 0, 0) end
+		--scale the shoulder bone to almost 0 so it and its children dont display
+		local localTransform = kismet_math_library:MakeTransform(kismet_math_library:Add_VectorVector(location, taperOffset), uevrUtils.rotator(0,0,0), uevrUtils.vector(0.001, 0.001, 0.001))
+		M.setBoneSpaceLocalTransform(poseableComponent, uevrUtils.fname_from_string(shoulderBoneName), localTransform, boneSpace, parentTransform)
 		
-
 		--apply a transform of the specified bone with respect the the tranform of the root bone of the skeleton
 		local localTransform = kismet_math_library:MakeTransform(location, rotation, scale)
 		M.setBoneSpaceLocalTransform(poseableComponent, uevrUtils.fname_from_string(boneName), localTransform, boneSpace, parentTransform)
 
+		--scale the hidden bone to 0 so it and its children dont display
+		poseableComponent:SetBoneScaleByName(uevrUtils.fname_from_string(hideBoneName), vector_3f(0.001, 0.001, 0.001), boneSpace);		
 
 	end
 end
