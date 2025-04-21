@@ -35,7 +35,8 @@ end
 function M.initPoseableComponent(poseableComponent, boneName, shoulderBoneName, hideBoneName, location, rotation, scale, rootBoneName, taperOffset)
 	if uevrUtils.validate_object(poseableComponent) ~= nil then
 		if rootBoneName == nil then 
-			rootBoneName = poseableComponent:GetBoneName(1) 
+			rootBoneName = M.getRootBoneOfBone(poseableComponent, boneName) --poseableComponent:GetBoneName(1) 
+			M.print("Found root bone " .. rootBoneName:to_string())
 		else
 			rootBoneName = uevrUtils.fname_from_string(rootBoneName)
 		end
@@ -226,13 +227,28 @@ function M.setSkeletalVisualizationBoneScale(skeletalMeshComponent, index, scale
 end
 -- end of skeletal visualization
 
-function M.getHierarchyForBone(skeletalMeshComponent, boneName)
-	local str = boneName
+function M.getRootBoneOfBone(skeletalMeshComponent, boneName)
 	local fName = uevrUtils.fname_from_string(boneName)
-	repeat 
+	local boneName = fName
+	while fName:to_string() ~= "None" do
+		boneName = fName
 		fName = skeletalMeshComponent:GetParentBone(fName)
-		str = str .. " -> " .. fName:to_string()
-	until (fName == nil or fName:to_string() == "None")
+	end
+	return boneName
+end
+
+function M.getHierarchyForBone(skeletalMeshComponent, boneName)
+	local str = ""
+	local fName = uevrUtils.fname_from_string(boneName)
+	while fName:to_string() ~= "None" do
+		if str ~= "" then str = str .. " -> " end
+		str = str .. fName:to_string()
+		fName = skeletalMeshComponent:GetParentBone(fName)
+	end
+	-- repeat 
+		-- fName = skeletalMeshComponent:GetParentBone(fName)
+		-- str = str .. " -> " .. fName:to_string()
+	-- until (fName == nil or fName:to_string() == "None")
 	M.print(str)
 end
 
@@ -320,7 +336,7 @@ function M.logBoneNames(component)
 	if component ~= nil then
 		local count = component:GetNumBones()
 		M.print(count .. " bones for " .. component:get_full_name())
-		for index = 1 , count do
+		for index = 0 , count - 1 do
 			M.print(index .. " " .. component:GetBoneName(index):to_string())
 		end
 	else

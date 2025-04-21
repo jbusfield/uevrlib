@@ -514,12 +514,12 @@ function M.enableDebug(val)
 end
 
 function M.print(str)
-	if isDebugOn then
-		if usingLuaVR then
-			print(str .. "\n")
-		else
-			print(str)
+	if type(str) == "string" then
+		if isDebugOn then
+			print(str .. (usingLuaVR and "\n" or ""))
 		end
+	else
+		print("Failed to print a non-string" .. (usingLuaVR and "\n" or ""))
 	end
 end
 
