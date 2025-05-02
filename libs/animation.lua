@@ -59,6 +59,36 @@ function M.initPoseableComponent(poseableComponent, boneName, shoulderBoneName, 
 	end
 end
 
+function M.transformBoneToRoot(poseableComponent, targetBoneName, location, rotation, scale, taperOffset)
+	if uevrUtils.validate_object(poseableComponent) ~= nil then
+		local boneSpace = 0
+		rootBoneName = M.getRootBoneOfBone(poseableComponent, targetBoneName) --should always be the 0 index bone but just to be safe we trace it back
+		M.print("Found root bone " .. rootBoneName:to_string())		
+		local rootTransform = poseableComponent:GetBoneTransformByName(rootBoneName, boneSpace)
+				
+		local parentFName = poseableComponent:GetParentBone(uevrUtils.fname_from_string(targetBoneName)) --the bone above the target bone
+		
+		--loop through all other bones of the skeleton and set their transforms with respect to the root to 0. Do not do this for bones that are children of the target
+		local localTransform = kismet_math_library:MakeTransform(uevrUtils.vector(0, 0, 0), uevrUtils.rotator(0,0,0), uevrUtils.vector(0.001, 0.001, 0.001))
+		local count = poseableComponent:GetNumBones()
+		for index = 1 , count do	
+			local childFName = poseableComponent:GetBoneName(index)
+			if not poseableComponent:BoneIsChildOf(childFName, parentFName) then	
+				M.setBoneSpaceLocalTransform(poseableComponent, childFName, localTransform, boneSpace, rootTransform)
+			end
+		end
+
+		--special handling for the bone above the target bone to allow for a taper
+		if taperOffset == nil then taperOffset = uevrUtils.vector(0, 0, 0) end
+		localTransform = kismet_math_library:MakeTransform(kismet_math_library:Add_VectorVector(location, taperOffset), uevrUtils.rotator(0,0,0), uevrUtils.vector(0.001, 0.001, 0.001))
+		M.setBoneSpaceLocalTransform(poseableComponent, parentFName, localTransform, boneSpace, rootTransform)
+		
+		--apply a transform of the target bone with respect the the tranform of the root bone of the skeleton
+		local localTransform = kismet_math_library:MakeTransform(location, rotation, scale)
+		M.setBoneSpaceLocalTransform(poseableComponent, uevrUtils.fname_from_string(targetBoneName), localTransform, boneSpace, rootTransform)
+	end
+end
+
 function M.getBoneSpaceLocalRotator(component, boneFName, fromBoneSpace)
 	if uevrUtils.validate_object(component) ~= nil and boneFName ~= nil then
 		if fromBoneSpace == nil then fromBoneSpace = 0 end
@@ -115,6 +145,7 @@ function M.hasBone(component, boneName)
 end
 
 function M.animate(animID, animName, val)
+	M.print("Called animate with " .. animID .. " " .. animName .. " " .. val)
 	local animation = animations[animID]
 	if animation ~= nil then
 		local component = animation["component"]
@@ -200,7 +231,7 @@ end
 
 --call on the tick to do the actual position update
 function M.updateSkeletalVisualization(skeletalMeshComponent)
-	if skeletalMeshComponent ~= nil and #boneVisualizers > 0 then
+	if uevrUtils.validate_object(skeletalMeshComponent) ~= nil and skeletalMeshComponent.GetNumBones ~= nil and #boneVisualizers > 0 then
 		local count = skeletalMeshComponent:GetNumBones()
 		local boneSpace = 0
 		--print("updateSkeletalVisualization", skeletalMeshComponent, #boneVisualizers, "\n")
@@ -215,7 +246,7 @@ end
 
 --scale a specific sphere in the hierarchy to a larger size and print that bone's name
 function M.setSkeletalVisualizationBoneScale(skeletalMeshComponent, index, scale)
-	if skeletalMeshComponent ~= nil then
+	if uevrUtils.validate_object(skeletalMeshComponent) ~= nil then
 		if index < 1 then index = 1 end
 		if index > skeletalMeshComponent:GetNumBones() then index = skeletalMeshComponent:GetNumBones() end
 		uevrUtils.print("Visualizing " .. index .. " " .. skeletalMeshComponent:GetBoneName(index):to_string())
@@ -275,55 +306,60 @@ end
 
 function M.logBoneRotators(component, boneList)
 	local boneSpace = 0
-	if component ~= nil then
-		--local pc = component
-	--local parentFName =  uevrUtils.fname_from_string("r_Hand_JNT") --pc:GetParentBone(pc:GetBoneName(1))
-	--local pTransform = pc:GetBoneTransformByName(parentFName, boneSpace)
-	--local pRotator = pc:GetBoneRotationByName(parentFName, boneSpace)
-		local text = "Rotators for " .. component:get_full_name() .. "\n"
+	if component ~= nil  then
+		local text = ""
+		if component.GetBoneTransformByName == nil then
+			text = "Component does not support retrieval of bone transforms in function logBoneRotators() (eg not a poseableMeshComponent)"
+		else
+			--local pc = component
+			--local parentFName =  uevrUtils.fname_from_string("r_Hand_JNT") --pc:GetParentBone(pc:GetBoneName(1))
+			--local pTransform = pc:GetBoneTransformByName(parentFName, boneSpace)
+			--local pRotator = pc:GetBoneRotationByName(parentFName, boneSpace)
+			text = "Rotators for " .. component:get_full_name() .. "\n"
 
-		for j = 1, #boneList do
-			for index = 1 , 3 do
-				local fName = component:GetBoneName(boneList[j] + index - 1)
-				
-				local pTransform = component:GetBoneTransformByName(component:GetParentBone(fName), boneSpace)
-				local wTranform = component:GetBoneTransformByName(fName, boneSpace)
-				--local localTransform = kismet_math_library:InvertTransform(pTransform) * wTranform
-				--local localTransform = kismet_math_library:ComposeTransforms(kismet_math_library:InvertTransform(pTransform), wTranform)
-				local localTransform2 = kismet_math_library:ComposeTransforms(wTranform, kismet_math_library:InvertTransform(pTransform))
-				local localRotator = uevrUtils.rotator(0, 0, 0)
-				--kismet_math_library:BreakTransform(localTransform,temp_vec3, localRotator, temp_vec3)
-				--print("Local Space1",index, localRotator.Pitch, localRotator.Yaw, localRotator.Roll)
-				kismet_math_library:BreakTransform(localTransform2,temp_vec3, localRotator, temp_vec3)
-				text = text .. "[\"" .. fName:to_string() .. "\"] = {" .. localRotator.Pitch .. ", " .. localRotator.Yaw .. ", " .. localRotator.Roll .. "}" .. "\n"
-				--["RightHandIndex1_JNT"] = {13.954909324646, 19.658151626587, 12.959843635559}
-				-- local wRotator = pc:GetBoneRotationByName(pc:GetBoneName(index), boneSpace)
-				-- --local relativeRotator = GetRelativeRotation(wRotator, pRotator) --wRotator - pRotator
-				-- local relativeRotator = GetRelativeRotation(wRotator, pRotator)
-				-- print("Local Space",index, relativeRotator.Pitch, relativeRotator.Yaw, relativeRotator.Roll)
-				
-				--[[
-				print("World Space",index, wRotator.Pitch, wRotator.Yaw, wRotator.Roll)
-				boneSpace = 1
-				local cRotator = pc:GetBoneRotationByName(pc:GetBoneName(index), boneSpace)
-				print("Component Space",index, cRotator.Pitch, cRotator.Yaw, cRotator.Roll)
-				local boneRotator = uevrUtils.rotator(0, 0, 0)
-				wRotator.Pitch = 0
-				wRotator.Yaw = 0
-				wRotator.Roll = 0
-				pc:TransformToBoneSpace(pc:GetBoneName(index), temp_vec3, wRotator, temp_vec3, boneRotator)
-				print("Bone Space",index, boneRotator.Pitch, boneRotator.Yaw, boneRotator.Roll)
-				--pc:TransformFromBoneSpace(class FName BoneName, const struct FVector& InPosition, const struct FRotator& InRotation, struct FVector* OutPosition, struct FRotator* OutRotation);
-
-				if pc.CachedBoneSpaceTransforms ~= nil then
-					local transform = pc.CachedBoneSpaceTransforms[index]
+			for j = 1, #boneList do
+				for index = 1 , 3 do
+					local fName = component:GetBoneName(boneList[j] + index - 1)
+					
+					local pTransform = component:GetBoneTransformByName(component:GetParentBone(fName), boneSpace)
+					local wTranform = component:GetBoneTransformByName(fName, boneSpace)
+					--local localTransform = kismet_math_library:InvertTransform(pTransform) * wTranform
+					--local localTransform = kismet_math_library:ComposeTransforms(kismet_math_library:InvertTransform(pTransform), wTranform)
+					local localTransform2 = kismet_math_library:ComposeTransforms(wTranform, kismet_math_library:InvertTransform(pTransform))
+					local localRotator = uevrUtils.rotator(0, 0, 0)
+					--kismet_math_library:BreakTransform(localTransform,temp_vec3, localRotator, temp_vec3)
+					--print("Local Space1",index, localRotator.Pitch, localRotator.Yaw, localRotator.Roll)
+					kismet_math_library:BreakTransform(localTransform2,temp_vec3, localRotator, temp_vec3)
+					text = text .. "[\"" .. fName:to_string() .. "\"] = {" .. localRotator.Pitch .. ", " .. localRotator.Yaw .. ", " .. localRotator.Roll .. "}" .. "\n"
+					--["RightHandIndex1_JNT"] = {13.954909324646, 19.658151626587, 12.959843635559}
+					-- local wRotator = pc:GetBoneRotationByName(pc:GetBoneName(index), boneSpace)
+					-- --local relativeRotator = GetRelativeRotation(wRotator, pRotator) --wRotator - pRotator
+					-- local relativeRotator = GetRelativeRotation(wRotator, pRotator)
+					-- print("Local Space",index, relativeRotator.Pitch, relativeRotator.Yaw, relativeRotator.Roll)
+					
+					--[[
+					print("World Space",index, wRotator.Pitch, wRotator.Yaw, wRotator.Roll)
+					boneSpace = 1
+					local cRotator = pc:GetBoneRotationByName(pc:GetBoneName(index), boneSpace)
+					print("Component Space",index, cRotator.Pitch, cRotator.Yaw, cRotator.Roll)
 					local boneRotator = uevrUtils.rotator(0, 0, 0)
-					kismet_math_library:BreakTransform(transform, temp_vec3, boneRotator, temp_vec3)
+					wRotator.Pitch = 0
+					wRotator.Yaw = 0
+					wRotator.Roll = 0
+					pc:TransformToBoneSpace(pc:GetBoneName(index), temp_vec3, wRotator, temp_vec3, boneRotator)
 					print("Bone Space",index, boneRotator.Pitch, boneRotator.Yaw, boneRotator.Roll)
-				else
-					print(pc.CachedBoneSpaceTransforms, pc.CachedComponentSpaceTransforms, pawn.FPVMesh.CachedBoneSpaceTransforms)
+					--pc:TransformFromBoneSpace(class FName BoneName, const struct FVector& InPosition, const struct FRotator& InRotation, struct FVector* OutPosition, struct FRotator* OutRotation);
+
+					if pc.CachedBoneSpaceTransforms ~= nil then
+						local transform = pc.CachedBoneSpaceTransforms[index]
+						local boneRotator = uevrUtils.rotator(0, 0, 0)
+						kismet_math_library:BreakTransform(transform, temp_vec3, boneRotator, temp_vec3)
+						print("Bone Space",index, boneRotator.Pitch, boneRotator.Yaw, boneRotator.Roll)
+					else
+						print(pc.CachedBoneSpaceTransforms, pc.CachedComponentSpaceTransforms, pawn.FPVMesh.CachedBoneSpaceTransforms)
+					end
+					]]--
 				end
-				]]--
 			end
 		end
 		
