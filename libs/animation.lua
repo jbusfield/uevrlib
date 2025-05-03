@@ -63,7 +63,7 @@ function M.transformBoneToRoot(poseableComponent, targetBoneName, location, rota
 	if uevrUtils.validate_object(poseableComponent) ~= nil then
 		local boneSpace = 0
 		rootBoneName = M.getRootBoneOfBone(poseableComponent, targetBoneName) --should always be the 0 index bone but just to be safe we trace it back
-		M.print("Found root bone " .. rootBoneName:to_string())		
+		--M.print("Found root bone " .. rootBoneName:to_string())		
 		local rootTransform = poseableComponent:GetBoneTransformByName(rootBoneName, boneSpace)
 				
 		local parentFName = poseableComponent:GetParentBone(uevrUtils.fname_from_string(targetBoneName)) --the bone above the target bone
