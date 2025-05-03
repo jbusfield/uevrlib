@@ -5,8 +5,8 @@ local M = {}
 local animations = {}
 local boneVisualizers = {}
 
-function M.print(text)
-	uevrUtils.print("[animation] " .. text)
+function M.print(text, logLevel)
+	uevrUtils.print("[animation] " .. text, logLevel)
 end
 
 function M.createPoseableComponent(skeletalMeshComponent, parent)
@@ -280,7 +280,7 @@ function M.getHierarchyForBone(skeletalMeshComponent, boneName)
 		-- fName = skeletalMeshComponent:GetParentBone(fName)
 		-- str = str .. " -> " .. fName:to_string()
 	-- until (fName == nil or fName:to_string() == "None")
-	M.print(str)
+	M.print(str, LogLevel.Info)
 end
 
 --used by mod devs to update bone angles interactively
@@ -363,7 +363,7 @@ function M.logBoneRotators(component, boneList)
 			end
 		end
 		
-		M.print(text)
+		M.print(text, LogLevel.Info)
 	end
 end
 
@@ -371,9 +371,9 @@ end
 function M.logBoneNames(component)
 	if component ~= nil then
 		local count = component:GetNumBones()
-		M.print(count .. " bones for " .. component:get_full_name())
+		M.print(count .. " bones for " .. component:get_full_name(), LogLevel.Info)
 		for index = 0 , count - 1 do
-			M.print(index .. " " .. component:GetBoneName(index):to_string())
+			M.print(index .. " " .. component:GetBoneName(index):to_string(), LogLevel.Info)
 		end
 	else
 		M.print("Can't log bone name because component was nil")

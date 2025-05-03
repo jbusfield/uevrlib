@@ -1258,7 +1258,7 @@ function M.fixMeshFOV(mesh, propertyName, value, includeChildren, includeNiagara
 		if mesh ~= nil and mesh.GetMaterials ~= nil then
 			local materials = mesh:GetMaterials()
 			if materials ~= nil then
-				M.print("Found " .. #materials .. " materials in fixMeshFOV", logLevel)
+				if showDebug == true then M.print("Found " .. #materials .. " materials in fixMeshFOV", logLevel) end
 				for i, material in ipairs(materials) do
 					if material:is_a(M.get_class("Class /Script/Engine.MaterialInstanceConstant")) then
 						material = mesh:CreateAndSetMaterialInstanceDynamicFromMaterial(i-1, material)
@@ -1299,7 +1299,7 @@ function M.fixMeshFOV(mesh, propertyName, value, includeChildren, includeNiagara
 						
 						if includeNiagara == true and child:is_a(M.get_class("Class /Script/Niagara.NiagaraComponent")) then
 							child:SetNiagaraVariableFloat(propertyName, value)
-							M.print("Child Niagara Material: " .. child:get_full_name(),logLevel)
+							if showDebug == true then M.print("Child Niagara Material: " .. child:get_full_name(),logLevel) end
 						end
 					end
 				end

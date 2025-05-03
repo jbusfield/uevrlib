@@ -179,9 +179,9 @@ function M.enableHandAdjustments(boneList, componentName)
 	handBoneList = boneList
 	M.print("Adjust Mode " .. adjustModeLabels[adjustMode])
 	if adjustMode == 3 then
-		M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex)
+		M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex, LogLevel.Info)
 	else
-		M.print("Current hand: " .. currentHandLabels[currentHand+1])
+		M.print("Current hand: " .. currentHandLabels[currentHand+1], LogLevel.Info)
 	end
 	
 	register_key_bind("NumPadFive", function()
@@ -189,26 +189,26 @@ function M.enableHandAdjustments(boneList, componentName)
 		adjustMode = (adjustMode % 3) + 1
 		M.print("Adjust Mode " .. adjustModeLabels[adjustMode])
 		if adjustMode == 3 then
-			M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex)
+			M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex, LogLevel.Info)
 		else
-			M.print("Current hand: " .. currentHandLabels[currentHand+1])
+			M.print("Current hand: " .. currentHandLabels[currentHand+1], LogLevel.Info)
 		end
 	end)
 
 	register_key_bind("NumPadNine", function()
 		M.print("Num9 pressed")
 		currentIndex = (currentIndex % 3) + 1
-		M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex)
+		M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex, LogLevel.Info)
 	end)
 
 	register_key_bind("NumPadSeven", function()
 		M.print("Num7 pressed")
 		if adjustMode == 3 then
 			currentFinger = (currentFinger % 10) + 1
-			M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex)
+			M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex, LogLevel.Info)
 		else 
 			currentHand = (currentHand + 1) % 2
-			M.print("Current hand: " .. currentHandLabels[currentHand+1])
+			M.print("Current hand: " .. currentHandLabels[currentHand+1], LogLevel.Info)
 		end
 	end)
 
@@ -291,8 +291,8 @@ function M.setFingerAngles(fingerIndex, jointIndex, angleID, angle, componentNam
 end
 
 function M.printHandTranforms(transforms)
-	M.print("Rotation = {" .. transforms["Rotation"][1] .. ", " .. transforms["Rotation"][2] .. ", "  .. transforms["Rotation"][3] ..  "}")
-	M.print("Location = {" .. transforms["Location"][1] .. ", " .. transforms["Location"][2] .. ", "  .. transforms["Location"][3] ..  "}")
+	M.print("Rotation = {" .. transforms["Rotation"][1] .. ", " .. transforms["Rotation"][2] .. ", "  .. transforms["Rotation"][3] ..  "}", LogLevel.Info)
+	M.print("Location = {" .. transforms["Location"][1] .. ", " .. transforms["Location"][2] .. ", "  .. transforms["Location"][3] ..  "}", LogLevel.Info)
 end
 
 function M.adjustRotation(hand, axis, delta, componentName)
