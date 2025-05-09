@@ -302,6 +302,11 @@ function M.getValue(widgetID)
 	return configValues[widgetID]
 end
 
+function M.setValue(widgetID, value)
+	configValues[widgetID] = value
+	isDirty = true
+end
+
 function M.intToAARRGGBB(num)
     local a = (num >> 24) & 0xFF
     local b = (num >> 16) & 0xFF
