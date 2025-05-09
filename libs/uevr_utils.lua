@@ -328,6 +328,8 @@ LogLevel = {
     Ignore = 99,
 }
 
+LogLevelString = {[0]="off",[1]="crit",[2]="error",[3]="warn",[4]="info",[5]="debug",[6]="trace",[99]="ignore"}
+
 Handed = {
 	Left = 0, 
 	Right = 1
@@ -550,7 +552,7 @@ function M.print(str, logLevel)
 	if logLevel == nil then logLevel = LogLevel.Debug end
 	if type(str) == "string" then
 		if logLevel <= currentLogLevel then
-			print(str .. (usingLuaVR and "\n" or ""))
+			print("[" .. LogLevelString[logLevel] .. "] " .. str .. (usingLuaVR and "\n" or ""))
 		end
 	else
 		print("Failed to print a non-string" .. (usingLuaVR and "\n" or ""))

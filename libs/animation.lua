@@ -125,16 +125,7 @@ function M.getBoneSpaceLocalTransform(component, boneFName, fromBoneSpace)
 end
 
 function M.getChildSkeletalMeshComponent(parent, name)
-	local skeletalMeshComponent = nil
-	if uevrUtils.validate_object(parent) ~= nil and name ~= nil then
-		local children = parent.AttachChildren
-		for i, child in ipairs(children) do
-			if  string.find(child:get_full_name(), name) then
-				skeletalMeshComponent = child
-			end
-		end
-	end
-	return skeletalMeshComponent
+	return uevrUtils.getChildComponent(parent, name)
 end
 
 --if you know the parent transform then pass it in to save a step
@@ -171,7 +162,7 @@ function M.animate(animID, animName, val)
 	local animation = animations[animID]
 	if animation ~= nil then
 		local component = animation["component"]
-		if component ~= nil then
+		if component ~= nil and animation["definitions"] ~= nil and animation["definitions"]["positions"] ~= nil then
 			local boneSpace = 0
 			local subAnim = animation["definitions"]["positions"][animName]
 			if subAnim ~= nil then
@@ -179,7 +170,7 @@ function M.animate(animID, animName, val)
 				if anim ~= nil then
 					for boneName, angles in pairs(anim) do
 						local localRotator = uevrUtils.rotator(angles[1], angles[2], angles[3])
-						M.print("Animating " .. boneName, LogLevel.Info)
+						M.print("Animating " .. boneName .. " " .. val, LogLevel.Info)
 						M.setBoneSpaceLocalRotator(component, uevrUtils.fname_from_string(boneName), localRotator, boneSpace)
 					end
 				end
@@ -191,15 +182,17 @@ function M.animate(animID, animName, val)
 end
 
 function M.pose(animID, poseID)
-	M.print("Called pose", LogLevel.Debug)
+	M.print("Called pose " .. poseID .. " for animationID " .. animID, LogLevel.Debug)
 	if animations ~= nil and animations[animID] ~= nil  and animations[animID]["definitions"]["poses"][poseID] ~= nil then
-		M.print("In pose")
 		local pose = animations[animID]["definitions"]["poses"][poseID]
-		for i, positions in ipairs(pose) do
-			local animName = positions[1]
-			local val = positions[2]
-			M.animate(animID, animName, val)
-			M.print("Got pose " .. i .. " " .. animID .. " " .. animName .. " " .. val, LogLevel.Info)
+		if pose ~= nil then
+			M.print("Found pose " .. poseID, LogLevel.Debug)
+			for i, positions in ipairs(pose) do
+				local animName = positions[1]
+				local val = positions[2]
+				M.print("Animating pose index " .. i .. " " .. animID .. " " .. animName .. " " .. val, LogLevel.Info)
+				M.animate(animID, animName, val)
+			end
 		end
 	end
 end
@@ -208,7 +201,7 @@ end
 --initial["right_hand"]["thumb_01_r"]["location"] = {-4.7485139256969, 1.6324441527213, 3.5768162332388}
 
 function M.initialize(animID, skeletalMeshComponent)
-	if animations ~= nil and animations[animID] ~= nil and animations[animID]["definitions"]["initialTranform"] ~= nil then
+	if animations ~= nil and animations[animID] ~= nil and animations[animID]["definitions"] ~= nil and animations[animID]["definitions"]["initialTranform"] ~= nil then
 		local initialTransform = animations[animID]["definitions"]["initialTranform"]
 		if initialTransform[animID] ~= nil then
 			for boneName, transforms in pairs(initialTransform[animID]) do				
@@ -228,7 +221,7 @@ function M.initialize(animID, skeletalMeshComponent)
 			end		
 		end
 	else
-		M.print("Initial tranform definitions not found", LogLevel.Warning)
+		M.print("Initial tranform definitions not found", LogLevel.Info)
 	end
 end
 

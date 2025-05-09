@@ -8,6 +8,18 @@ local handComponents = {}
 local handDefinitions = {}
 local handBoneList = {}
 local offset={X=0, Y=0, Z=0, Pitch=0, Yaw=0, Roll=0}
+local inputHandlerAnimID = {} --list of animID only used for the default input handler
+
+local currentLogLevel = LogLevel.Error
+function M.setLogLevel(val)
+	currentLogLevel = val
+end
+function M.print(text, logLevel)
+	if logLevel == nil then logLevel = LogLevel.Debug end
+	if logLevel <= currentLogLevel then
+		uevrUtils.print("[hands] " .. text, logLevel)
+	end
+end
 
 local function getValidVector(definition, id, default)
 	if definition == nil or id == nil or definition[id] == nil then
@@ -34,15 +46,18 @@ local function getComponentName(componentName)
 	return foundName == nil and "" or foundName
 end
 
-function M.print(text, logLevel)
-	uevrUtils.print("[hands] " .. text, logLevel)
+local function getAnimIDSuffix(animID)
+	local arr = uevrUtils.splitStr(animID, "_")
+	return #arr > 0 and arr[#arr] or nil
 end
+
 
 function M.reset()
 	handComponents = {}
 	definition = {}
 	handBoneList = {}
 	offset={X=0, Y=0, Z=0, Pitch=0, Yaw=0, Roll=0}
+	inputHandlerAnimID = {}
 end
 
 function M.exists()
@@ -58,20 +73,33 @@ function M.getHandComponent(hand, componentName)
 end 
 
 function M.create(skeletalMeshComponent, definition, handAnimations)
-	if uevrUtils.validate_object(skeletalMeshComponent) ~= nil and definition ~= nil then
+	if definition ~= nil then
 		for name, skeletalMeshDefinition in pairs(definition) do
 			M.print("Creating hand component: " .. name )
-			handComponents[name] = {}
-			for index = 0 , 1 do
-				handComponents[name][index] = M.createComponent(skeletalMeshComponent, name, index, skeletalMeshDefinition[index==0 and "Left" or "Right"])
-				M.print("Created hand component index: " .. index )
-				animation.add(skeletalMeshDefinition[index==0 and "Left" or "Right"]["AnimationID"], handComponents[name][index], handAnimations)
-				animation.initialize(skeletalMeshDefinition[index==0 and "Left" or "Right"]["AnimationID"], handComponents[name][index])
+			local component = nil
+			if type(skeletalMeshComponent) == "table" then
+				component = skeletalMeshComponent[name]
+			else
+				component = skeletalMeshComponent
+			end
+			if uevrUtils.validate_object(component) ~= nil then
+				handComponents[name] = {}
+				for index = 0 , 1 do
+					handComponents[name][index] = M.createComponent(component, name, index, skeletalMeshDefinition[index==0 and "Left" or "Right"])
+					M.print("Created " .. name .. " component: " .. (index==0 and "Left" or "Right"), LogLevel.Info )
+					local animID = skeletalMeshDefinition[index==0 and "Left" or "Right"]["AnimationID"]
+					local suffix = getAnimIDSuffix(animID)
+					if suffix ~= nil then inputHandlerAnimID[animID] = suffix end
+					animation.add(animID, handComponents[name][index], handAnimations)
+					animation.initialize(animID, handComponents[name][index])
+				end
+			else
+				M.print("Call to create " .. name .. " failed, invalid skeletalMeshComponent", LogLevel.Info )
 			end
 		end
 		handDefinitions = definition
 	else
-		M.print("SkeletalMesh component is nil or target joints are invalid in create" )
+		M.print("Call to create failed, invalid definiton", LogLevel.Warning )
 	end
 end
 
@@ -123,35 +151,36 @@ function M.handleInput(state, isHoldingWeapon, hand, overrideTrigger)
 	local weaponHandStr = isRightHanded and "right" or "left"
 	local offHandStr = isRightHanded and "left" or "right"
 	
-	local offhandTriggerValue = (isRightHanded or overrideTrigger) and state.Gamepad.bLeftTrigger or state.Gamepad.bRightTrigger
-	animation.updateAnimation(offHandStr.."_hand", offHandStr.."_trigger", offhandTriggerValue > 100)
+	for id, target in pairs(inputHandlerAnimID) do
+		local offhandTriggerValue = (isRightHanded or overrideTrigger) and state.Gamepad.bLeftTrigger or state.Gamepad.bRightTrigger
+		animation.updateAnimation(offHandStr.."_"..target, offHandStr.."_trigger", offhandTriggerValue > 100)
 
-	animation.updateAnimation(offHandStr.."_hand", offHandStr.."_grip", uevrUtils.isButtonPressed(state, isRightHanded and XINPUT_GAMEPAD_LEFT_SHOULDER or XINPUT_GAMEPAD_RIGHT_SHOULDER))
+		animation.updateAnimation(offHandStr.."_"..target, offHandStr.."_grip", uevrUtils.isButtonPressed(state, isRightHanded and XINPUT_GAMEPAD_LEFT_SHOULDER or XINPUT_GAMEPAD_RIGHT_SHOULDER))
 
-    local offhandController = uevr.params.vr.get_left_joystick_source() 
-	if not isRightHanded then offhandController = uevr.params.vr.get_right_joystick_source() end
-    local offhandRest = uevr.params.vr.get_action_handle(isRightHanded and "/actions/default/in/ThumbrestTouchLeft" or "/actions/default/in/ThumbrestTouchRight")    
-	animation.updateAnimation(offHandStr.."_hand", offHandStr.."_thumb", uevr.params.vr.is_action_active(offhandRest, offhandController))
+		local offhandController = uevr.params.vr.get_left_joystick_source() 
+		if not isRightHanded then offhandController = uevr.params.vr.get_right_joystick_source() end
+		local offhandRest = uevr.params.vr.get_action_handle(isRightHanded and "/actions/default/in/ThumbrestTouchLeft" or "/actions/default/in/ThumbrestTouchRight")    
+		animation.updateAnimation(offHandStr.."_"..target, offHandStr.."_thumb", uevr.params.vr.is_action_active(offhandRest, offhandController))
 
- 	if not isHoldingWeapon then
-		local weaponHandTriggerValue = (isRightHanded or overrideTrigger) and state.Gamepad.bRightTrigger or state.Gamepad.bLeftTrigger
-		animation.updateAnimation(weaponHandStr.."_hand", weaponHandStr.."_trigger", weaponHandTriggerValue > 100)
+		if not isHoldingWeapon then
+			local weaponHandTriggerValue = (isRightHanded or overrideTrigger) and state.Gamepad.bRightTrigger or state.Gamepad.bLeftTrigger
+			animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_trigger", weaponHandTriggerValue > 100)
 
-		animation.updateAnimation(weaponHandStr.."_hand", weaponHandStr.."_grip", uevrUtils.isButtonPressed(state, isRightHanded and XINPUT_GAMEPAD_RIGHT_SHOULDER or XINPUT_GAMEPAD_LEFT_SHOULDER))
+			animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_grip", uevrUtils.isButtonPressed(state, isRightHanded and XINPUT_GAMEPAD_RIGHT_SHOULDER or XINPUT_GAMEPAD_LEFT_SHOULDER))
 
-		local weaponhandController = uevr.params.vr.get_right_joystick_source() 
-		if not isRightHanded then weaponhandController = uevr.params.vr.get_left_joystick_source() end
-		local weaponhandRest = uevr.params.vr.get_action_handle(isRightHanded and "/actions/default/in/ThumbrestTouchRight" or "/actions/default/in/ThumbrestTouchLeft")  
-		animation.updateAnimation(weaponHandStr.."_hand", weaponHandStr.."_thumb", uevr.params.vr.is_action_active(weaponhandRest, weaponhandController))
-	else
-		local weaponHandTriggerValue = (isRightHanded or overrideTrigger) and state.Gamepad.bRightTrigger or state.Gamepad.bLeftTrigger
-		animation.updateAnimation(weaponHandStr.."_hand", weaponHandStr.."_trigger_weapon", weaponHandTriggerValue > 100)
-		if uevrUtils.isButtonPressed(state, isRightHanded and XINPUT_GAMEPAD_RIGHT_SHOULDER or XINPUT_GAMEPAD_LEFT_SHOULDER) then 
-			--animation.updateAnimation(weaponHandStr.."_hand", weaponHandStr.."_grip_weapon", false) --allow for updating a messed up skeleton
-			animation.updateAnimation(weaponHandStr.."_hand", weaponHandStr.."_grip_weapon", true)
+			local weaponhandController = uevr.params.vr.get_right_joystick_source() 
+			if not isRightHanded then weaponhandController = uevr.params.vr.get_left_joystick_source() end
+			local weaponhandRest = uevr.params.vr.get_action_handle(isRightHanded and "/actions/default/in/ThumbrestTouchRight" or "/actions/default/in/ThumbrestTouchLeft")  
+			animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_thumb", uevr.params.vr.is_action_active(weaponhandRest, weaponhandController))
+		else
+			local weaponHandTriggerValue = (isRightHanded or overrideTrigger) and state.Gamepad.bRightTrigger or state.Gamepad.bLeftTrigger
+			animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_trigger_weapon", weaponHandTriggerValue > 100)
+			if uevrUtils.isButtonPressed(state, isRightHanded and XINPUT_GAMEPAD_RIGHT_SHOULDER or XINPUT_GAMEPAD_LEFT_SHOULDER) then 
+				animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_grip_weapon", false) --forces an update regardless of current state
+				animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_grip_weapon", true)
+			end
 		end
 	end
-
 end
 
 function M.hideHands(val)
