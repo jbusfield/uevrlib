@@ -328,6 +328,9 @@ end
 
 function M.load(panelID, fileName)
 	--print("Loading config")
+	if json == nil then
+		json = require("jsonStorage")
+	end
 	if fileName ~= nil and fileName ~= "" then
 		local loadConfig = json.load_file(fileName .. ".json")
 		if loadConfig ~= nil then
@@ -376,6 +379,9 @@ function M.save(panelID)
 				end
 			end
 			
+			if json == nil then
+				json = require("jsonStorage")
+			end
 			--print(configValues)
 			json.dump_file(fileName .. ".json", saveConfig, 4)
 		end

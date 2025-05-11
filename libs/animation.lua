@@ -181,6 +181,33 @@ function M.animate(animID, animName, val)
 	end
 end
 
+function lerpAnimation(animID, animName, alpha)
+	--M.print("Called lerp with " .. animID .. " " .. animName .. " " .. alpha, LogLevel.Info)
+	local animation = animations[animID]
+	if animation ~= nil then
+		local component = animation["component"]
+		if component ~= nil and animation["definitions"] ~= nil and animation["definitions"]["positions"] ~= nil then
+			local boneSpace = 0
+			local subAnim = animation["definitions"]["positions"][animName]
+			if subAnim ~= nil then
+				local startPose = subAnim["off"]
+				local endPose = subAnim["on"]
+				if startPose ~= nil and endPose ~= nil then
+					for boneName, angles in pairs(startPose) do
+						local startRotator = uevrUtils.rotator(angles[1], angles[2], angles[3])
+						local endRotator = uevrUtils.rotator(endPose[boneName][1], endPose[boneName][2], endPose[boneName][3])
+						--M.print("Lerping " .. boneName .. " " .. alpha, LogLevel.Info)
+						local localRotator = kismet_math_library:RLerp(startRotator, endRotator, alpha, true)
+						M.setBoneSpaceLocalRotator(component, uevrUtils.fname_from_string(boneName), localRotator, boneSpace)
+					end
+				end
+			end
+		else
+			M.print("Component was nil in animate", LogLevel.Warning)
+		end
+	end
+end
+
 function M.pose(animID, poseID)
 	M.print("Called pose " .. poseID .. " for animationID " .. animID, LogLevel.Debug)
 	if animations ~= nil and animations[animID] ~= nil  and animations[animID]["definitions"]["poses"][poseID] ~= nil then
@@ -231,8 +258,18 @@ function M.add(animID, skeletalMeshComponent, animationDefinitions)
 	animations[animID]["definitions"] = animationDefinitions
 end
 
+-- function lerpCallback(animID, animName, alpha)
+	-- print(animID, animName, alpha)
+	-- lerpAnimation(animID, animName, alpha)
+-- end
+
+local function lerpCallback(alpha, progress, userdata)
+	--print(alpha, progress, userdata.animID, userdata.animName,"\n")
+	lerpAnimation(userdata.animID, userdata.animName, alpha)
+end
+
 local animStates = {}
-function M.updateAnimation(animID, animName, isPressed)
+function M.updateAnimation(animID, animName, isPressed, lerpParam)
 	if animStates[animID] == nil then 
 		animStates[animID] = {} 
 		if animStates[animID][animName] == nil then 
@@ -240,17 +277,32 @@ function M.updateAnimation(animID, animName, isPressed)
 		end
 	end
 	if isPressed then
-		if not animStates[animID][animName] then
-			M.animate(animID, animName, "on")
+		if not animStates[animID][animName] == true then
+			if lerpParam ~= nil then	
+				uevrUtils.lerp(animID.."-"..animName, lerpParam.startAlpha == nil and 0.0 or lerpParam.startAlpha, lerpParam.endAlpha == nil and 1.0 or lerpParam.endAlpha, lerpParam.duration == nil and 0.3 or lerpParam.duration, {animID = animID, animName = animName}, lerpCallback)
+			else
+				M.animate(animID, animName, "on")
+			end
 		end
 		animStates[animID][animName] = true
 	else
-		if animStates[animID][animName] then
-			M.animate(animID, animName, "off")
+		if animStates[animID][animName] == true then
+			if lerpParam ~= nil then	
+				uevrUtils.lerp(animID.."-"..animName, lerpParam.startAlpha == nil and 1.0 or lerpParam.startAlpha, lerpParam.endAlpha == nil and 0.0 or lerpParam.endAlpha, lerpParam.duration == nil and 0.3 or lerpParam.duration, {animID = animID, animName = animName}, lerpCallback)
+			else
+				M.animate(animID, animName, "off")
+			end
 		end
 		animStates[animID][animName] = false
 	end
-end 
+end
+
+function M.resetAnimation(animID, animName, isPressed)
+	if animStates[animID] == nil then 
+		animStates[animID] = {} 
+	end
+	animStates[animID][animName] = isPressed 
+end
 
 -- creates a set of spheres that are positioned at each bone joint in order to visualize the bone hierarchy
 function M.createSkeletalVisualization(skeletalMeshComponent, scale)

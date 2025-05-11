@@ -335,6 +335,7 @@ Handed = {
 	Right = 1
 }
 -------------------------------
+local coreLerp = require("libs/core/lerp")
 
 local M = {}
 
@@ -389,6 +390,29 @@ local function updateDelay(delta)
 			end
 			table.remove(delayList, i)
 		end
+	end
+end
+
+local lerpList = {}
+function M.lerp(lerpID, startAlpha, endAlpha, duration, userdata, callback)
+	if lerpList[lerpID] ~= nil then
+		lerpList[lerpID]:update(startAlpha, endAlpha, duration, userdata)
+	else
+		local lerp = coreLerp.new(startAlpha, endAlpha, duration, userdata, callback)
+		lerp:start()
+		lerpList[lerpID] = lerp
+		--print("Created lerp\n")
+	end
+end
+local function updateLerp(delta)
+	local cleanup = {}
+	for id, lerp in pairs(lerpList) do
+		lerp:tick(delta)
+		if lerp:isFinished() then table.insert(cleanup, id) end		
+	end
+	for i = 1, #cleanup do
+		lerpList[cleanup[i]] = nil
+		--print("Deleted lerp\n")
 	end
 end
 
@@ -516,16 +540,22 @@ function M.initUEVR(UEVR)
 	end)
 
 	uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
-		pawn = uevr.api:get_local_pawn(0)
-		updateCurrentLevel()
-		updateDelay(delta)
-		updateLazyPoll(delta)
-		updateKeyPress()
-		if on_pre_engine_tick ~= nil then
-			on_pre_engine_tick(engine, delta)
-		end
-		
-		executeUEVRCallbacks("preEngineTick")
+		local success, response = pcall(function()		
+			pawn = uevr.api:get_local_pawn(0)
+			updateCurrentLevel()
+			updateDelay(delta)
+			updateLazyPoll(delta)
+			updateKeyPress()
+			updateLerp(delta)
+			if on_pre_engine_tick ~= nil then
+				on_pre_engine_tick(engine, delta)
+			end
+			
+			executeUEVRCallbacks("preEngineTick")
+		end)
+		-- if success == false then
+			-- uevrUtils.print("[on_pre_engine_tick] " .. response, LogLevel.Error)
+		-- end
 	end)
 
 	uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
