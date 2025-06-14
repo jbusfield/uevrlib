@@ -280,8 +280,7 @@ function M.attachComponentToController(controllerID, childComponent, socketName,
 	if childComponent ~= nil then
 		local controller = M.getController(controllerID)
 		if controller ~= nil then
-			childComponent:K2_AttachTo(controller, uevrUtils.fname_from_string(socketName), attachType, weld)
-			return true
+			return childComponent:K2_AttachTo(controller, uevrUtils.fname_from_string(socketName), attachType, weld)
 		end
 	end
 	return false
