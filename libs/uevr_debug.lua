@@ -221,8 +221,10 @@ function dumpPropertyOfObject(Object, Property, level, recursive, ignoreRecursio
         local Value = Object[Property:get_fname():to_string()]
 		if Value == nil then
 			ValueStr = "nil"
-		else
+		elseif Value.to_string ~= nil then
 			ValueStr = string.format("%s", Value:to_string())
+		else
+			ValueStr = Value
 		end
     elseif Property:get_class():get_name() == "ByteProperty" then
         local Value = Object[Property:get_fname():to_string()]

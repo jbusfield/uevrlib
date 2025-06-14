@@ -19,7 +19,7 @@ end
 function M.createPoseableComponent(skeletalMeshComponent, parent)
 	local poseableComponent = nil
 	if skeletalMeshComponent ~= nil then
-		poseableComponent = uevrUtils.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, parent)
+		poseableComponent = uevrUtils.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, parent, currentLogLevel == LogLevel.Debug)
 						
 		-- poseableComponent.SkeletalMesh.PositiveBoundsExtension.X = 100
 		-- poseableComponent.SkeletalMesh.PositiveBoundsExtension.Y = 100

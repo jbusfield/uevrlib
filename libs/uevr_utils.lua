@@ -861,6 +861,28 @@ function M.find_required_object(name)
     return obj
 end
 
+function M.getUEVRParam_bool(paramName)
+	local param = uevr.params.vr:get_mod_value(paramName)
+	if param ~= nil then
+		if string.sub(param, 1, 4 ) == "true" then return true else return false end
+	else
+		M.print("Invalid paramName in getUEVRParam_bool", LogLevel.Error)
+	end
+	return false
+end
+
+function M.getUEVRParam_int(paramName, default)
+	local result = nil
+	local param = uevr.params.vr:get_mod_value(paramName)
+	if param ~= nil then 
+		result = math.tointeger(param:gsub("[^%-%d]", ""))
+	else
+		M.print("Invalid paramName in getUEVRParam_int", LogLevel.Error)
+	end
+	if result == nil then result = default end
+	return result
+end
+
 --uses caching
 function M.get_class(name, clearCache)
 	if clearCache or classCache[name] == nil then
@@ -1075,7 +1097,7 @@ end
 
 function M.stopFadeCamera()
 	local camMan = M.find_first_of("Class /Script/Engine.PlayerCameraManager")
-	print("Camera Manager was",camMan:get_full_name(),"\n")
+	--print("Camera Manager was",camMan:get_full_name(),"\n")
 	
 	if uevr ~= nil and camMan ~= nil and UEVR_UObjectHook.exists(camMan) then
 		--(FromAlpha, ToAlpha, Duration, Color, bShouldFadeAudio, bHoldWhenFinished)
@@ -1205,30 +1227,36 @@ function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, parent, sho
 	if showDebug == true then M.print("Creating PoseableMeshComponent from " .. skeletalMeshComponent:get_full_name()) end
 	local poseableComponent = nil
 	if skeletalMeshComponent ~= nil then
-		poseableComponent = M.create_component_of_class("Class /Script/Engine.PoseableMeshComponent", false, nil, nil, parent)
-		--poseableComponent:SetCollisionEnabled(0, false)
-		if poseableComponent ~= nil then
-			if showDebug == true then M.print("Created " .. poseableComponent:get_full_name()) end
-			poseableComponent.SkeletalMesh = skeletalMeshComponent.SkeletalMesh		
-			--force initial update
-			if poseableComponent.SetMasterPoseComponent ~= nil then
-				poseableComponent:SetMasterPoseComponent(skeletalMeshComponent, true)
-				poseableComponent:SetMasterPoseComponent(nil, false)
-			elseif poseableComponent.SetLeaderPoseComponent ~= nil then
-				poseableComponent:SetLeaderPoseComponent(skeletalMeshComponent, true)
-				poseableComponent:SetLeaderPoseComponent(nil, false)
-			end
-			if showDebug == true then M.print("Master pose updated") end
+		if skeletalMeshComponent:is_a(M.get_class("Class /Script/Engine.SkeletalMeshComponent")) then
+			poseableComponent = M.create_component_of_class("Class /Script/Engine.PoseableMeshComponent", false, nil, nil, parent)
+			--poseableComponent:SetCollisionEnabled(0, false)
+			if poseableComponent ~= nil then
+				if showDebug == true then M.print("Created " .. poseableComponent:get_full_name()) end
+				poseableComponent.SkeletalMesh = skeletalMeshComponent.SkeletalMesh		
+				--force initial update
+				if poseableComponent.SetMasterPoseComponent ~= nil then
+					poseableComponent:SetMasterPoseComponent(skeletalMeshComponent, true)
+					poseableComponent:SetMasterPoseComponent(nil, false)
+				elseif poseableComponent.SetLeaderPoseComponent ~= nil then
+					poseableComponent:SetLeaderPoseComponent(skeletalMeshComponent, true)
+					poseableComponent:SetLeaderPoseComponent(nil, false)
+				end
+				if showDebug == true then M.print("Master pose updated") end
+				
+				pcall(function()
+					poseableComponent:CopyPoseFromSkeletalComponent(skeletalMeshComponent)	
+					if showDebug == true then M.print("Pose copied") end
+				end)	
 			
-			pcall(function()
-				poseableComponent:CopyPoseFromSkeletalComponent(skeletalMeshComponent)	
-				if showDebug == true then M.print("Pose copied") end
-			end)	
-		
-			M.copyMaterials(skeletalMeshComponent, poseableComponent, showDebug)
-		else 
-			M.print("PoseableMeshComponent could not be created")
+				M.copyMaterials(skeletalMeshComponent, poseableComponent, showDebug)
+			else 
+				M.print("PoseableMeshComponent could not be created")
+			end
+		else
+			M.print("PoseableMeshComponent could not be created because provided component is not a skeletalMeshComponent")
 		end
+	else
+		M.print("PoseableMeshComponent could not be created because provided component is nil")
 	end
 	return poseableComponent
 end

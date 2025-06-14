@@ -146,98 +146,100 @@ end
 
 local function drawUI(panelID)
 	for _, item in ipairs(layoutDefinitions[panelID]) do
-		if item.widgetType == "checkbox" then
-			local changed, newValue = imgui.checkbox(item.label, configValues[panelID][item.id])
-			if changed then 
-				doUpdate(panelID, item.id, newValue)
+		if item.isHidden ~= true then
+			if item.widgetType == "checkbox" then
+				local changed, newValue = imgui.checkbox(item.label, configValues[panelID][item.id])
+				if changed then 
+					doUpdate(panelID, item.id, newValue)
+				end
+			elseif item.widgetType == "button" then
+				local changed, newValue = imgui.button(item.label, item.size) 
+				if changed then 
+					doUpdate(panelID, item.id, true, false)
+				end
+			elseif item.widgetType == "small_button" then
+				local changed, newValue = imgui.small_button(item.label, item.size) 
+				if changed then 
+					doUpdate(panelID, item.id, true, false)
+				end
+			elseif item.widgetType == "combo" then
+				local changed, newValue = imgui.combo(item.label, configValues[panelID][item.id], item.selections)
+				if changed then
+					doUpdate(panelID, item.id, newValue)
+				end
+			elseif item.widgetType == "slider_int" then
+				local changed, newValue = imgui.slider_int(item.label, configValues[panelID][item.id], item.range[1], item.range[2])
+				if changed then 
+					doUpdate(panelID, item.id, newValue)
+				end
+			elseif item.widgetType == "slider_float" then
+				local changed, newValue = imgui.slider_float(item.label, configValues[panelID][item.id], item.range[1], item.range[2])
+				if changed then 
+					doUpdate(panelID, item.id, newValue)
+				end
+			elseif item.widgetType == "drag_int" then
+				local changed, newValue = imgui.drag_int(item.label, configValues[panelID][item.id], item.speed, item.range[1], item.range[2])
+				if changed then 
+					doUpdate(panelID, item.id, newValue)
+				end
+			elseif item.widgetType == "drag_float" then
+				local changed, newValue = imgui.drag_float(item.label, configValues[panelID][item.id], item.speed, item.range[1], item.range[2])
+				if changed then 
+					doUpdate(panelID, item.id, newValue)
+				end
+			elseif item.widgetType == "drag_float2" then
+				local changed, newValue = imgui.drag_float2(item.label, configValues[panelID][item.id], item.speed, item.range[1], item.range[2])
+				if changed then 
+					doUpdate(panelID, item.id, newValue)
+				end
+			elseif item.widgetType == "drag_float3" then
+				local changed, newValue = imgui.drag_float3(item.label, configValues[panelID][item.id], item.speed, item.range[1], item.range[2])
+				if changed then 
+					doUpdate(panelID, item.id, newValue)
+				end
+			elseif item.widgetType == "drag_float4" then
+				local changed, newValue = imgui.drag_float4(item.label, configValues[panelID][item.id], item.speed, item.range[1], item.range[2])
+				if changed then 
+					doUpdate(panelID, item.id, newValue)
+				end
+			elseif item.widgetType == "input_text" then
+				local changed, newValue, selectionStart, selectionEnd = imgui.input_text(item.label, configValues[panelID][item.id])
+				if changed then 
+					doUpdate(panelID, item.id, newValue)
+				end
+			elseif item.widgetType == "input_text_multiline" then
+				local changed, newValue, selectionStart, selectionEnd = imgui.input_text_multiline(item.label, configValues[panelID][item.id], item.size)
+				if changed then 
+					doUpdate(panelID, item.id, newValue)
+				end
+			elseif item.widgetType == "color_picker" then
+				local changed, newValue = imgui.color_picker(item.label, configValues[panelID][item.id])
+				if changed then 
+					doUpdate(panelID, item.id, newValue)
+				end
+			elseif item.widgetType == "begin_rect" then
+				imgui.begin_rect()
+			elseif item.widgetType == "end_rect" then
+				imgui.end_rect(item.additionalSize ~= nil and item.additionalSize or 0, item.rounding ~= nil and item.rounding or 0)
+			elseif item.widgetType == "begin_group" then
+				imgui.begin_group()
+			elseif item.widgetType == "end_group" then
+				imgui.end_group()
+			elseif item.widgetType == "begin_child_window" then
+				imgui.begin_child_window(getVector2FromArray(item.size), item.border)
+			elseif item.widgetType == "end_child_window" then
+				imgui.end_child_window()
+			elseif item.widgetType == "new_line" then
+				imgui.new_line()
+			elseif item.widgetType == "spacing" then
+				imgui.spacing()
+			elseif item.widgetType == "same_line" then
+				imgui.same_line()
+			elseif item.widgetType == "text" then
+				imgui.text(item.label)
+			elseif item.widgetType == "text_colored" then
+				imgui.text_colored(item.label, colorStringToInteger(item.color))
 			end
-		elseif item.widgetType == "button" then
-			local changed, newValue = imgui.button(item.label, item.size) 
-			if changed then 
-				doUpdate(panelID, item.id, true, false)
-			end
-		elseif item.widgetType == "small_button" then
-			local changed, newValue = imgui.small_button(item.label, item.size) 
-			if changed then 
-				doUpdate(panelID, item.id, true, false)
-			end
-		elseif item.widgetType == "combo" then
-		    local changed, newValue = imgui.combo(item.label, configValues[panelID][item.id], item.selections)
-			if changed then
-				doUpdate(panelID, item.id, newValue)
-			end
-		elseif item.widgetType == "slider_int" then
-			local changed, newValue = imgui.slider_int(item.label, configValues[panelID][item.id], item.range[1], item.range[2])
-			if changed then 
-				doUpdate(panelID, item.id, newValue)
-			end
-		elseif item.widgetType == "slider_float" then
-			local changed, newValue = imgui.slider_float(item.label, configValues[panelID][item.id], item.range[1], item.range[2])
-			if changed then 
-				doUpdate(panelID, item.id, newValue)
-			end
-		elseif item.widgetType == "drag_int" then
-			local changed, newValue = imgui.drag_int(item.label, configValues[panelID][item.id], item.speed, item.range[1], item.range[2])
-			if changed then 
-				doUpdate(panelID, item.id, newValue)
-			end
-		elseif item.widgetType == "drag_float" then
-			local changed, newValue = imgui.drag_float(item.label, configValues[panelID][item.id], item.speed, item.range[1], item.range[2])
-			if changed then 
-				doUpdate(panelID, item.id, newValue)
-			end
-		elseif item.widgetType == "drag_float2" then
-			local changed, newValue = imgui.drag_float2(item.label, configValues[panelID][item.id], item.speed, item.range[1], item.range[2])
-			if changed then 
-				doUpdate(panelID, item.id, newValue)
-			end
-		elseif item.widgetType == "drag_float3" then
-			local changed, newValue = imgui.drag_float3(item.label, configValues[panelID][item.id], item.speed, item.range[1], item.range[2])
-			if changed then 
-				doUpdate(panelID, item.id, newValue)
-			end
-		elseif item.widgetType == "drag_float4" then
-			local changed, newValue = imgui.drag_float4(item.label, configValues[panelID][item.id], item.speed, item.range[1], item.range[2])
-			if changed then 
-				doUpdate(panelID, item.id, newValue)
-			end
-		elseif item.widgetType == "input_text" then
-			local changed, newValue, selectionStart, selectionEnd = imgui.input_text(item.label, configValues[panelID][item.id])
-			if changed then 
-				doUpdate(panelID, item.id, newValue)
-			end
-		elseif item.widgetType == "input_text_multiline" then
-			local changed, newValue, selectionStart, selectionEnd = imgui.input_text_multiline(item.label, configValues[panelID][item.id], item.size)
-			if changed then 
-				doUpdate(panelID, item.id, newValue)
-			end
-		elseif item.widgetType == "color_picker" then
-			local changed, newValue = imgui.color_picker(item.label, configValues[panelID][item.id])
-			if changed then 
-				doUpdate(panelID, item.id, newValue)
-			end
-		elseif item.widgetType == "begin_rect" then
-			imgui.begin_rect()
-		elseif item.widgetType == "end_rect" then
-			imgui.end_rect(item.additionalSize ~= nil and item.additionalSize or 0, item.rounding ~= nil and item.rounding or 0)
-		elseif item.widgetType == "begin_group" then
-			imgui.begin_group()
-		elseif item.widgetType == "end_group" then
-			imgui.end_group()
-		elseif item.widgetType == "begin_child_window" then
-			imgui.begin_child_window(getVector2FromArray(item.size), item.border)
-		elseif item.widgetType == "end_child_window" then
-			imgui.end_child_window()
-		elseif item.widgetType == "new_line" then
-			imgui.new_line()
-		elseif item.widgetType == "spacing" then
-			imgui.spacing()
-		elseif item.widgetType == "same_line" then
-			imgui.same_line()
-		elseif item.widgetType == "text" then
-			imgui.text(item.label)
-		elseif item.widgetType == "text_colored" then
-			imgui.text_colored(item.label, colorStringToInteger(item.color))
 		end
 	end
 end
@@ -278,7 +280,7 @@ function M.createPanel(panelDefinition)
 			uevr.sdk.callbacks.on_draw_ui(function()
 				drawUI(panelID)
 			end)
-		else
+		elseif uevr.lua ~= nil then
 			uevr.lua.add_script_panel(label, function()
 				drawUI(panelID)
 			end)
@@ -328,10 +330,10 @@ end
 
 function M.load(panelID, fileName)
 	--print("Loading config")
-	if json == nil then
-		json = require("jsonStorage")
-	end
-	if fileName ~= nil and fileName ~= "" then
+	-- if json == nil then
+		-- json = require("jsonStorage")
+	-- end
+	if fileName ~= nil and fileName ~= "" and json ~= nil then
 		local loadConfig = json.load_file(fileName .. ".json")
 		if loadConfig ~= nil then
 			for key, val in pairs(loadConfig) do
@@ -358,7 +360,7 @@ function M.save(panelID)
 	local panel = panelList[panelID]
 	if panel ~= nil then
 		local fileName = panel.fileName
-		if fileName ~= nil and fileName ~= "" then
+		if fileName ~= nil and fileName ~= "" and json ~= nil then
 			--print("Saving config")
 			--things like vector3 need to be converted into a json friendly format
 			local saveConfig = {}
@@ -379,9 +381,9 @@ function M.save(panelID)
 				end
 			end
 			
-			if json == nil then
-				json = require("jsonStorage")
-			end
+			-- if json == nil then
+				-- json = require("jsonStorage")
+			-- end
 			--print(configValues)
 			json.dump_file(fileName .. ".json", saveConfig, 4)
 		end
@@ -417,6 +419,16 @@ function M.setValue(widgetID, value)
 	doUpdate(panelID, widgetID, value)
 end
 
+function M.hideWidget(widgetID, value)
+	local panelID = itemMap[widgetID]
+	if panelID == nil then
+		panelID = defaultFilename
+		panelList[panelID] = {isDirty=false, timeSinceLastSave=0, fileName=defaultFilename}
+	end
+	item = getDefinitionElement(panelID, widgetID)
+	item.isHidden = value
+end
+
 function M.intToAARRGGBB(num)
     local a = (num >> 24) & 0xFF
     local b = (num >> 16) & 0xFF
@@ -428,6 +440,7 @@ end
 uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
 	for panelID, element in pairs(panelList) do
 		element.timeSinceLastSave = element.timeSinceLastSave + delta
+		--prevent spamming save
 		if element.isDirty == true and element.timeSinceLastSave > 1.0 then
 			M.save(panelID)
 			element.isDirty = false

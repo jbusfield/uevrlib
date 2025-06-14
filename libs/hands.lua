@@ -86,12 +86,14 @@ function M.create(skeletalMeshComponent, definition, handAnimations)
 				handComponents[name] = {}
 				for index = 0 , 1 do
 					handComponents[name][index] = M.createComponent(component, name, index, skeletalMeshDefinition[index==0 and "Left" or "Right"])
-					M.print("Created " .. name .. " component: " .. (index==0 and "Left" or "Right"), LogLevel.Info )
-					local animID = skeletalMeshDefinition[index==0 and "Left" or "Right"]["AnimationID"]
-					local suffix = getAnimIDSuffix(animID)
-					if suffix ~= nil then inputHandlerAnimID[animID] = suffix end
-					animation.add(animID, handComponents[name][index], handAnimations)
-					animation.initialize(animID, handComponents[name][index])
+					if handComponents[name][index] ~= nil then
+						M.print("Created " .. name .. " component: " .. (index==0 and "Left" or "Right"), LogLevel.Info )
+						local animID = skeletalMeshDefinition[index==0 and "Left" or "Right"]["AnimationID"]
+						local suffix = getAnimIDSuffix(animID)
+						if suffix ~= nil then inputHandlerAnimID[animID] = suffix end
+						animation.add(animID, handComponents[name][index], handAnimations)
+						animation.initialize(animID, handComponents[name][index])
+					end
 				end
 			else
 				M.print("Call to create " .. name .. " failed, invalid skeletalMeshComponent", LogLevel.Info )
@@ -189,7 +191,7 @@ end
 
 function M.hideHands(val)
 	for name, components in pairs(handComponents) do
-		M.print("Hiding " .. components[0]:get_full_name() .. " hand components", LogLevel.Debug)
+		M.print((val and "Hiding " or "Showing ") .. components[0]:get_full_name() .. " hand components", LogLevel.Debug)
 		components[0]:SetVisibility(not val, true)	
 		components[1]:SetVisibility(not val, true)	
 	end
