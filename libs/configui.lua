@@ -40,6 +40,14 @@ Usage
 			configui.setValue("use_hands", true)
 			configui.setValue("some_id_that_doesnt_exist_in_any_config", 1) -- now getValue() will return 1
 
+	configui.setLabel(itemID, newLabel) -- sets the label of the given itemID
+		example
+			configui.setLabel("use_hands", "Use Hands")
+
+	configui.hideWidget(widgetID, value) -- hides widget if value is true or shows widget if value is false
+		example
+			configui.hideWidget("use_hands", true)
+
 	configui.onUpdate(itemID, callbackFunction) -- allows you to define a callback function that triggers any time the value for the itemID changes for any reason,
 		including being changed in the UI or being changed with code.
 		example:
@@ -427,6 +435,16 @@ function M.hideWidget(widgetID, value)
 	end
 	item = getDefinitionElement(panelID, widgetID)
 	item.isHidden = value
+end
+
+function M.setLabel(widgetID, newLabel)
+	local panelID = itemMap[widgetID]
+	if panelID == nil then
+		panelID = defaultFilename
+		panelList[panelID] = {isDirty=false, timeSinceLastSave=0, fileName=defaultFilename}
+	end
+	item = getDefinitionElement(panelID, widgetID)
+	item.label = newLabel
 end
 
 function M.intToAARRGGBB(num)
