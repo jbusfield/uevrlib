@@ -480,8 +480,13 @@ local function executeUEVRCallbacks(callbackName)
 end
 
 local isInitialized = false
-function M.initUEVR(UEVR)
-	if isInitialized == true then return end
+function M.initUEVR(UEVR, callbackFunc)
+	if isInitialized == true then 
+		if callbackFunc ~= nil then
+			callbackFunc()
+		end
+		return 
+	end
 	isInitialized = true
 	
 	if UEVR == nil then
@@ -570,11 +575,16 @@ function M.initUEVR(UEVR)
 			
 		executeUEVRCallbacks("postEngineTick")
 	end)
+	
+	if callbackFunc ~= nil then
+		callbackFunc()
+	end
 
 	if UEVRReady ~= nil then UEVRReady(uevr) end
 end
 
 local currentLogLevel = LogLevel.Error
+local logToFile = false
 function M.enableDebug(val)
 	currentLogLevel = val and LogLevel.Debug or LogLevel.Off
 end
@@ -583,11 +593,24 @@ function M.setLogLevel(val)
 	currentLogLevel = val
 end
 
+function M.setLogToFile(val)
+	logToFile = val
+end
+
 function M.print(str, logLevel)
 	if logLevel == nil then logLevel = LogLevel.Debug end
 	if type(str) == "string" then
 		if logLevel <= currentLogLevel then
 			print("[" .. LogLevelString[logLevel] .. "] " .. str .. (usingLuaVR and "\n" or ""))
+			if logToFile then
+				if logLevel == LogLevel.Error or logLevel == LogLevel.Critical then
+					uevr.params.functions.log_error("[" .. LogLevelString[logLevel] .. "] " .. str)
+				elseif logLevel == LogLevel.Warning then
+					uevr.params.functions.log_warning("[" .. LogLevelString[logLevel] .. "] " .. str)
+				else
+					uevr.params.functions.log_info("[" .. LogLevelString[logLevel] .. "] " .. str)
+				end
+			end
 		end
 	else
 		print("Failed to print a non-string" .. (usingLuaVR and "\n" or ""))
@@ -650,7 +673,47 @@ function M.quatf(x, y, z, w)
 	return quatf(x, y, z, w)
 end
 
-function M.vector(x, y, z, reuseable)
+--function M.vector(x, y, z, reuseable)
+function M.vector(...)
+    local arg = {...}
+	local x=0
+	local y=0
+	local z=0
+	local reuseable = false
+
+	if #arg == 1 or #arg == 2 then
+		if type(arg[1]) == "userdata" then --maybe a vector was sent in
+			--if arg[1]:is_a(M.get_class("ScriptStruct /Script/CoreUObject.Vector")) then
+			return arg[1]
+		elseif type(arg[1]) == "table" then
+			x = (arg[1].X ~= nil) and arg[1].X or ((arg[1].x ~= nil) and arg[1].x or ((#arg[1] > 0) and arg[1][1]))
+			y = (arg[1].Y ~= nil) and arg[1].Y or ((arg[1].y ~= nil) and arg[1].y or ((#arg[1] > 1) and arg[1][2]))
+			z = (arg[1].Z ~= nil) and arg[1].Z or ((arg[1].z ~= nil) and arg[1].z or ((#arg[1] > 2) and arg[1][3]))
+		else
+			M.print("Invalid argument 1 passed to vector function", LogLevel.Warning)
+		end
+		
+		if #arg == 2 then
+			if type(arg[2]) == "boolean" then
+				reuseable = arg[2]
+			else
+				M.print("Invalid argument 2 passed to vector function", LogLevel.Warning)
+			end
+		end
+	elseif #arg == 3 or #arg == 4 then
+		if type(arg[1]) == "number" then x = arg[1] else M.print("Invalid x value passed to vector function", LogLevel.Warning) end
+		if type(arg[2]) == "number" then y = arg[2] else M.print("Invalid y value passed to vector function", LogLevel.Warning) end
+		if type(arg[3]) == "number" then z = arg[3] else M.print("Invalid z value passed to vector function", LogLevel.Warning) end
+		
+		if #arg == 4 then
+			if type(arg[4]) == "boolean" then
+				reuseable = arg[4]
+			else
+				M.print("Invalid argument 4 passed to vector function", LogLevel.Warning)
+			end
+		end
+	end
+			
 	local vector = M.get_struct_object("ScriptStruct /Script/CoreUObject.Vector", reuseable)
 	if vector ~= nil then
 		vector.X = x
@@ -715,6 +778,29 @@ function M.set_component_relative_transform(component, position, rotation, scale
 		component.RelativeScale3D.Z = scale.Z
 	end
 end
+
+function M.getUEVRParam_bool(paramName)
+	local param = uevr.params.vr:get_mod_value(paramName)
+	if param ~= nil then
+		if string.sub(param, 1, 4 ) == "true" then return true else return false end
+	else
+		M.print("Invalid paramName in getUEVRParam_bool", LogLevel.Error)
+	end
+	return false
+end
+
+function M.getUEVRParam_int(paramName, default)
+	local result = nil
+	local param = uevr.params.vr:get_mod_value(paramName)
+	if param ~= nil then 
+		result = math.tointeger(param:gsub("[^%-%d]", ""))
+	else
+		M.print("Invalid paramName in getUEVRParam_int", LogLevel.Error)
+	end
+	if result == nil then result = default end
+	return result
+end
+
 
 function M.PositiveIntegerMask(text)
     return text:gsub("[^%-%d]", "")
@@ -859,28 +945,6 @@ function M.find_required_object(name)
     end
 
     return obj
-end
-
-function M.getUEVRParam_bool(paramName)
-	local param = uevr.params.vr:get_mod_value(paramName)
-	if param ~= nil then
-		if string.sub(param, 1, 4 ) == "true" then return true else return false end
-	else
-		M.print("Invalid paramName in getUEVRParam_bool", LogLevel.Error)
-	end
-	return false
-end
-
-function M.getUEVRParam_int(paramName, default)
-	local result = nil
-	local param = uevr.params.vr:get_mod_value(paramName)
-	if param ~= nil then 
-		result = math.tointeger(param:gsub("[^%-%d]", ""))
-	else
-		M.print("Invalid paramName in getUEVRParam_int", LogLevel.Error)
-	end
-	if result == nil then result = default end
-	return result
 end
 
 --uses caching
@@ -1196,7 +1260,7 @@ function M.getChildComponent(parent, name)
 end
 
 function M.detachAndDestroyComponent(component, destroyOwner, showDebug)
-	if component ~= nil then
+	if M.validate_object(component) ~= nil then
 		if showDebug == true then M.print("Detaching " .. component:get_full_name()) end
 		component:DetachFromParent(true,false)
 		if showDebug == true then M.print("Component detached") end
@@ -1420,17 +1484,17 @@ end
 -- Returns: true on success, false on failure.
 -------------------------------------------------------------------------------
 function hook_function(class_name, function_name, native, prefn, postfn, dbgout)
-	if(dbgout) then print("Hook_function for ", class_name, function_name) end
+	if(dbgout) then M.print("Hook_function for " .. class_name .. "   " .. function_name) end
     local result = false
     local class_obj = uevr.api:find_uobject(class_name)
     if(class_obj ~= nil) then
-        if dbgout then print("hook_function: found class obj for", class_name) end
+        if dbgout then M.print("hook_function: found class obj for" .. class_name) end
         local class_fn = class_obj:find_function(function_name)
         if(class_fn ~= nil) then 
-            if dbgout then print("hook_function: found function", function_name, "for", class_name) end
+            if dbgout then M.print("hook_function: found function" .. function_name .. " for " .. class_name) end
             if (native == true) then
                 class_fn:set_function_flags(class_fn:get_function_flags() | 0x400)
-                if dbgout then print("hook_function: set native flag") end
+                if dbgout then M.print("hook_function: set native flag") end
             end
             
             class_fn:hook_ptr(prefn, postfn)
@@ -1529,5 +1593,6 @@ end
 --hook_function("BlueprintGeneratedClass /Game/Reality/BP_ShiftManager.BP_ShiftManager_C", "OnShiftBegin", false, HookedFunctionPre, nil, true)
 
 
+M.initUEVR(uevr)
 
 return M

@@ -1,4 +1,6 @@
 --[[ 
+originally based on UE4SS dump tool
+
 Usage
 	Drop the lib folder containing this file into your project folder
 	At the top of your script file add 
@@ -9,15 +11,17 @@ Usage
 			
 	Available functions:
 	
-	debugModule.dump(Object, (optional)recursive, (optional)ignoreRecursionList) - print the Object properties to the console
+	debugModule.dump(Object, (optional)recursive, (optional)ignoreRecursionList, (optional)logToFile) - print the Object properties to the console
 		Object - The object you wish to dump
-		[optional] recursive -  Whether the object dump should recursively dump child objects of the original object 
+		[optional] recursive -  Whether the object dump should recursively dump child objects of the original object. Default is false
 		[optional] ignoreRecursionList - A list of object full names or entire classes of objects to ignore when recursing 
 			example: 
 				ignoreRecursionList = {}
 				ignoreRecursionList["SkeletalMeshComponentBudgeted /Game/Levels/Overland/Overland.Overland.PersistentLevel.BP_Biped_Player_C_2147461360.CharacterMesh0"] = true
 				ignoreRecursionList["CameraStackComponent /Game/Levels/Overland/Overland.Overland.PersistentLevel.BP_Biped_Player_C_2147461360.CameraStack"] = true
 				ignoreRecursionList["Class /Script/Engine.BodySetup"] = true
+		[optional] logToFile - Sends the dump to the log file in addition to the console
+
 		example:
 			ignoreRecursionList = {}
 			ignoreRecursionList["BlueprintGeneratedClass /Game/Pawn/Player/BP_Phoenix_Player_Controller.BP_Phoenix_Player_Controller_C"] = true
@@ -312,23 +316,43 @@ function dumpPropertyOfObject(Object, Property, level, recursive, ignoreRecursio
     return string.format("%s%s %s=%s", level, Property:get_class():get_fname():to_string(), Property:get_fname():to_string(), ValueStr)
 end
 
-local function Log(x)
-	print(x)
+function split_string_into_chunks(str, chunk_size)
+	local chunks = {}  -- Initialize an empty table to store the chunks
+	local i = 1  -- Start index for extracting substrings
+	while i <= #str do
+		local chunk = string.sub(str, i, i + chunk_size - 1)  -- Extract a substring of the specified size
+		table.insert(chunks, chunk)  -- Add the chunk to the table
+		i = i + chunk_size  -- Move to the next chunk's starting index
+	end
+	return chunks  -- Return the table containing the chunks
+end
+
+local function Log(str, logToFile)
+	if logToFile == true then
+		local chunk_length = 128000 -- apparently uevr limits the string size that it will log
+		local result_array = split_string_into_chunks(str, chunk_length)
+
+		-- Print the result:
+		for _, chunk in ipairs(result_array) do
+			uevr.params.functions.log_info(str)
+		end	
+	end
+	
+	print(str)
 end
 
 
-
-
-function M.dump(Object, recursive, ignoreRecursionList)
+function M.dump(Object, recursive, ignoreRecursionList, logToFile)
+	if recursive ~= true then recursive = false end
 	if Object == nil then
-		Log("Invalid parameters passed to dumpObject\n")
+		Log("Invalid parameters passed to dump\n", logToFile)
 	else	
 		if UClassStaticClass == nil then UClassStaticClass = uevr.api:find_uobject("/Script/CoreUObject.Class") end
 		if UScriptStructStaticClass == nil then UScriptStructStaticClass = uevr.api:find_uobject("/Script/CoreUObject.ScriptStruct") end
 		if UEnumStaticClass == nil then UEnumStaticClass = uevr.api:find_uobject("/Script/CoreUObject.Enum") end
 		if UPropertyStaticClass == nil then UPropertyStaticClass = uevr.api:find_uobject("/Script/CoreUObject.Property") end
 
-		Log(string.format("\n*** Property dump for object '%s ***\n%s", getEntityName(Object), doDump(Object, "", recursive, ignoreRecursionList)))
+		Log(string.format("\n*** Property dump for object '%s ***\n%s", getEntityName(Object), doDump(Object, "", recursive, ignoreRecursionList)), logToFile)
 	end
  end
  

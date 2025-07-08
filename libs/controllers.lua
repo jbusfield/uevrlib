@@ -87,7 +87,17 @@ local M = {}
 
 local sourceNames = {[0]="Left",[1]="Right"}
 local actors = {}
-local debugPrint = false
+
+local currentLogLevel = LogLevel.Error
+function M.setLogLevel(val)
+	currentLogLevel = val
+end
+function M.print(text, logLevel)
+	if logLevel == nil then logLevel = LogLevel.Debug end
+	if logLevel <= currentLogLevel then
+		uevrUtils.print("[controllers] " .. text, logLevel)
+	end
+end
 
 local function destroyActor(actor)
 	if actor ~= nil then
@@ -95,25 +105,25 @@ local function destroyActor(actor)
 			local components = actor.BlueprintCreatedComponents
 			for index, component in pairs(components) do
 				if component ~= nil then
-					if debugPrint then print("Destroying controller component",component:get_full_name(),"\n") end
+					M.print("Destroying controller component " .. component:get_full_name()) 
 					pcall(function()
 						if actor.K2_DestroyComponent ~= nil then
 							actor:K2_DestroyComponent(component)
-							if debugPrint then print("HMD Controller component destroyed\n") end
+							M.print("HMD Controller component destroyed")
 						end
 					end)	
 				end
 			end
 			if actor.K2_DestroyActor ~= nil then
 				actor:K2_DestroyActor()
-				if debugPrint then print("HMD Controller actor destroyed\n") end
+				M.print("HMD Controller actor destroyed")
 			end
 		end)	
 	end
 end
 
 local function createControllerComponent(parentActor, sourceName, handIndex)	
-	if debugPrint then print("Creating controller",sourceName, handIndex, "\n") end
+	M.print("Creating controller" .. sourceName .. " " .. handIndex)
 	if parentActor ~= nil and parentActor.AddComponentByClass ~= nil then
 		local motionControllerComponent = parentActor:AddComponentByClass(uevrUtils.get_class("Class /Script/HeadMountedDisplay.MotionControllerComponent"), true, uevrUtils.get_transform(), false)
 		if motionControllerComponent ~= nil then
@@ -123,7 +133,7 @@ local function createControllerComponent(parentActor, sourceName, handIndex)
 				motionControllerComponent.Hand = handIndex
 			end
 			
-			if debugPrint then print("Controller created\n") end
+			M.print("Controller created")
 			return motionControllerComponent
 		end
 	end
@@ -131,10 +141,10 @@ local function createControllerComponent(parentActor, sourceName, handIndex)
 end
 
 local function createHMDControllerComponent()	
-	if debugPrint then print("Creating HMD controller\n") end
+	M.print("Creating HMD controller")
 	local hmdIndex = 2
 	local parentActor = uevrUtils.spawn_actor(uevrUtils.get_transform(), 1, nil)
-	if debugPrint then print("Created HMD controller actor",parentActor:get_full_name(),"\n") end
+	M.print("Created HMD controller actor " .. parentActor:get_full_name())
 	if parentActor ~= nil and parentActor.AddComponentByClass ~= nil then
 		local motionControllerComponent = parentActor:AddComponentByClass(uevrUtils.get_class("Class /Script/Engine.SceneComponent"), true, uevrUtils.get_transform(), false)
 		if motionControllerComponent ~= nil then
@@ -143,16 +153,16 @@ local function createHMDControllerComponent()
 				hmdState:set_hand(hmdIndex) 
 				hmdState:set_permanent(true)
 				actors[hmdIndex] = parentActor
-				if debugPrint then print("Controller created\n") end
+				M.print("Controller created")
 				return motionControllerComponent
 			else
-				print("HMD Controller state creation failed\n")
+				M.print("HMD Controller state creation failed", LogLevel.Warning)
 			end	
 		else
-			print("HMD Controller component creation failed\n")
+			M.print("HMD Controller component creation failed", LogLevel.Warning)
 		end
 	else
-		print("HMD Controller actor creation failed\n")
+		M.print("HMD Controller actor creation failed", LogLevel.Warning)
 	end
 	destroyActor(parentActor)
 	return nil
@@ -164,7 +174,7 @@ local function createActor(controllerID)
 end
 
 local function resetMotionControllers()
-	if debugPrint then print("Removing all motion controller states\n") end
+	M.print("Removing all motion controller states")
 	if UEVR_UObjectHook.remove_all_motion_controller_states ~= nil then
 		UEVR_UObjectHook.remove_all_motion_controller_states()
 	end
@@ -242,6 +252,7 @@ local function createLeftControllerComponent()
 end
 
 function M.createController(controllerID)
+	M.print("Creating controller " ..  controllerID)
 	if controllerID == 2 then
 		return M.createHMDController()
 	else
@@ -273,15 +284,22 @@ function M.resetControllers()
 end
 
 --controllerID 0-left, 1-right, 2-head
-function M.attachComponentToController(controllerID, childComponent, socketName, attachType, weld)
+function M.attachComponentToController(controllerID, childComponent, socketName, attachType, weld, createIfNotExists)
 	if socketName == nil then socketName = "" end
 	if attachType == nil then attachType = 0 end
 	if weld == nil then weld = false end
 	if childComponent ~= nil then
 		local controller = M.getController(controllerID)
+		if controller == nil and createIfNotExists == true then
+			controller = M.createController(controllerID)
+		end
 		if controller ~= nil then
 			return childComponent:K2_AttachTo(controller, uevrUtils.fname_from_string(socketName), attachType, weld)
+		else
+			M.print("Could not attach component to controller " .. controllerID .. " because controller is nil")
 		end
+	else
+		M.print("Could not attach component to controller " .. controllerID .. "  because childComponent is nil")
 	end
 	return false
 end

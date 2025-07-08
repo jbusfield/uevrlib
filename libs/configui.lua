@@ -48,6 +48,10 @@ Usage
 		example
 			configui.hideWidget("use_hands", true)
 
+	configui.setSelections(widgetID, selections) --changes the available selections in a dropdown
+		example
+			configui.setSelections("selection_list", {"One","Two","Three"})
+	
 	configui.onUpdate(itemID, callbackFunction) -- allows you to define a callback function that triggers any time the value for the itemID changes for any reason,
 		including being changed in the UI or being changed with code.
 		example:
@@ -72,6 +76,7 @@ local panelList = {}
 local layoutDefinitions = {}
 local updateFunctions = {}
 local defaultFilename = "config_default"
+local treeInitialized = {}
 
 local function doUpdate(panelID, widgetID, value, updateConfigValue)
 	if panelID ~= nil then
@@ -153,8 +158,12 @@ local function getArrayFromVector4(vec)
 end
 
 local function drawUI(panelID)
+	local treeDepth = 0
+	local treeState = {}
+	local isTreeOpen = false
 	for _, item in ipairs(layoutDefinitions[panelID]) do
-		if item.isHidden ~= true then
+		if item.isHidden ~= true and (treeDepth == 0 or treeState[treeDepth] == true or item.widgetType == "tree_node" or item.widgetType == "tree_node_ptr_id" or item.widgetType == "tree_node_str_id" or item.widgetType == "tree_pop") then 
+			if item.label == "" then item.label = " " end --with an empty label, combos wont open
 			if item.widgetType == "checkbox" then
 				local changed, newValue = imgui.checkbox(item.label, configValues[panelID][item.id])
 				if changed then 
@@ -237,6 +246,46 @@ local function drawUI(panelID)
 				imgui.begin_child_window(getVector2FromArray(item.size), item.border)
 			elseif item.widgetType == "end_child_window" then
 				imgui.end_child_window()
+			elseif item.widgetType == "tree_node" then
+				treeDepth = treeDepth + 1
+				if treeDepth - 1 == 0 or treeState[treeDepth - 1] == true then
+					if treeInitialized[item.id] ~= true then
+						imgui.set_next_item_open(item.initialOpen == true and true or false)
+						treeInitialized[item.id] = true
+					end
+					treeState[treeDepth] = imgui.tree_node(item.label)
+				else
+					treeState[treeDepth] = false
+				end
+			elseif item.widgetType == "tree_node_ptr_id" then
+				treeDepth = treeDepth + 1
+				if treeDepth - 1 == 0 or treeState[treeDepth - 1] == true then
+					if treeInitialized[item.id] ~= true then
+						imgui.set_next_item_open(item.initialOpen == true and true or false)
+						treeInitialized[item.id] = true
+					end
+					treeState[treeDepth] = imgui.tree_node_ptr_id(item.id,item.label)
+				else
+					treeState[treeDepth] = false
+				end
+			elseif item.widgetType == "tree_node_str_id" then
+				treeDepth = treeDepth + 1
+				if treeDepth - 1 == 0 or treeState[treeDepth - 1] == true then
+					if treeInitialized[item.id] ~= true then
+						imgui.set_next_item_open(item.initialOpen == true and true or false)
+						treeInitialized[item.id] = true
+					end
+					treeState[treeDepth] = imgui.tree_node_str_id(item.id,item.label)
+				else
+					treeState[treeDepth] = false
+				end
+			elseif item.widgetType == "tree_pop" then
+				if treeState[treeDepth] == true then
+					imgui.tree_pop()
+				end
+				treeDepth = treeDepth - 1
+			elseif item.widgetType == "collapsing_header" then
+				imgui.collapsing_header(item.label)
 			elseif item.widgetType == "new_line" then
 				imgui.new_line()
 			elseif item.widgetType == "spacing" then
@@ -245,6 +294,10 @@ local function drawUI(panelID)
 				imgui.same_line()
 			elseif item.widgetType == "text" then
 				imgui.text(item.label)
+			elseif item.widgetType == "indent" then
+				imgui.indent(item.width)
+			elseif item.widgetType == "unindent" then
+				imgui.unindent(item.width)
 			elseif item.widgetType == "text_colored" then
 				imgui.text_colored(item.label, colorStringToInteger(item.color))
 			end
@@ -405,6 +458,15 @@ function M.onUpdate(widgetID, funcDef)
 	table.insert(updateFunctions[widgetID], funcDef)
 end
 
+function M.getPanelID(widgetID)
+	local panelID = itemMap[widgetID]
+	if panelID == nil then
+		panelID = defaultFilename
+		panelList[panelID] = {isDirty=false, timeSinceLastSave=0, fileName=defaultFilename}
+	end
+	return panelID
+end
+
 function M.getValue(widgetID)
 	local panelID = itemMap[widgetID]
 	if panelID == nil then
@@ -419,31 +481,21 @@ function M.getValue(widgetID)
 end
 
 function M.setValue(widgetID, value)
-	local panelID = itemMap[widgetID]
-	if panelID == nil then
-		panelID = defaultFilename
-		panelList[panelID] = {isDirty=false, timeSinceLastSave=0, fileName=defaultFilename}
-	end
-	doUpdate(panelID, widgetID, value)
+	doUpdate(M.getPanelID(widgetID), widgetID, value)
+end
+
+function M.setSelections(widgetID, selections)
+	item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
+	item.selections = selections
 end
 
 function M.hideWidget(widgetID, value)
-	local panelID = itemMap[widgetID]
-	if panelID == nil then
-		panelID = defaultFilename
-		panelList[panelID] = {isDirty=false, timeSinceLastSave=0, fileName=defaultFilename}
-	end
-	item = getDefinitionElement(panelID, widgetID)
+	item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
 	item.isHidden = value
 end
 
 function M.setLabel(widgetID, newLabel)
-	local panelID = itemMap[widgetID]
-	if panelID == nil then
-		panelID = defaultFilename
-		panelList[panelID] = {isDirty=false, timeSinceLastSave=0, fileName=defaultFilename}
-	end
-	item = getDefinitionElement(panelID, widgetID)
+	item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
 	item.label = newLabel
 end
 
