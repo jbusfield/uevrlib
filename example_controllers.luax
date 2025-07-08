@@ -1,9 +1,6 @@
 local uevrUtils = require("libs/uevr_utils")
 uevrUtils.initUEVR(uevr)
-local debugModule = require("libs/uevr_debug")
 local controllersModule = require("libs/controllers")
-local flickerFixer = require("libs/flicker_fixer")
-
 
 local objectsConnected = false
 
@@ -15,19 +12,11 @@ function on_level_change(level)
 	controllersModule.createController(1)
 	controllersModule.createController(2) 
 	objectsConnected = false
-	
-	--To fix flicker with the Native Stereo Fix on, include the require("libs/flicker_fixer") 
-	--above and call flickerFixer.create() at a level change
-	flickerFixer.create()
-	
+		
 end
 
 function on_pre_engine_tick(engine, delta)
 	attachObjectsToControllers()
-end
-
-function on_lazy_poll()
-
 end
 
 --replace this with a way to get a widget in your particular game
@@ -58,19 +47,5 @@ function attachObjectsToControllers()
 	end
 end
 
-hook_function("Class /Script/Engine.PlayerController", "ClientRestart", true, nil, 
-	function(fn, obj, locals, result)
-		print("ClientRestart called")
-		return false
-	end
-, true)
 
-register_key_bind("F1", function()
-    print("F1 pressed\n")
-	debugModule.dump(pawn)
-end)
-
-register_key_bind("F2", function()
-    print("F2 pressed\n")
-end)
 
