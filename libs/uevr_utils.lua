@@ -10,16 +10,24 @@ Usage
 	In your code call function like this
 		local actor = uevrUtils.spawn_actor(transform, collisionMethod, owner)
 		
-	Some functions such as delay(msec, func) that are globally useful have both
+	Some functions such as setTimeout(msec, func) that are globally useful have both
 	a global and module referenced implementation. The module reference is just for
 	convenience and does nothing but call the global implementation
 	
 	Available functions:
 	
-	delay(msec, func) or uevrUtils.delay(msec, func) - delays for specified number of milliseconds before executing func
+	setTimeout(msec, func) or uevrUtils.setTimeout(msec, func)) or uevrUtils.delay(msec, func) - delays for specified number of milliseconds 
+		before executing func. 
+		delay(msec, func) is deprecated to prevent global naming conflicts but, if used, will still call setTimeout(msec, func) internally
 		example: 
-			delay(1000, function()
+			setTimeout(1000, function()
 				print("after one second delay")
+			end)
+			
+	setInterval(msec, func) or uevrUtils.setInterval(msec, func) - delays for specified number of milliseconds before executing func then repeats
+		example: 
+			setInterval(1000, function()
+				print("repeats one second delay")
 			end)
 
 	uevrUtils.vector_2(x, y, reuseable) - returns a CoreUObject.Vector2D structure with the given params
@@ -48,11 +56,17 @@ Usage
 		example:
 			print("Yaw value is",uevrUtils.rotator(30, 40, 50).Yaw)
 	
-	uevrUtils.vector(x, y, z, reuseable) - returns a CoreUObject.Vector with the given params
+	uevrUtils.vector(x, y, z, (optional)reuseable) - returns a CoreUObject.Vector with the given params
 		If reuseable is true a cached struct is returned. This is faster but if you need two instances for the same function call this would not work
 		example:
 			print("X value is",uevrUtils.vector(30, 40, 50).X)
 	
+	uevrUtils.vector(table, (optional)reuseable) - returns a CoreUObject.Vector with the given params
+		If reuseable is true a cached struct is returned. 
+		example:
+			print("X value is",uevrUtils.vector({30,40,50}).X)
+			print("X value is",uevrUtils.vector({X=30,Y=40,Z=50}).X)
+			print("X value is",uevrUtils.vector({x=30,y=40,z=50}).X)
 	
 	uevrUtils.rotatorFromQuat(x, y, z, w) - returns CoreUObject.Rotator given the x,y,z and w values from a quaternion
 		example:
@@ -196,21 +210,57 @@ Usage
 		example:
 			local referenceGlove = uevrUtils.getChildComponent(pawn.Mesh, "Gloves")
 	
-	uevrUtils.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, (optional)parent) - creates a skeletal mesh component (PoseableMeshComponent) that can be 
+	uevrUtils.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, (optional)options) - creates a skeletal mesh component (PoseableMeshComponent) that can be 
 		manually manipulated and is a copy of the passed in skeletalMeshComponent. If parent is provided then parent is used as the component's actor rather 
 		than create a new actor
+		options: 
+			manualAttachment(bool) 
+			relativeTransform(transform) (ex uevrUtils.get_transform(position, rotation, scale, reuseable))
+			deferredFinish(bool)
+			parent(object) 
+			tag(string)
+			showDebug(bool)
 		example:
-			poseableComponent = uevrUtils.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent)
+			poseableComponent = uevrUtils.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, {showDebug=false})
 	
-	uevrUtils.createSkeletalMeshComponent(meshName, (optional)parent) - creates a skeletal mesh component and assigns a mesh to it with the given name. 
+	uevrUtils.createSkeletalMeshComponent(meshName, (optional)options) - creates a skeletal mesh component and assigns a mesh to it with the given name. 
+		options: 
+			manualAttachment(bool) 
+			relativeTransform(transform) (ex uevrUtils.get_transform(position, rotation, scale, reuseable))
+			deferredFinish(bool)
+			parent(object) 
+			tag(string)
 		Can use short name. If parent is provided then parent is used as the component's actor rather than create a new actor
-	
-	uevrUtils.createStaticMeshComponent(meshName) - creates a static mesh component and assigns a mesh to it with the given name. Can use short name
+		example:
+			local component = uevrUtils.createSkeletalMeshComponent(wand.SK_Wand.SkeletalMesh:get_full_name(), {parent=wand})	
+
+	uevrUtils.createStaticMeshComponent(mesh, (optional)options) - creates a static mesh component and assigns a mesh to it.
+		The mesh param can be a StaticMesh object or the class name of a static mesh. Can use short name
+		options: 
+			manualAttachment(bool) 
+			relativeTransform(transform) (ex uevrUtils.get_transform(position, rotation, scale, reuseable))
+			deferredFinish(bool)
+			parent(object) 
+			tag(string)
 		example:
 			local rightComponent = uevrUtils.createStaticMeshComponent("StaticMesh /Engine/EngineMeshes/Sphere.Sphere")
 			local rightComponent = uevrUtils.createStaticMeshComponent("Sphere") --beware of duplicate short names
+			local rightComponent = uevrUtils.createStaticMeshComponent(mesh)
 
-	uevrUtils.createWidgetComponent(widget, (optional)removeFromViewport, (optional)twoSided, (optional)drawSize) - creates a widget component and assigns a widget to it
+	uevrUtils.createWidgetComponent(widget, (optional)options) - creates a widget component and assigns a widget to it
+		The widget param can be a widget class name or an actual widget object
+		options: 
+			manualAttachment(bool) 
+			relativeTransform(transform) (ex uevrUtils.get_transform(position, rotation, scale, reuseable))
+			deferredFinish(bool)
+			parent(object) 
+			tag(string)
+			removeFromViewport(bool)
+			twoSided(bool)
+			drawSize(Vector2D)
+		example:
+			local hudComponent = uevrUtils.createWidgetComponent(widget, {removeFromViewport=true, twoSided=true, drawSize=vector_2(620, 75)})	
+			local hudComponent = uevrUtils.createWidgetComponent("WidgetBlueprintGeneratedClass /Game/UI/HUD/Reticle/Reticle_BP.Reticle_BP_C", {removeFromViewport=true, twoSided=true, drawSize=vector_2(100, 100)})	
 	
 	uevrUtils.fixMeshFOV(mesh, propertyName, value, (optional)includeChildren, (optional)includeNiagara, (optional)showDebug) --Removes the FOV distortions that 
 		many flat FPS games apply to player and weapon meshes using ScalarParameterValues
@@ -311,9 +361,11 @@ actor_c = nil
 -- These are useful as is
 pawn = nil -- updated every tick 
 Statics = nil
+WidgetBlueprintLibrary = nil
 kismet_system_library = nil
 kismet_math_library = nil
 kismet_string_library = nil 
+kismet_rendering_library = nil
 --uevr = nil
 -------------------------------
 -- global enums
@@ -374,11 +426,17 @@ local function updateKeyPress()
 end
 
 local delayList = {}
-function delay(msec, func)
+function setTimeout(msec, func)
 	table.insert(delayList, {countDown = msec/1000, func = func})
 end
+function M.setTimeout(msec, func)
+	setTimeout(msec, func)
+end
+function delay(msec, func)
+	setTimeout(msec, func)
+end
 function M.delay(msec, func)
-	delay(msec, func)
+	setTimeout(msec, func)
 end
 
 local function updateDelay(delta)
@@ -389,6 +447,26 @@ local function updateDelay(delta)
 				delayList[i]["func"]()
 			end
 			table.remove(delayList, i)
+		end
+	end
+end
+
+local timerList = {}
+function setInterval(msec, func)
+	table.insert(timerList, {period = msec/1000, countDown = msec/1000, func = func})
+end
+function M.setInterval(msec, func)
+	setInterval(msec, func)
+end
+
+local function updateTimer(delta)
+	for i = #timerList, 1, -1 do
+		timerList[i]["countDown"] = timerList[i]["countDown"] - delta
+		if timerList[i]["countDown"] < 0 then
+			if timerList[i]["func"] ~= nil then
+				timerList[i]["func"]()
+			end
+			timerList[i]["countDown"] = timerList[i]["countDown"] + timerList[i]["period"]
 		end
 	end
 end
@@ -430,24 +508,6 @@ end
   -- end
 -- end
 
-local function getCurrentLevel()
-	local world = M.get_world()
-	if world ~= nil then
-		return world.PersistentLevel
-	end
-	return nil
-end
-
-local function updateCurrentLevel()
-	if on_level_change ~= nil then
-		local level = getCurrentLevel()
-		if lastLevel ~= level then
-			on_level_change(level)
-		end	
-		lastLevel = level
-	end
-end
-
 local lazyElapsedTime = 0.0
 local lazyPollTime = 1.0
 local function updateLazyPoll(delta)
@@ -471,13 +531,33 @@ local function registerUEVRCallback(callbackName, callbackFunc)
 	table.insert(uevrCallbacks[callbackName], callbackFunc)
 end
 
-local function executeUEVRCallbacks(callbackName)
+local function executeUEVRCallbacks(callbackName, ...)
 	if uevrCallbacks[callbackName] ~= nil then
 		for i, func in ipairs(uevrCallbacks[callbackName]) do
-			func(engine, delta)
+			func(table.unpack({...}))
 		end
 	end
 end
+
+local function getCurrentLevel()
+	local world = M.get_world()
+	if world ~= nil then
+		return world.PersistentLevel
+	end
+	return nil
+end
+
+local function updateCurrentLevel()
+	local level = getCurrentLevel()
+	if lastLevel ~= level then
+		executeUEVRCallbacks("on_level_change", level)
+		if on_level_change ~= nil then
+			on_level_change(level)
+		end
+	end	
+	lastLevel = level
+end
+
 
 local isInitialized = false
 function M.initUEVR(UEVR, callbackFunc)
@@ -507,7 +587,9 @@ function M.initUEVR(UEVR, callbackFunc)
 	kismet_system_library = M.find_default_instance("Class /Script/Engine.KismetSystemLibrary")
 	kismet_math_library = M.find_default_instance("Class /Script/Engine.KismetMathLibrary")
 	kismet_string_library = M.find_default_instance("Class /Script/Engine.KismetStringLibrary")
+	kismet_rendering_library = M.find_default_instance("Class /Script/Engine.KismetRenderingLibrary")
 	Statics = M.find_default_instance("Class /Script/Engine.GameplayStatics")
+	WidgetBlueprintLibrary = M.find_default_instance("Class /Script/UMG.WidgetBlueprintLibrary")
 	
 	game_engine = M.find_first_of("Class /Script/Engine.GameEngine")
 	
@@ -525,7 +607,7 @@ function M.initUEVR(UEVR, callbackFunc)
 			on_xinput_get_state(retval, user_index, state)
 		end
 		
-		executeUEVRCallbacks("onInputGetState")
+		executeUEVRCallbacks("onInputGetState", retval, user_index, state)
 	end)
 
 	uevr.sdk.callbacks.on_pre_calculate_stereo_view_offset(function(device, view_index, world_to_meters, position, rotation, is_double)
@@ -533,7 +615,7 @@ function M.initUEVR(UEVR, callbackFunc)
 			on_pre_calculate_stereo_view_offset(device, view_index, world_to_meters, position, rotation, is_double)
 		end
 		
-		executeUEVRCallbacks("preCalculateStereoView")
+		executeUEVRCallbacks("preCalculateStereoView", device, view_index, world_to_meters, position, rotation, is_double)
 	end)
 
 	uevr.sdk.callbacks.on_post_calculate_stereo_view_offset(function(device, view_index, world_to_meters, position, rotation, is_double)
@@ -542,10 +624,10 @@ function M.initUEVR(UEVR, callbackFunc)
 				on_post_calculate_stereo_view_offset(device, view_index, world_to_meters, position, rotation, is_double)
 			end
 			
-			executeUEVRCallbacks("postCalculateStereoView")
+			executeUEVRCallbacks("postCalculateStereoView", device, view_index, world_to_meters, position, rotation, is_double)
 		end)
 		-- if success == false then
-			-- uevrUtils.print("[on_pre_engine_tick] " .. response, LogLevel.Error)
+			-- M.print("[on_pre_engine_tick] " .. response, LogLevel.Error)
 		-- end
 	end)
 
@@ -554,6 +636,7 @@ function M.initUEVR(UEVR, callbackFunc)
 			pawn = uevr.api:get_local_pawn(0)
 			updateCurrentLevel()
 			updateDelay(delta)
+			updateTimer(delta)
 			updateLazyPoll(delta)
 			updateKeyPress()
 			updateLerp(delta)
@@ -561,10 +644,10 @@ function M.initUEVR(UEVR, callbackFunc)
 				on_pre_engine_tick(engine, delta)
 			end
 			
-			executeUEVRCallbacks("preEngineTick")
+			executeUEVRCallbacks("preEngineTick", engine, delta)
 		end)
 		-- if success == false then
-			-- uevrUtils.print("[on_pre_engine_tick] " .. response, LogLevel.Error)
+			-- M.print("[on_pre_engine_tick] " .. response, LogLevel.Error)
 		-- end
 	end)
 
@@ -573,7 +656,7 @@ function M.initUEVR(UEVR, callbackFunc)
 			on_post_engine_tick(engine, delta)
 		end
 			
-		executeUEVRCallbacks("postEngineTick")
+		executeUEVRCallbacks("postEngineTick", engine, delta)
 	end)
 	
 	if callbackFunc ~= nil then
@@ -637,6 +720,10 @@ function M.registerPostCalculateStereoViewCallback(func)
 	registerUEVRCallback("postCalculateStereoView", func)
 end
 
+function M.registerLevelChangeCallback(func)
+	registerUEVRCallback("on_level_change", func)
+end
+
 function vector_2(x, y, reuseable)
 	local vector = M.get_struct_object("ScriptStruct /Script/CoreUObject.Vector2D", reuseable)
 	if vector ~= nil then
@@ -676,9 +763,9 @@ end
 --function M.vector(x, y, z, reuseable)
 function M.vector(...)
     local arg = {...}
-	local x=0
-	local y=0
-	local z=0
+	local x=0.0
+	local y=0.0
+	local z=0.0
 	local reuseable = false
 
 	if #arg == 1 or #arg == 2 then
@@ -716,11 +803,69 @@ function M.vector(...)
 			
 	local vector = M.get_struct_object("ScriptStruct /Script/CoreUObject.Vector", reuseable)
 	if vector ~= nil then
-		vector.X = x
-		vector.Y = y
-		vector.Z = z
+		if vector["X"] ~= nil then vector.X = x else vector.x = x end
+		if vector["Y"] ~= nil then vector.Y = y else vector.y = y end
+		if vector["Z"] ~= nil then vector.Z = z else vector.z = z end
 	end
 	return vector
+	
+	--this should work but doesnt, at least in robocop
+	--return kismet_math_library:MakeVector(x, y, z)
+
+end
+
+function M.rotator(...)
+    local arg = {...}
+	local pitch=0
+	local yaw=0
+	local roll=0
+	local reuseable = false
+
+	if #arg == 1 or #arg == 2 then
+		if type(arg[1]) == "userdata" then --maybe a rotator was sent in
+			--if arg[1]:is_a(M.get_class("ScriptStruct /Script/CoreUObject.Rotator")) then
+			return arg[1]
+		elseif type(arg[1]) == "table" then
+			pitch = (arg[1].Pitch ~= nil) and arg[1].Pitch or ((arg[1].X ~= nil) and arg[1].X or ((arg[1].x ~= nil) and arg[1].x or ((#arg[1] > 0) and arg[1][1])))
+			yaw = (arg[1].Yaw ~= nil) and arg[1].Yaw or ((arg[1].Y ~= nil) and arg[1].Y or ((arg[1].y ~= nil) and arg[1].y or ((#arg[1] > 1) and arg[1][2])))
+			roll = (arg[1].Roll ~= nil) and arg[1].Roll or ((arg[1].Z ~= nil) and arg[1].Z or ((arg[1].z ~= nil) and arg[1].z or ((#arg[1] > 2) and arg[1][3])))
+		else
+			M.print("Invalid argument 1 passed to rotator function", LogLevel.Warning)
+		end
+		
+		if #arg == 2 then
+			if type(arg[2]) == "boolean" then
+				reuseable = arg[2]
+			else
+				M.print("Invalid argument 2 passed to rotator function", LogLevel.Warning)
+			end
+		end
+	elseif #arg == 3 or #arg == 4 then
+		if type(arg[1]) == "number" then pitch = arg[1] else M.print("Invalid pitch value passed to rotator function", LogLevel.Warning) end
+		if type(arg[2]) == "number" then yaw = arg[2] else M.print("Invalid yaw value passed to rotator function", LogLevel.Warning) end
+		if type(arg[3]) == "number" then roll = arg[3] else M.print("Invalid roll value passed to rotator function", LogLevel.Warning) end
+		
+		if #arg == 4 then
+			if type(arg[4]) == "boolean" then
+				reuseable = arg[4]
+			else
+				M.print("Invalid argument 4 passed to vector function", LogLevel.Warning)
+			end
+		end
+	end
+
+	-- local rotator = M.get_struct_object("ScriptStruct /Script/CoreUObject.Rotator", reuseable)
+	-- if rotator ~= nil then
+		-- if rotator["Pitch"] ~= nil then rotator.Pitch = pitch else rotator.pitch = pitch end
+		-- if rotator["Yaw"] ~= nil then rotator.Yaw = yaw else rotator.yaw = yaw end
+		-- if rotator["Roll"] ~= nil then rotator.Roll = roll else rotator.roll = roll end
+	-- end
+	-- return rotator
+	return kismet_math_library:MakeRotator(roll, pitch, yaw)
+end
+
+function M.rotatorFromQuat(x, y, z, w)
+	return kismet_math_library:Quat_Rotator(M.quat(x, y, z, w))
 end
 
 function M.quat(x, y, z, w, reuseable)
@@ -731,18 +876,33 @@ function M.quat(x, y, z, w, reuseable)
 	return quat
 end
 
-function M.rotator(pitch, yaw, roll, reuseable)
-	local rotator = M.get_struct_object("ScriptStruct /Script/CoreUObject.Rotator", reuseable)
-	if rotator ~= nil then
-		rotator.Pitch = pitch
-		rotator.Yaw = yaw
-		rotator.Roll = roll
-	end
-	return rotator
-end
+-- function M.sumRotators(...) --BreakRotator doesnt work in robocop UB
+    -- local arg = {...}
+	-- local rollTotal,pitchTotal,yawTotal = 0,0,0
+	-- for i = 1, #arg do
+		-- local roll,pitch,yaw = 0,0,0
+		-- kismet_math_library:BreakRotator(arg[i], roll, pitch, yaw) 
+		-- print("here", roll, pitch, yaw)
+		-- rollTotal = rollTotal + roll
+		-- pitchTotal = pitchTotal + pitch
+		-- yawTotal = yawTotal + yaw
+	-- end
+	-- return kismet_math_library:MakeRotator(rollTotal, pitchTotal, yawTotal)
+-- end
 
-function M.rotatorFromQuat(x, y, z, w)
-	return kismet_math_library:Quat_Rotator(M.quat(x, y, z, w))
+function M.sumRotators(...)
+    local arg = {...}
+	local rollTotal,pitchTotal,yawTotal = 0,0,0
+	if arg ~= nil then
+		for i = 1, #arg do
+			if arg[i] ~= nil then
+				if arg[i]["Pitch"] ~= nil then pitchTotal = pitchTotal + arg[i]["Pitch"] else pitchTotal = pitchTotal + arg[i]["pitch"] end
+				if arg[i]["Yaw"] ~= nil then yawTotal = yawTotal + arg[i]["Yaw"] else yawTotal = yawTotal + arg[i]["yaw"] end
+				if arg[i]["Roll"] ~= nil then rollTotal = rollTotal + arg[i]["Roll"] else rollTotal = rollTotal + arg[i]["roll"] end
+			end
+		end
+	end
+	return kismet_math_library:MakeRotator(rollTotal, pitchTotal, yawTotal)
 end
 
 function M.get_transform(position, rotation, scale, reuseable)
@@ -762,21 +922,37 @@ function M.get_transform(position, rotation, scale, reuseable)
 	return transform
 end
 
-function M.set_component_relative_transform(component, position, rotation, scale)
+function M.set_component_relative_location(component, position)
 	if component ~= nil and component.RelativeLocation ~= nil then
-		if position == nil then position = {X=0.0, Y=0.0, Z=0.0} end 
-		if rotation == nil then rotation = {Pitch=0, Yaw=0, Roll=0} end
-		if scale == nil then scale = {X=1.0, Y=1.0, Z=1.0} end
+		if position == nil then position = {X=0.0, Y=0.0, Z=0.0} else position = M.vector(position) end 
 		component.RelativeLocation.X = position.X
 		component.RelativeLocation.Y = position.Y
 		component.RelativeLocation.Z = position.Z
+	end
+end
+
+function M.set_component_relative_rotation(component, rotation)
+	if component ~= nil and component.RelativeRotation ~= nil then
+		if rotation == nil then rotation = {Pitch=0, Yaw=0, Roll=0} else rotation = M.rotator(rotation)  end
 		component.RelativeRotation.Pitch = rotation.Pitch
 		component.RelativeRotation.Yaw = rotation.Yaw
 		component.RelativeRotation.Roll = rotation.Roll
+	end
+end
+
+function M.set_component_relative_scale(component, scale)
+	if component ~= nil and component.RelativeScale3D ~= nil then
+		if scale == nil then scale = {X=1.0, Y=1.0, Z=1.0} else scale = M.vector(scale) end
 		component.RelativeScale3D.X = scale.X
 		component.RelativeScale3D.Y = scale.Y
 		component.RelativeScale3D.Z = scale.Z
 	end
+end
+
+function M.set_component_relative_transform(component, position, rotation, scale)
+	M.set_component_relative_location(component, position)
+	M.set_component_relative_rotation(component, rotation)
+	M.set_component_relative_scale(component, scale)
 end
 
 function M.getUEVRParam_bool(paramName)
@@ -839,7 +1015,7 @@ function M.get_world()
 end
 
 
-function M.spawn_actor(transform, collisionMethod, owner)
+function M.spawn_actor(transform, collisionMethod, owner, tag)
 	viewport = game_engine.GameViewport
 	if viewport == nil then
 		print("Viewport is nil")
@@ -862,8 +1038,44 @@ function M.spawn_actor(transform, collisionMethod, owner)
     end
 
     Statics:FinishSpawningActor(actor, transform)
-
+	
+	-- print("Tags ",actor.Tags)
+	-- if actor.Tags == nil then actor.Tags = {} end
+	-- print("Tags before",#actor.Tags)
+	-- if tag ~= nil then
+		-- actor.Tags[#actor.Tags + 1] = M.fname_from_string(tag)
+		-- print("Tag added", actor.Tags[#actor.Tags])
+	-- end
+	-- print("Tags after",#actor.Tags)
+	
     return actor
+end
+
+function M.getAllActorsWithTag(tag)
+	local actors = {}
+	Statics:GetAllActorsWithTag(M.get_world(), M.fname_from_string(tag), actors)
+	print("getAllActorWithTag",#actors)
+	return actors
+end
+
+function M.getAllActorsOfClassWithTag(className, tag)
+	local actors = {}
+	local class = M.get_class(className)
+	if class ~= nil then
+		Statics:GetAllActorsOfClassWithTag(M.get_world(), class, M.fname_from_string(tag), actors)
+	end
+	print("getAllActorWithTag",#actors)
+	return actors
+end
+
+function M.getAllActorsOfClass(className)
+	local actors = {}
+	local class = M.get_class(className)
+	if class ~= nil then
+		Statics:GetAllActorsOfClass(M.get_world(), class, M.fname_from_string(tag), actors)
+	end
+	print("getAllActorWithTag",#actors)
+	return actors
 end
 
 --coutesy of Pande4360
@@ -922,13 +1134,14 @@ end
         -- EAttachLocation_MAX = 4,
     -- };
 -- }
-function M.create_component_of_class(className, manualAttachment, relativeTransform, deferredFinish, parent)
+function M.create_component_of_class(class, manualAttachment, relativeTransform, deferredFinish, parent, tag)
+	if type(class) == "string" then class = M.get_class(class) end
 	if manualAttachment == nil then manualAttachment = true end
 	if relativeTransform == nil then relativeTransform = M.get_transform() end
 	if deferredFinish == nil then deferredFinish = false end
 	local baseActor = parent
-	if baseActor == nil or baseActor.AddComponentByClass == nil then baseActor = M.spawn_actor( nil, 1, nil) end
-	local component = baseActor:AddComponentByClass(M.get_class(className), manualAttachment, relativeTransform, deferredFinish)
+	if baseActor == nil or baseActor.AddComponentByClass == nil then baseActor = M.spawn_actor( nil, 1, nil, tag) end
+	local component = baseActor:AddComponentByClass(class, manualAttachment, relativeTransform, deferredFinish)
 	component:SetVisibility(true)
 	component:SetHiddenInGame(false)
 	if component.SetCollisionEnabled ~= nil then
@@ -1035,14 +1248,10 @@ end
 function color_from_rgba(r,g,b,a, reuseable)
 	local color = M.get_struct_object("ScriptStruct /Script/CoreUObject.LinearColor", reuseable) --StructObject.new(M.get_class("ScriptStruct /Script/CoreUObject.LinearColor"))
 	--zero_color = StructObject.new(color_c)
-	color.R = r
-	color.G = g
-	if color["B"] == nil then
-		color.b = b
-	else
-		color.B = b
-	end
-	color.A = a
+	if color["R"] ~= nil then color.R = r else color.r = r end
+	if color["G"] ~= nil then color.G = g else color.g = g end
+	if color["B"] ~= nil then color.B = b else color.b = b end
+	if color["A"] ~= nil then color.A = a else color.a = a end
 	return color
 end
 function M.color_from_rgba(r,g,b,a, reuseable)
@@ -1089,6 +1298,20 @@ function M.pressButton(state, button)
 end
 function M.unpressButton(state, button)
     state.Gamepad.wButtons = state.Gamepad.wButtons & ~(button)
+end
+function M.isThumbpadTouched(state, hand)
+    local thumbpad = hand == Handed.Right and uevr.params.vr.get_action_handle("/actions/default/in/ThumbrestTouchRight") or uevr.params.vr.get_action_handle("/actions/default/in/ThumbrestTouchLeft")
+	local controller = hand == Handed.Right and uevr.params.vr.get_right_joystick_source() or uevr.params.vr.get_left_joystick_source()
+	return uevr.params.vr.is_action_active(thumbpad, controller)
+end
+function M.triggerHapticVibration(hand, secondsFromNow, duration, frequency, amplitude)
+	if hand == nil then hand = Handed.Right end
+	if secondsFromNow == nil then secondsFromNow = 0 end
+	if duration == nil then duration = .05 end
+	if frequency == nil then frequency = 1000.0 end
+	if amplitude == nil then amplitude = 1.0 end
+	local controller = hand == Handed.Right and uevr.params.vr.get_right_joystick_source() or uevr.params.vr.get_left_joystick_source()
+	uevr.params.vr.trigger_haptic_vibration(secondsFromNow, duration, frequency, amplitude, controller)
 end
 
 -- if isButtonPressed(state, XINPUT_GAMEPAD_X) then
@@ -1259,40 +1482,72 @@ function M.getChildComponent(parent, name)
 	return childComponent
 end
 
-function M.detachAndDestroyComponent(component, destroyOwner, showDebug)
+function M.destroyComponent(component, destroyOwner, destroyChildren)
+	print("destroyComponent called on ", component )
 	if M.validate_object(component) ~= nil then
-		if showDebug == true then M.print("Detaching " .. component:get_full_name()) end
-		component:DetachFromParent(true,false)
-		if showDebug == true then M.print("Component detached") end
-		pcall(function()
-			if showDebug == true then M.print("Getting component owner") end
+		local success, response = pcall(function()
+			local name = component:get_full_name()
+			M.print("[destroyComponent] destroyComponent called for " .. name)
+			
+			if destroyChildren == true then
+				local children = component.AttachChildren
+				if children ~= nil then
+					M.print("[destroyComponent] Found " .. #children .. " children")
+					for i = #children, 1, -1 do
+						M.destroyComponent(children[i], destroyOwner, destroyChildren)
+					end
+				else
+					print("[destroyComponent] No children found")
+				end
+			end
+
+			M.print("[destroyComponent] Getting component owner for " ..  name)
 			local actor = component:GetOwner()
 			if actor ~= nil then
-				if showDebug == true then M.print("Got component owner " .. actor:get_full_name()) end
+				local actorName = actor:get_full_name()
+				M.print("[destroyComponent] Found component owner " .. actorName)
 				if actor.K2_DestroyComponent ~= nil then
 					actor:K2_DestroyComponent(component)
-					if showDebug == true then M.print("Destroyed component ") end
+					M.print("[destroyComponent] Destroyed component " .. name)
 				elseif component.K2_DestroyComponent ~= nil then
 					component:K2_DestroyComponent(component)
-					if showDebug == true then M.print("Destroyed component ") end
+					M.print("[destroyComponent] Destroyed component directly " .. name)
 				end
 				if destroyOwner == nil then destroyOwner = false end
 				if destroyOwner then
 					actor:K2_DestroyActor()
+					M.print("[destroyComponent] Destroyed component owner " .. actorName .. " for " .. name)
 				end
 			else
-				if showDebug == true then M.print("Component owner not found") end
+				M.print("[destroyComponent] Component owner not found")
 			end
 		end)	
+		if success == false then
+			print("[destroyComponent] pcall fail " .. response, LogLevel.Error)
+		end
 	end
 end
 
-function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, parent, showDebug)
+function M.detachAndDestroyComponent(component, destroyOwner, destroyChildren)
+	if M.validate_object(component) ~= nil then
+		M.print("[detachAndDestroyComponent] Detaching " .. component:get_full_name())
+		if component.DetachFromParent ~= nil then
+			component:DetachFromParent(true,false)
+		end
+		M.print("[detachAndDestroyComponent] Component detached")
+		M.destroyComponent(component, destroyOwner, destroyChildren)
+	end
+end
+
+--options are manualAttachment, relativeTransform, deferredFinish, parent, tag, showDebug
+function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, options)
+	if options == nil then options = {} end
+	local showDebug = options.showDebug
 	if showDebug == true then M.print("Creating PoseableMeshComponent from " .. skeletalMeshComponent:get_full_name()) end
 	local poseableComponent = nil
 	if skeletalMeshComponent ~= nil then
 		if skeletalMeshComponent:is_a(M.get_class("Class /Script/Engine.SkeletalMeshComponent")) then
-			poseableComponent = M.create_component_of_class("Class /Script/Engine.PoseableMeshComponent", false, nil, nil, parent)
+			poseableComponent = M.create_component_of_class("Class /Script/Engine.PoseableMeshComponent", options.manualAttachment, options.relativeTransform, options.deferredFinish, options.parent, options.tag)
 			--poseableComponent:SetCollisionEnabled(0, false)
 			if poseableComponent ~= nil then
 				if showDebug == true then M.print("Created " .. poseableComponent:get_full_name()) end
@@ -1325,63 +1580,168 @@ function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, parent, sho
 	return poseableComponent
 end
 
-function M.createStaticMeshComponent(meshName)
-	local component = M.create_component_of_class("Class /Script/Engine.StaticMeshComponent")
-	if component ~= nil then
-		--component:SetCollisionEnabled(false,false)
-		--various ways of finding a StaticMesh
-		--local staticMesh = uevrUtils.find_required_object("StaticMesh /Engine/EngineMeshes/Sphere.Sphere") --no caching so performance could suffer
-		--local staticMesh = uevrUtils.get_class("StaticMesh /Engine/EngineMeshes/Sphere.Sphere") --has caching but call is ideally meant for classes not other types
-		--local staticMesh = uevrUtils.find_instance_of("Class /Script/Engine.StaticMesh", "Sphere") --easier to specify name unless there is more than one "Sphere"
-		--local staticMesh = uevrUtils.find_instance_of("Class /Script/Engine.StaticMesh", "StaticMesh /Engine/EngineMeshes/Sphere.Sphere") --safest
-		local staticMesh = M.find_instance_of("Class /Script/Engine.StaticMesh", meshName) 
-		if staticMesh ~= nil then
-			component:SetStaticMesh(staticMesh)				
+--options are manualAttachment, relativeTransform, deferredFinish, parent, tag, visible, collisionEnabled
+function M.createStaticMeshComponent(mesh, options)
+	local component = nil
+	if mesh ~= nil and (type(mesh) == "string" or mesh:is_a(M.get_class("Class /Script/Engine.StaticMesh"))) then
+		if type(mesh) == "string" then
+			mesh = M.find_instance_of("Class /Script/Engine.StaticMesh", mesh) 
+		end
+
+		if mesh ~= nil then --check mesh again because it changed if it was originally a string
+			if options == nil then options = {} end
+			component = M.create_component_of_class("Class /Script/Engine.StaticMeshComponent", options.manualAttachment, options.relativeTransform, options.deferredFinish, options.parent, options.tag)
+			if component ~= nil then
+				if options.visible ~= nil then
+					component:SetVisibility(options.visible)
+				end
+				if options.collisionEnabled ~= nil and component.SetCollisionEnabled ~= nil then
+					component:SetCollisionEnabled(options.collisionEnabled == true and 1 or 0)
+				end
+				--various ways of finding a StaticMesh
+				--local staticMesh = M.find_required_object("StaticMesh /Engine/EngineMeshes/Sphere.Sphere") --no caching so performance could suffer
+				--local staticMesh = M.get_class("StaticMesh /Engine/EngineMeshes/Sphere.Sphere") --has caching but call is ideally meant for classes not other types
+				--local staticMesh = M.find_instance_of("Class /Script/Engine.StaticMesh", "Sphere") --easier to specify name unless there is more than one "Sphere"
+				--local staticMesh = M.find_instance_of("Class /Script/Engine.StaticMesh", "StaticMesh /Engine/EngineMeshes/Sphere.Sphere") --safest
+
+				component:SetStaticMesh(mesh)
+			else
+				M.print("StaticMeshComponent creation failed")
+			end
 		else
-			print("Static Mesh not found\n")
+			M.print("StaticMeshComponent not created because static mesh could not be created")
 		end
 	else
-		print("StaticMeshComponent not created\n")
+		M.print("StaticMeshComponent not created because mesh param is invalid")
 	end
 	return component
 end
 
-function M.createSkeletalMeshComponent(meshName, parent)
-	local component = M.create_component_of_class("Class /Script/Engine.SkeletalMeshComponent", nil, nil, nil, parent)
-	if component ~= nil then
-		--component:SetCollisionEnabled(false,false)
-		local skeletalMesh = M.find_instance_of("Class /Script/Engine.SkeletalMesh", meshName) 
-		if skeletalMesh ~= nil then
-			component:SetSkeletalMesh(skeletalMesh)				
+--options are manualAttachment, relativeTransform, deferredFinish, parent, tag
+function M.createSkeletalMeshComponent(mesh, options)
+	local component = nil
+	if mesh ~= nil and (type(mesh) == "string" or mesh:is_a(M.get_class("Class /Script/Engine.SkeletalMesh"))) then
+		if type(mesh) == "string" then
+			mesh = M.find_instance_of("Class /Script/Engine.SkeletalMesh", mesh) 
+		end
+		
+		if mesh ~= nil then --check mesh again because it changed if it was originally a string
+			if options == nil then options = {} end
+		
+			component = M.create_component_of_class("Class /Script/Engine.SkeletalMeshComponent", options.manualAttachment, options.relativeTransform, options.deferredFinish, options.parent, options.tag)
+			if component ~= nil then
+				--component:SetCollisionEnabled(false,false)
+				if component.SetSkeletalMesh ~= nil then
+					component:SetSkeletalMesh(skeletalMesh)
+					--M.print("Using SetSkeletalMesh")
+				elseif component.SetSkeletalMeshAsset ~= nil then
+					component:SetSkeletalMeshAsset(skeletalMesh)				
+					--M.print("Using SetSkeletalMeshAsset")
+				else
+					M.print("SkeletalMeshComponent SetSkeletalMesh function does not exist")
+				end
+				--component.SkeletalMesh = skeletalMesh				
+			else
+				M.print("SkeletalMeshComponent creation failed")
+			end
 		else
-			print("Skeletal Mesh not found\n")
+			M.print("SkeletalMeshComponent not created because skeletal mesh could not be created")
 		end
 	else
-		print("SkeletalMeshComponent not created\n")
+		M.print("SkeletalMeshComponent not created because mesh param is invalid")
 	end
 	return component
 end
 
-function M.createWidgetComponent(widget, removeFromViewport, twoSided, drawSize)
-	local component = M.create_component_of_class("Class /Script/UMG.WidgetComponent")
+--options are width, height, format
+function M.createRenderTarget2D(options)
+     return kismet_rendering_library:CreateRenderTarget2D( M.get_world(), options.width, options.height, options.format, zero_color, false)
+end
+
+--options are manualAttachment, relativeTransform, deferredFinish, parent, tag, visible, collisionEnabled
+function M.createSceneCaptureComponent(options)
+	local component = M.create_component_of_class("Class /Script/Engine.SceneCaptureComponent2D", options.manualAttachment, options.relativeTransform, options.deferredFinish, options.parent, options.tag)
 	if component ~= nil then
-		if removeFromViewport == true then
-			widget:RemoveFromViewport()
+		if options.visible ~= nil then
+			component:SetVisibility(options.visible)
 		end
-		component:SetWidget(widget)
-		if twoSided ~= nil then 
-			component:SetTwoSided(twoSided)
+		if options.collisionEnabled ~= nil and component.SetCollisionEnabled ~= nil then
+			component:SetCollisionEnabled(options.collisionEnabled == true and 1 or 0)
 		end
-		if drawSize ~= nil then
-			component:SetDrawSize(drawSize)
-		end
-		-- component:SetRenderCustomDepth(true)
-		-- component:SetCustomDepthStencilValue(100)
-		-- component:SetCustomDepthStencilWriteMask(1)
+		-- if component["bCacheVolumetricCloudsShadowMaps"] ~= nil then component.bCacheVolumetricCloudsShadowMaps = true end
+		-- -- component.bCachedDistanceFields = 1;
+		-- component.bUseRayTracingIfEnabled = false;
+		-- -- component.PrimitiveRenderMode = 2; -- 0 - legacy, 1 - other
+		-- -- component.CaptureSource = 1;
+		-- component.bAlwaysPersistRenderingState = true;
+		-- if component["bEnableVolumetricCloudsCapture"] ~= nil then component.bEnableVolumetricCloudsCapture = false end
+		-- component.bCaptureEveryFrame = 1;
+
+		-- -- post processing
+		-- component.PostProcessSettings.bOverride_MotionBlurAmount = true
+		-- component.PostProcessSettings.MotionBlurAmount = 0.0 -- Disable motion blur
+		-- component.PostProcessSettings.bOverride_ScreenSpaceReflectionIntensity = true
+		-- component.PostProcessSettings.ScreenSpaceReflectionIntensity = 0.0 -- Disable screen space reflections
+		-- component.PostProcessSettings.bOverride_AmbientOcclusionIntensity = true
+		-- component.PostProcessSettings.AmbientOcclusionIntensity = 0.0 -- Disable ambient occlusion
+		-- component.PostProcessSettings.bOverride_BloomIntensity = true
+		-- component.PostProcessSettings.BloomIntensity = 0.0
+		-- component.PostProcessSettings.bOverride_LensFlareIntensity = true
+		-- component.PostProcessSettings.LensFlareIntensity = 0.0 -- Disable lens flares
+		-- component.PostProcessSettings.bOverride_VignetteIntensity = true
+		-- component.PostProcessSettings.VignetteIntensity = 0.0 -- Disable vignette
 	else
-		print("WidgetComponent not created\n")
+		print("SceneCaptureComponent not created\n")
 	end
-	
+	return component
+end
+
+function M.getActiveWidgetByClass(className)
+	local widgets = M.find_all_instances(className, false)
+	if widgets ~= nil and M.getValid(pawn) ~= nil then
+		for _, widget in ipairs(widgets) do
+			if widget:GetOwningPlayerPawn() == pawn then
+				return widget
+			end
+		end
+	end
+end
+
+-- local widget = WidgetBlueprintLibrary:Create(uevrUtils.get_world(), uevrUtils.get_class("WidgetBlueprintGeneratedClass /Game/UI/HUD/Reticle/Reticle_BP.Reticle_BP_C"), playerController)
+
+--options are manualAttachment, relativeTransform, deferredFinish, parent, tag, removeFromViewport, twoSided, drawSize
+function M.createWidgetComponent(widget, options)
+	local component = nil
+	if widget ~= nil and (type(widget) == "string" or widget:is_a(M.get_class("Class /Script/UMG.Widget"))) then
+		if type(widget) == "string" then
+			widget = M.getActiveWidgetByClass(widget) 
+		end
+		
+		if M.getValid(widget) ~= nil then
+			component = M.create_component_of_class("Class /Script/UMG.WidgetComponent", options.manualAttachment, options.relativeTransform, options.deferredFinish, options.parent, options.tag)
+			if component ~= nil then
+				if options.removeFromViewport == true and widget.RemoveFromViewport ~= nil then
+					widget:RemoveFromViewport()
+				end
+				component:SetWidget(widget)
+				if options.twoSided ~= nil and component.SetTwoSided ~= nil then 
+					component:SetTwoSided(options.twoSided)
+				end
+				if options.drawSize ~= nil and component.SetDrawSize ~= nil then
+					component:SetDrawSize(options.drawSize)
+				end
+				-- component:SetRenderCustomDepth(true)
+				-- component:SetCustomDepthStencilValue(100)
+				-- component:SetCustomDepthStencilWriteMask(1)
+			else
+				M.print("WidgetComponent creation failed")
+			end			
+		else
+			M.print("WidgetComponent not created because widget could not be created")
+		end
+	else
+		M.print("WidgetComponent not created because widget param was invalid")	
+	end
 	return component
 end
 
@@ -1415,12 +1775,14 @@ function M.fixMeshFOV(mesh, propertyName, value, includeChildren, includeNiagara
 						end
 					end
 				end
+			else
+				M.print("No materials found on mesh", logLevel)
 			end
 			if includeChildren == true then
 				children = mesh.AttachChildren
 				if children ~= nil then
 					for i, child in ipairs(children) do
-						if child:is_a(static_mesh_component_c) and child.GetMaterials ~= nil then
+						if child:is_a(M.get_class("Class /Script/Engine.MeshComponent")) and child.GetMaterials ~= nil then
 							local materials = child:GetMaterials()
 							if materials ~= nil then
 								for i, material in ipairs(materials) do
@@ -1450,10 +1812,41 @@ function M.fixMeshFOV(mesh, propertyName, value, includeChildren, includeNiagara
 	end
 end
 
+
+function M.cloneComponent(component, options)
+	if options == nil then options = {} end
+	local clone = M.create_component_of_class(component:get_class(), options.manualAttachment, options.relativeTransform, options.deferredFinish, options.parent, options.tag)
+	if component.SetStaticMesh ~= nil then
+		clone:SetStaticMesh(component.StaticMesh)
+	elseif component:is_a(M.get_class("Class /Script/Engine.SkeletalMeshComponent")) then
+		clone = M.createPoseableMeshFromSkeletalMesh(component, nil)
+	end
+	-- if component.SetSkeletalMesh ~= nil then
+		-- clone:SetSkeletalMesh(component.SkeletalMesh)
+		-- M.copyMaterials(component, clone, showDebug)
+	-- end
+	-- if component.SetSkeletalMeshAsset ~= nil then
+		-- clone:SetSkeletalMeshAsset(component.SkeletalMeshAsset)
+		-- M.copyMaterials(component, clone, showDebug)
+	-- end
+	return clone
+end
+
 -- Following code is coutesy of markmon 
 ------------------------------------------------------------------------------------
 -- Helper section
 ------------------------------------------------------------------------------------
+function get_cvar_int(cvar)
+    local console_manager = uevr.api:get_console_manager()
+    
+    local var = console_manager:find_variable(cvar)
+    if(var ~= nil) then
+        return var:get_int()
+    end
+end
+function M.get_cvar_int(cvar)
+	get_cvar_int(cvar)
+end
 function set_cvar_int(cvar, value)
     local console_manager = uevr.api:get_console_manager()
     
@@ -1464,6 +1857,18 @@ function set_cvar_int(cvar, value)
 end
 function M.set_cvar_int(cvar, value)
 	set_cvar_int(cvar, value)
+end
+
+function set_cvar_float(cvar, value)
+    local console_manager = uevr.api:get_console_manager()
+    
+    local var = console_manager:find_variable(cvar)
+    if(var ~= nil) then
+        var:set_float(value)
+    end
+end
+function M.set_cvar_float(cvar, value)
+	set_cvar_float(cvar, value)
 end
 
 -------------------------------------------------------------------------------
@@ -1484,25 +1889,25 @@ end
 -- Returns: true on success, false on failure.
 -------------------------------------------------------------------------------
 function hook_function(class_name, function_name, native, prefn, postfn, dbgout)
-	if(dbgout) then M.print("Hook_function for " .. class_name .. "   " .. function_name) end
+	if(dbgout) then M.print("[hook_function] " .. class_name .. "   " .. function_name) end
     local result = false
     local class_obj = uevr.api:find_uobject(class_name)
     if(class_obj ~= nil) then
-        if dbgout then M.print("hook_function: found class obj for" .. class_name) end
+        if dbgout then M.print("[hook_function] Found class obj for " .. class_name) end
         local class_fn = class_obj:find_function(function_name)
         if(class_fn ~= nil) then 
-            if dbgout then M.print("hook_function: found function" .. function_name .. " for " .. class_name) end
+            if dbgout then M.print("[hook_function] Found function " .. function_name .. " for " .. class_name) end
             if (native == true) then
                 class_fn:set_function_flags(class_fn:get_function_flags() | 0x400)
-                if dbgout then M.print("hook_function: set native flag") end
+                if dbgout then M.print("[hook_function] Set native flag") end
             end
             
             class_fn:hook_ptr(prefn, postfn)
             result = true
-            if dbgout then print("hook_function: set function hook for", prefn, "and", postfn) end
+            if dbgout then M.print("[hook_function] Set function hook for " .. (prefn == nil and "nil" or "pre-function") .. " and " .. (postfn == nil and "nil" or "post-function")) end
         end
     end
-    
+    if dbgout then M.print("---") end
     return result
 end
 

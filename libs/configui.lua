@@ -78,6 +78,10 @@ local updateFunctions = {}
 local defaultFilename = "config_default"
 local treeInitialized = {}
 
+local defaultPanelList = {}
+local framePanelList = {}
+local customPanelList = {}
+
 local function doUpdate(panelID, widgetID, value, updateConfigValue)
 	if panelID ~= nil then
 		if updateConfigValue == nil then updateConfigValue = true end
@@ -325,26 +329,47 @@ function M.createPanel(panelDefinition)
 		label = "__default__"
 		fileName = defaultFilename
 	end
-	
-	local panelID = fileName
-	if panelID == nil or panelID == "" then 
-		panelID = label
+
+	local panelID = panelDefinition["id"]
+	if panelID == nil or panelID == "" then 		
+		panelID = fileName
+		if panelID == nil or panelID == "" then 
+			panelID = label
+		end
 	end
 	
 	layoutDefinitions[panelID] = panelDefinition["layout"]
+
+	panelList[panelID] = {isDirty=false, timeSinceLastSave=0, fileName=fileName, isHidden=panelDefinition["isHidden"]}
 	
-		--print("Creating panel",label, fileName)
+	print("Creating panel",label, fileName)
 	if configValues[panelID] == nil then
 		configValues[panelID] = {}
 		
 		if label == "__default__" then
+			--table.insert(defaultPanelList, panelID)
 			uevr.sdk.callbacks.on_draw_ui(function()
 				drawUI(panelID)
 			end)
-		elseif uevr.lua ~= nil then
-			uevr.lua.add_script_panel(label, function()
-				drawUI(panelID)
+		elseif panelDefinition["windowed"] == true then
+			--table.insert(framePanelList, panelID)
+			uevr.sdk.callbacks.on_frame(function()
+				if (panelList[panelID]["isHidden"] == nil or panelList[panelID]["isHidden"] == false) then
+					local opened = imgui.begin_window(label, true)
+					drawUI(panelID)
+					imgui.end_window()
+					if not opened then 
+						panelList[panelID]["isHidden"] = true
+					end
+				end
 			end)
+		elseif uevr.lua ~= nil then
+			--table.insert(customPanelList, panelID)
+			if (panelList[panelID]["isHidden"] == nil or panelList[panelID]["isHidden"] == false) then
+				uevr.lua.add_script_panel(label, function()
+						drawUI(panelID)
+				end)
+			end
 		end
 	end
 
@@ -366,7 +391,6 @@ function M.createPanel(panelDefinition)
 		end
 	end
 
-	panelList[panelID] = {isDirty=false, timeSinceLastSave=0, fileName=fileName}
 
 	M.load(panelID, fileName)
 	
@@ -467,6 +491,10 @@ function M.getPanelID(widgetID)
 	return panelID
 end
 
+-- function M.setPanelWindowed(panelID, value)
+-- change the configDefinition and then destroy existing an call create to create a new one
+-- end
+
 function M.getValue(widgetID)
 	local panelID = itemMap[widgetID]
 	if panelID == nil then
@@ -494,6 +522,15 @@ function M.hideWidget(widgetID, value)
 	item.isHidden = value
 end
 
+function M.hidePanel(panelID, value)
+	panelList[panelID]["isHidden"] = value
+end
+
+function M.togglePanel(panelID)
+	if panelList[panelID]["isHidden"] == nil then panelList[panelID]["isHidden"] = false end
+	panelList[panelID]["isHidden"] = not panelList[panelID]["isHidden"]
+end
+
 function M.setLabel(widgetID, newLabel)
 	item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
 	item.label = newLabel
@@ -518,6 +555,36 @@ uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
         end
     end
 end)
+
+-- uevr.sdk.callbacks.on_draw_ui(function()
+	-- for index, panelID in ipairs(defaultPanelList) do
+		-- drawUI(panelID)
+	-- end
+-- end)
+
+-- uevr.sdk.callbacks.on_frame(function()
+-- --print(#framePanelList)
+	-- for index, panelID in ipairs(framePanelList) do
+		-- if (panelList[panelID]["isHidden"] == nil or panelList[panelID]["isHidden"] == false) then
+			-- local opened = imgui.begin_window(label, true)
+			-- drawUI(panelID)
+			-- imgui.end_window()
+			-- if not opened then 
+				-- panelList[panelID]["isHidden"] = true
+			-- end
+		-- end
+	-- end
+-- end)
+
+-- uevr.lua.add_script_panel(label, function()
+-- print(#customPanelList)
+	-- for index, panelID in ipairs(customPanelList) do
+	-- print("here",panelID)
+		-- if (panelList[panelID]["isHidden"] == nil or panelList[panelID]["isHidden"] == false) then
+			-- drawUI(panelID)
+		-- end
+	-- end
+-- end)
 
 return M
 

@@ -191,9 +191,13 @@ end
 
 function M.hideHands(val)
 	for name, components in pairs(handComponents) do
-		M.print((val and "Hiding " or "Showing ") .. components[0]:get_full_name() .. " hand components", LogLevel.Debug)
-		components[0]:SetVisibility(not val, true)	
-		components[1]:SetVisibility(not val, true)	
+		if uevrUtils.getValid(components[0]) ~= nil and components[1].SetVisibility ~= nil then
+			M.print((val and "Hiding " or "Showing ") .. components[0]:get_full_name() .. " hand components", LogLevel.Debug)
+			components[0]:SetVisibility(not val, true)	
+		end
+		if uevrUtils.getValid(components[1]) ~= nil and components[1].SetVisibility ~= nil then
+			components[1]:SetVisibility(not val, true)	
+		end
 	end
 end
 
@@ -204,6 +208,7 @@ function M.destroyHands()
 		uevrUtils.detachAndDestroyComponent(components[0], true)	
 		uevrUtils.detachAndDestroyComponent(components[1], true)	
 	end
+	M.reset()
 end
 
 function M.createSkeletalVisualization(hand, scale, componentName)
@@ -232,38 +237,39 @@ local jointAngleDelta = 5
 
 function M.enableHandAdjustments(boneList, componentName)	
 	handBoneList = boneList
-	M.print("Adjust Mode " .. adjustModeLabels[adjustMode])
+	local logLevel = LogLevel.Critical
+	M.print("Adjust Mode " .. adjustModeLabels[adjustMode], logLevel)
 	if adjustMode == 3 then
-		M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex, LogLevel.Info)
+		M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex, logLevel)
 	else
-		M.print("Current hand: " .. currentHandLabels[currentHand+1], LogLevel.Info)
+		M.print("Current hand: " .. currentHandLabels[currentHand+1], logLevel)
 	end
 	
 	register_key_bind("NumPadFive", function()
 		M.print("Num5 pressed")
 		adjustMode = (adjustMode % 3) + 1
-		M.print("Adjust Mode " .. adjustModeLabels[adjustMode])
+		M.print("Adjust Mode " .. adjustModeLabels[adjustMode], logLevel)
 		if adjustMode == 3 then
-			M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex, LogLevel.Info)
+			M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex, logLevel)
 		else
-			M.print("Current hand: " .. currentHandLabels[currentHand+1], LogLevel.Info)
+			M.print("Current hand: " .. currentHandLabels[currentHand+1], logLevel)
 		end
 	end)
 
 	register_key_bind("NumPadNine", function()
 		M.print("Num9 pressed")
 		currentIndex = (currentIndex % 3) + 1
-		M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex, LogLevel.Info)
+		M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex, logLevel)
 	end)
 
 	register_key_bind("NumPadSeven", function()
 		M.print("Num7 pressed")
 		if adjustMode == 3 then
 			currentFinger = (currentFinger % 10) + 1
-			M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex, LogLevel.Info)
+			M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex, logLevel)
 		else 
 			currentHand = (currentHand + 1) % 2
-			M.print("Current hand: " .. currentHandLabels[currentHand+1], LogLevel.Info)
+			M.print("Current hand: " .. currentHandLabels[currentHand+1], logLevel)
 		end
 	end)
 
@@ -346,8 +352,9 @@ function M.setFingerAngles(fingerIndex, jointIndex, angleID, angle, componentNam
 end
 
 function M.printHandTranforms(transforms)
-	M.print("Rotation = {" .. transforms["Rotation"][1] .. ", " .. transforms["Rotation"][2] .. ", "  .. transforms["Rotation"][3] ..  "}", LogLevel.Info)
-	M.print("Location = {" .. transforms["Location"][1] .. ", " .. transforms["Location"][2] .. ", "  .. transforms["Location"][3] ..  "}", LogLevel.Info)
+	local logLevel = LogLevel.Critical
+	M.print("Rotation = {" .. transforms["Rotation"][1] .. ", " .. transforms["Rotation"][2] .. ", "  .. transforms["Rotation"][3] ..  "}", logLevel)
+	M.print("Location = {" .. transforms["Location"][1] .. ", " .. transforms["Location"][2] .. ", "  .. transforms["Location"][3] ..  "}", logLevel)
 end
 
 function M.adjustRotation(hand, axis, delta, componentName)

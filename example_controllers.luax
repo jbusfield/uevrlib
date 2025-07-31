@@ -39,7 +39,7 @@ function attachObjectsToControllers()
 
 		local widget = getWidget()
 		if widget ~= nil then
-			local hudComponent = uevrUtils.createWidgetComponent(widget, true, false, vector_2(620, 75))
+			local hudComponent = uevrUtils.createWidgetComponent(widget, {removeFromViewport=true, twoSided=false, drawSize=vector_2(620, 75)})
 			local hudConnected = controllersModule.attachComponentToController(2, hudComponent)		
 			uevrUtils.set_component_relative_transform(hudComponent, {X=25.0, Y=0.0, Z=10}, {Pitch=0,Yaw=0 ,Roll=0}, {X=-0.03, Y=-0.03, Z=0.03})
 		end
