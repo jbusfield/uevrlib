@@ -191,7 +191,7 @@ end
 
 function M.hideHands(val)
 	for name, components in pairs(handComponents) do
-		if uevrUtils.getValid(components[0]) ~= nil and components[1].SetVisibility ~= nil then
+		if uevrUtils.getValid(components[0]) ~= nil and components[0].SetVisibility ~= nil then
 			M.print((val and "Hiding " or "Showing ") .. components[0]:get_full_name() .. " hand components", LogLevel.Debug)
 			components[0]:SetVisibility(not val, true)	
 		end

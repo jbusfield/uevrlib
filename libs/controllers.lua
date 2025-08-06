@@ -374,31 +374,6 @@ function M.getControllerRightVector(controllerID)
 	return nil
 end
 
-local g_shoulderGripOn = false
-function M.isEarGrabMotionActive(state, isLeftHanded)
-	local gripButton = XINPUT_GAMEPAD_RIGHT_SHOULDER
-	if isLeftHanded then
-		gripButton = XINPUT_GAMEPAD_LEFT_SHOULDER
-	end
-	if not g_shoulderGripOn and uevrUtils.isButtonPressed(state, gripButton)  then
-		g_shoulderGripOn = true
-		local headLocation = M.getControllerLocation(2)
-		local handLocation = M.getControllerLocation(isLeftHanded and 0 or 1)
-		if headLocation ~= nil and handLocation ~= nil then
-			local distance = kismet_math_library:Vector_Distance(headLocation, handLocation)
-			--print(distance,"\n")
-			if distance < 30 then	
-				return true
-			end
-		end
-	elseif g_shoulderGripOn and uevrUtils.isButtonNotPressed(state, gripButton) then
-		delay(1000, function()
-			g_shoulderGripOn = false
-		end)
-	end
-	return false
-end
-
 local isRestored = false
 uevrUtils.registerLevelChangeCallback(function(level)
 print("Level changed")

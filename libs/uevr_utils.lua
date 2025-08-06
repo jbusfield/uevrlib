@@ -396,6 +396,8 @@ local structCache = {}
 local uevrCallbacks = {}
 local keyBindList = {}
 local usingLuaVR = false
+local isPaused = false
+
 
 function register_key_bind(keyName, callbackFunc)
 	keyBindList[keyName] = {}
@@ -539,6 +541,7 @@ local function executeUEVRCallbacks(callbackName, ...)
 	end
 end
 
+
 local function getCurrentLevel()
 	local world = M.get_world()
 	if world ~= nil then
@@ -557,6 +560,21 @@ local function updateCurrentLevel()
 	end	
 	lastLevel = level
 end
+
+local function updateGamePaused()
+	local m_isPaused = false
+	local world = M.get_world()
+	if world ~= nil then
+		m_isPaused = Statics:IsGamePaused(world)
+	end
+	if isPaused ~= m_isPaused then
+		if on_game_paused ~= nil then
+			on_game_paused(m_isPaused)
+		end
+	end	
+	isPaused = m_isPaused
+end
+
 
 
 local isInitialized = false
@@ -640,15 +658,16 @@ function M.initUEVR(UEVR, callbackFunc)
 			updateLazyPoll(delta)
 			updateKeyPress()
 			updateLerp(delta)
+			updateGamePaused()
 			if on_pre_engine_tick ~= nil then
 				on_pre_engine_tick(engine, delta)
 			end
 			
 			executeUEVRCallbacks("preEngineTick", engine, delta)
 		end)
-		-- if success == false then
-			-- M.print("[on_pre_engine_tick] " .. response, LogLevel.Error)
-		-- end
+		if success == false then
+			M.print("[on_pre_engine_tick] " .. response, LogLevel.Error)
+		end
 	end)
 
 	uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
@@ -682,6 +701,7 @@ end
 
 function M.print(str, logLevel)
 	if logLevel == nil then logLevel = LogLevel.Debug end
+	if type(logLevel) ~= "number" then logLevel = LogLevel.Debug end
 	if type(str) == "string" then
 		if logLevel <= currentLogLevel then
 			print("[" .. LogLevelString[logLevel] .. "] " .. str .. (usingLuaVR and "\n" or ""))
@@ -1003,6 +1023,10 @@ function M.get_struct_object(structClassName, reuseable)
 	return nil
 end
 
+function M.isGamePaused()
+	return isPaused
+end
+
 function M.get_world()
 	if game_engine ~= nil then
 		viewport = game_engine.GameViewport	
@@ -1012,6 +1036,10 @@ function M.get_world()
 		end
 	end
 	return nil
+end
+
+function M.getWorld()
+	return M.get_world()
 end
 
 
@@ -1140,12 +1168,21 @@ function M.create_component_of_class(class, manualAttachment, relativeTransform,
 	if relativeTransform == nil then relativeTransform = M.get_transform() end
 	if deferredFinish == nil then deferredFinish = false end
 	local baseActor = parent
-	if baseActor == nil or baseActor.AddComponentByClass == nil then baseActor = M.spawn_actor( nil, 1, nil, tag) end
-	local component = baseActor:AddComponentByClass(class, manualAttachment, relativeTransform, deferredFinish)
-	component:SetVisibility(true)
-	component:SetHiddenInGame(false)
-	if component.SetCollisionEnabled ~= nil then
-		component:SetCollisionEnabled(0, false)	
+	if baseActor == nil then baseActor = M.spawn_actor( nil, 1, nil, tag) end
+	local component = nil
+	if baseActor.AddComponentByClass == nil then
+		component = uevr.api:add_component_by_class(baseActor, class, manualAttachment)
+	else
+		component = baseActor:AddComponentByClass(class, manualAttachment, relativeTransform, deferredFinish)
+	end
+	if component ~= nil then
+		component:SetVisibility(true)
+		component:SetHiddenInGame(false)
+		if component.SetCollisionEnabled ~= nil then
+			component:SetCollisionEnabled(0, false)	
+		end
+	else
+		M.print("Failed to create_component_of_class because component was nil")
 	end
 	return component
 end
@@ -1349,6 +1386,7 @@ function M.fadeCamera(rate, hardLock, softLock, overrideHardLock, overrideSoftLo
 	--print("fadeCamera executed",rate,"\n")
 
 	local camMan = M.find_first_of("Class /Script/Engine.PlayerCameraManager")
+	--camMan = uevr.api:get_player_controller(0).PlayerCameraManager
 	--print("Camera Manager was",camMan:get_full_name(),"\n")
 	if uevr ~= nil and camMan ~= nil and UEVR_UObjectHook.exists(camMan) then
 		--(FromAlpha, ToAlpha, Duration, Color, bShouldFadeAudio, bHoldWhenFinished)
@@ -1483,7 +1521,6 @@ function M.getChildComponent(parent, name)
 end
 
 function M.destroyComponent(component, destroyOwner, destroyChildren)
-	print("destroyComponent called on ", component )
 	if M.validate_object(component) ~= nil then
 		local success, response = pcall(function()
 			local name = component:get_full_name()
@@ -1497,7 +1534,7 @@ function M.destroyComponent(component, destroyOwner, destroyChildren)
 						M.destroyComponent(children[i], destroyOwner, destroyChildren)
 					end
 				else
-					print("[destroyComponent] No children found")
+					M.print("[destroyComponent] No children found")
 				end
 			end
 
@@ -1523,7 +1560,7 @@ function M.destroyComponent(component, destroyOwner, destroyChildren)
 			end
 		end)	
 		if success == false then
-			print("[destroyComponent] pcall fail " .. response, LogLevel.Error)
+			M.print("[destroyComponent] pcall fail " .. response, LogLevel.Error)
 		end
 	end
 end
