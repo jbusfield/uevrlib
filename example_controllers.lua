@@ -1,11 +1,14 @@
 local uevrUtils = require("libs/uevr_utils")
 uevrUtils.initUEVR(uevr)
 local controllersModule = require("libs/controllers")
+uevrUtils.setLogLevel(LogLevel.Debug)
+controllersModule.setLogLevel(LogLevel.Debug)
+uevrUtils.setLogToFile(true)
 
 local objectsConnected = false
 
 function on_level_change(level)
-	print("Level changed\n")
+	uevrUtils.print("Level changed\n")
 
 	controllersModule.onLevelChange()
 	controllersModule.createController(0)
@@ -15,9 +18,9 @@ function on_level_change(level)
 		
 end
 
-function on_pre_engine_tick(engine, delta)
+uevrUtils.setInterval(1000, function()
 	attachObjectsToControllers()
-end
+end)
 
 --replace this with a way to get a widget in your particular game
 function getWidget()

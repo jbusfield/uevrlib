@@ -43,12 +43,13 @@ function M.print(text, logLevel)
 end
 
 local punchDetector = {
-    prevControllerPos = nil,
-    prevPawnPos = nil,
+    prevLocalPos = nil,
     cooldown = 0,
-    thresholdSpeed = 180, -- units/sec
+    minThresholdSpeed = 180, -- units/sec min speed needed to register as a punch
+    maxThresholdSpeed = 320, -- units/sec speed at which a punch is cosidered hardest. Use max-min to get a scale of hardness
     forwardDotThreshold = 0.75,
-    cooldownTime = 0.8
+    cooldownTime = 0.8,
+	currentPunchSpeed = 0.0
 }
 
 -- local function degToRad(deg)
@@ -93,15 +94,15 @@ local punchDetector = {
     -- }
 -- end
 
--- local function rotationToForwardVector(rot)
-    -- local pitchRad = math.rad(rot.Pitch)
-    -- local yawRad = math.rad(rot.Yaw)
-    -- return {
-        -- X = math.cos(pitchRad) * math.cos(yawRad),
-        -- Y = math.cos(pitchRad) * math.sin(yawRad),
-        -- Z = math.sin(pitchRad)
-    -- }
--- end
+local function rotationToForwardVector(rot)
+    local pitchRad = math.rad(rot.Pitch)
+    local yawRad = math.rad(rot.Yaw)
+    return {
+        X = math.cos(pitchRad) * math.cos(yawRad),
+        Y = math.cos(pitchRad) * math.sin(yawRad),
+        Z = math.sin(pitchRad)
+    }
+end
 
 local function subtract(a, b)
     return { X = a.X - b.X, Y = a.Y - b.Y, Z = a.Z - b.Z }
@@ -121,43 +122,85 @@ local function dot(a, b)
     return a.X*b.X + a.Y*b.Y + a.Z*b.Z
 end
 
-function punchDetector:update(controllerPos, forward, pawnPos, deltaTime)
+-- Rotate a vector by negative yaw to get local space
+local function rotateVectorInverseYaw(vec, yawDeg)
+    local yawRad = -math.rad(yawDeg)
+    local cosY = math.cos(yawRad)
+    local sinY = math.sin(yawRad)
+    return {
+        X = vec.X * cosY - vec.Y * sinY,
+        Y = vec.X * sinY + vec.Y * cosY,
+        Z = vec.Z -- Z remains unchanged for yaw-only
+    }
+end
+
+local function getLocalForwardVector(controllerRot, pawnRot)
+    return rotationToForwardVector({
+        Pitch = controllerRot.Pitch,
+        Yaw = controllerRot.Yaw - pawnRot.Yaw,
+        Roll = controllerRot.Roll
+    })
+end
+
+-- Get controller position relative to pawn
+local function getLocalControllerPos(controllerPos, pawnPos, pawnRot)
+    local offset = subtract(controllerPos, pawnPos)
+    return rotateVectorInverseYaw(offset, pawnRot.Yaw)
+end
+
+local function getSpeedPercent(speed, minThresholdSpeed, maxThresholdSpeed)
+    if maxThresholdSpeed == minThresholdSpeed then
+        return 0 -- avoid division by zero
+    end
+    local clampedSpeed = math.max(minThresholdSpeed, math.min(speed, maxThresholdSpeed))
+    return (clampedSpeed - minThresholdSpeed) / (maxThresholdSpeed - minThresholdSpeed)
+end
+
+function punchDetector:update(controllerPos, controllerRot, pawnPos, pawnRot, deltaTime)
     if self.cooldown > 0 then
         self.cooldown = self.cooldown - deltaTime
-		self.prevControllerPos = controllerPos
-		self.prevPawnPos = pawnPos
-        return false
+ 		self.prevLocalPos = getLocalControllerPos(controllerPos, pawnPos, pawnRot)
+       return false
     end
 
-    if not self.prevControllerPos or not self.prevPawnPos then
-        self.prevControllerPos = controllerPos
-        self.prevPawnPos = pawnPos
+    if not self.prevLocalPos then
+ 		self.prevLocalPos = getLocalControllerPos(controllerPos, pawnPos, pawnRot)
         return false
     end
-
-    -- Compute controller and pawn movement
-    local controllerDelta = subtract(controllerPos, self.prevControllerPos)
-    local pawnDelta = subtract(pawnPos, self.prevPawnPos)
-    local relativeMotion = subtract(controllerDelta, pawnDelta)
-	-- print("Pawn delta", pawnDelta.X, pawnDelta.Y, pawnDelta.Z)
-	-- print("Controller delta", controllerDelta.X, controllerDelta.Y, controllerDelta.Z)
-
-    local speed = magnitude(relativeMotion) / deltaTime
+	
+	local localPos = getLocalControllerPos(controllerPos, pawnPos, pawnRot)
+	
+    local localDelta = subtract(localPos, self.prevLocalPos)
+    local speed = magnitude(localDelta) / deltaTime
     --local forward = rotationToForwardVector(controllerRot)
-    local motionDir = normalize(relativeMotion)
+	local forward = getLocalForwardVector(controllerRot, pawnRot)
+    local motionDir = normalize(localDelta)
     local forwardDot = dot(forward, motionDir)
 
-    local isPunch = speed > self.thresholdSpeed and forwardDot > self.forwardDotThreshold
+	local isPunch = false
+	local punchSpeed = 0
+	local punchSpeedPercent = 0
+    local punchDetected = speed > self.minThresholdSpeed and forwardDot > self.forwardDotThreshold
+	if self.currentPunchSpeed > 0 or punchDetected then
+		if speed > self.currentPunchSpeed then
+			self.currentPunchSpeed = speed
+		else
+			isPunch = true
+			punchSpeed = self.currentPunchSpeed
+			punchSpeedPercent = getSpeedPercent(punchSpeed, self.minThresholdSpeed, self.maxThresholdSpeed)
+			self.currentPunchSpeed = 0
+		end
+	end
 
     if isPunch then
+		--print(punchSpeed, forwardDot, punchSpeedPercent)
         self.cooldown = self.cooldownTime
     end
 
     -- Update history
-    self.prevControllerPos = controllerPos
-    self.prevPawnPos = pawnPos
+    self.prevLocalPos = localPos
 
-    return isPunch
+    return isPunch, punchSpeedPercent, punchSpeed
 end
 
 local holsterGripOn = false
@@ -290,23 +333,26 @@ function detectFace(state, hand, continuous)
 end
 
 
-function M.detectGesture(id, deltaTime, hand, currentPos, currentDirection, pawnPos )
+function M.detectGesture(id, deltaTime, hand, currentPos, currentRot, pawnPos, pawnRot )
 	if hand == nil then hand = Handed.Right end
 	if currentPos == nil then 
 		currentPos = controllers.getControllerLocation(hand)
 	end
-	if currentDirection == nil then 
-		currentDirection = controllers.getControllerDirection(hand)
+	if currentRot == nil then 
+		currentRot = controllers.getControllerRotation(hand)
 	end
 	if pawnPos == nil then 
 		pawnPos = controllers.getControllerLocation(2)
 	end
-	if currentPos == nil or currentDirection == nil or pawnPos == nil then
+	if pawnRot == nil then 
+		pawnRot = controllers.getControllerRotation(2)
+	end
+	if currentPos == nil or currentRot == nil or pawnPos == nil or pawnRot == nil then
 		M.print("Call to detectGesture() failed because controller was invalid")
 		return false
 	else
 		if id == M.Gesture.PUNCH then
-			return punchDetector:update(currentPos, currentDirection, pawnPos, deltaTime)
+			return punchDetector:update(currentPos, currentRot, pawnPos, pawnRot, deltaTime)
 		end
 	end
 	return false

@@ -9,6 +9,7 @@ local handDefinitions = {}
 local handBoneList = {} --used for debugging
 local offset={X=0, Y=0, Z=0, Pitch=0, Yaw=0, Roll=0}
 local inputHandlerAnimID = {} --list of animID only used for the default input handler
+local handsConfig = nil -- the configuration tool for creating hands in game
 
 local currentLogLevel = LogLevel.Error
 function M.setLogLevel(val)
@@ -51,6 +52,9 @@ local function getAnimIDSuffix(animID)
 	return #arr > 0 and arr[#arr] or nil
 end
 
+function M.enableConfigurationTool()
+	handsConfig = require('libs/config/hands_config')
+end
 
 function M.reset()
 	handComponents = {}
@@ -72,9 +76,88 @@ function M.getHandComponent(hand, componentName)
 	end
 end 
 
+local fixEnabled = false
+local currentProfile = nil
+local function registerFOVFix(profile)
+	currentProfile = profile
+	
+	if currentProfile ~= nil and fixEnabled == false then
+		setInterval(1000, function()
+			if currentProfile ~= nil then
+				for name, components in pairs(handComponents) do
+					local fovFixParam = currentProfile[name]["FOV"]
+					--print(name, profileName, fovFixParam, components[0], components[1])
+					if fovFixParam ~= nil and fovFixParam ~= "" then
+						uevrUtils.fixMeshFOV(components[Handed.Left], fovFixParam, 0.0, true, true, false)
+						uevrUtils.fixMeshFOV(components[Handed.Right], fovFixParam, 0.0, true, true, false)
+					end
+				end
+			end
+		end)	
+		fixEnabled = true
+	end
+end
+
+function M.createFromConfig(configuration, profileName, animationName)
+	if type(configuration) == "string" then
+		configuration = json.load_file(configuration .. ".json")
+	end
+	if configuration ~= nil and configuration["profiles"] ~= nil then
+		local profile = configuration["profiles"][profileName]
+		if profile ~= nil then 
+			local components = {}
+			for key, mesh in pairs(profile) do
+				--key = "Arms"
+				local meshPropertyName = mesh["Mesh"]
+				if meshPropertyName ~= "" then
+					local component = uevrUtils.getObjectFromDescriptor(meshPropertyName) -- "Pawn.Mesh(Arm).Glove")
+					if component ~= nil then
+						components[key] = component
+					end
+				end		
+			end
+			
+			local animations = nil
+			if configuration["animations"] ~= nil and animationName ~= nil and animationName ~= "" then
+				animations = configuration["animations"][animationName]
+				-- animDef = {}
+				-- local poses = {}
+				-- poses["open_left"] = { {"left_grip","off"}, {"left_trigger","off"}, {"left_thumb","off"} }
+				-- poses["open_right"] = { {"right_grip","off"}, {"right_trigger","off"}, {"right_thumb","off"} }
+				-- poses["grip_right_weapon"] = { {"right_grip_weapon","on"}, {"right_trigger_weapon","off"} }
+				-- poses["grip_left_weapon"] = { {"left_grip_weapon","on"}, {"left_trigger_weapon","off"} }
+
+				-- animDef.positions = animations
+				-- animDef.poses = poses
+			end
+			
+			M.create(components, profile, animations)
+			
+			--going to need to call fixMeshFOV on lazy poll
+			for name, components in pairs(handComponents) do
+				--print(name, profileName, components[0], components[1])
+				local fovFixParam = configuration["profiles"][profileName][name]["FOV"]
+				if fovFixParam ~= nil and fovFixParam ~= "" then
+					uevrUtils.fixMeshFOV(components[Handed.Left], fovFixParam, 0.0, true, true, false)
+					uevrUtils.fixMeshFOV(components[Handed.Right], fovFixParam, 0.0, true, true, false)
+					registerFOVFix(profile)
+				end
+			end
+
+		end
+	else
+		M.print("Could not create from config because configuration is invalid")
+		--json.dump_file("debug.json", configuration, 4)
+	end
+end
+
+--skeletalMeshComponent can either be a single component or a table of components
 function M.create(skeletalMeshComponent, definition, handAnimations)
 	if definition ~= nil then
 		for name, skeletalMeshDefinition in pairs(definition) do
+			if skeletalMeshDefinition["Offset"] ~= nil then
+				offset = skeletalMeshDefinition["Offset"]
+			end
 			M.print("Creating hand component: " .. name )
 			local component = nil
 			if type(skeletalMeshComponent) == "table" then
@@ -88,11 +171,17 @@ function M.create(skeletalMeshComponent, definition, handAnimations)
 					handComponents[name][index] = M.createComponent(component, name, index, skeletalMeshDefinition[index==0 and "Left" or "Right"])
 					if handComponents[name][index] ~= nil then
 						M.print("Created " .. name .. " component: " .. (index==0 and "Left" or "Right"), LogLevel.Info )
+						if skeletalMeshDefinition["FOV"] ~= nil and skeletalMeshDefinition["FOV"] ~= "" then
+							uevrUtils.fixMeshFOV(handComponents[name][index], skeletalMeshDefinition["FOV"], 0.0, true, true, false)					
+						end
+
 						local animID = skeletalMeshDefinition[index==0 and "Left" or "Right"]["AnimationID"]
-						local suffix = getAnimIDSuffix(animID)
-						if suffix ~= nil then inputHandlerAnimID[animID] = suffix end
-						animation.add(animID, handComponents[name][index], handAnimations)
-						animation.initialize(animID, handComponents[name][index])
+						if animID ~= nil then
+							local suffix = getAnimIDSuffix(animID)
+							if suffix ~= nil then inputHandlerAnimID[animID] = suffix end
+							animation.add(animID, handComponents[name][index], handAnimations)
+							animation.initialize(animID, handComponents[name][index])
+						end 
 					end
 				end
 			else
@@ -109,7 +198,7 @@ function M.createComponent(skeletalMeshComponent, name, hand, definition)
 	local component = nil
 	if uevrUtils.validate_object(skeletalMeshComponent) ~= nil then
 		--not using an existing actor as owner. Mesh affects the hands opacity so its not appropriate
-		component = animation.createPoseableComponent(skeletalMeshComponent, nil)
+		component = animation.createPoseableComponent(skeletalMeshComponent, nil, definition ~= nil and definition["UseDefaultPose"] == true)
 		if component ~= nil then
 			--fixes flickering but > 1 causes a perfomance hit with dynamic shadows according to unreal doc
 			--a better way to do this should be found
@@ -143,6 +232,15 @@ end
 --if, in debug mode, the skeleton is not pointed forward when the wrist is pointed forward then make adjustments with this function
 function  M.setOffset(newOffset)
 	offset = newOffset
+end
+
+--only for debugging
+function M.updateOffset(skeletalMeshComponent, newOffset)
+	if skeletalMeshComponent ~= nil then
+		local baseRotation = skeletalMeshComponent.RelativeRotation
+		local component = handComponents["Arms"][Handed.Right]
+		uevrUtils.set_component_relative_transform(component, newOffset, {Pitch=baseRotation.Pitch+newOffset.Pitch, Yaw=baseRotation.Yaw+newOffset.Yaw,Roll=baseRotation.Roll+newOffset.Roll})	
+	end
 end
 
 function M.addRealism()
@@ -183,6 +281,7 @@ function M.handleInput(state, isHoldingWeapon, hand, overrideTrigger)
 			animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_trigger_weapon", weaponHandTriggerValue > 100, {duration=animDuration})
 			if uevrUtils.isButtonPressed(state, isRightHanded and XINPUT_GAMEPAD_RIGHT_SHOULDER or XINPUT_GAMEPAD_LEFT_SHOULDER) then 
 				animation.resetAnimation(weaponHandStr.."_"..target, weaponHandStr.."_grip_weapon", false) --forces an update regardless of current state
+--print("Here",weaponHandStr.."_"..target,weaponHandStr.."_grip_weapon")
 				animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_grip_weapon", true, {duration=animDuration})
 			end
 		end
@@ -211,16 +310,21 @@ function M.destroyHands()
 	M.reset()
 end
 
+local visualCallbackExists = false
 function M.createSkeletalVisualization(hand, scale, componentName)
+	animation.destroySkeletalVisualization()
 	if M.exists() then
 		if hand == null then hand = Handed.Right end
 		if scale == null then scale = 0.003 end
 		animation.createSkeletalVisualization(M.getHandComponent(hand, componentName), scale)
-		uevrUtils.registerPostEngineTickCallback(function()
-			if M.exists() then
-				animation.updateSkeletalVisualization(M.getHandComponent(hand, componentName))
-			end
-		end)
+		if not visualCallbackExists then
+			uevrUtils.registerPostEngineTickCallback(function()
+				if M.exists() then
+					animation.updateSkeletalVisualization(M.getHandComponent(hand, componentName))
+				end
+			end)
+		end
+		visualCallbackExists = true
 	end
 end
 
@@ -353,69 +457,203 @@ end
 
 function M.printHandTranforms(transforms)
 	local logLevel = LogLevel.Critical
-	M.print("Rotation = {" .. transforms["Rotation"][1] .. ", " .. transforms["Rotation"][2] .. ", "  .. transforms["Rotation"][3] ..  "}", logLevel)
-	M.print("Location = {" .. transforms["Location"][1] .. ", " .. transforms["Location"][2] .. ", "  .. transforms["Location"][3] ..  "}", logLevel)
+	if transforms["Rotation"] ~= nil then
+		M.print("Rotation = {" .. transforms["Rotation"][1] .. ", " .. transforms["Rotation"][2] .. ", "  .. transforms["Rotation"][3] ..  "}", logLevel)
+	end
+	if transforms["Location"] ~= nil then
+		M.print("Location = {" .. transforms["Location"][1] .. ", " .. transforms["Location"][2] .. ", "  .. transforms["Location"][3] ..  "}", logLevel)
+	end
+end
+
+-- local function getValidRotator(definition, id, default)
+	-- if definition == nil or id == nil or definition[id] == nil then
+		-- return uevrUtils.rotator(default[1], default[2], default[3])
+	-- end
+	-- return uevrUtils.rotator(definition[id][1], definition[id][2], definition[id][3])
+-- end
+
+local function getValidArray(definition, id, default)
+	if definition == nil or id == nil or definition[id] == nil then
+		return default
+	end
+	return definition[id]
+end
+
+--transformType "Rotation", "Location", "Scale"
+function M.setTransform(hand, axis, val, transformType, isDelta, componentName)
+--print(hand, axis, val, transformType, isDelta, componentName)
+	componentName = getComponentName(componentName)
+	--print(componentName)
+	if componentName == nil or componentName == "" or handDefinitions[componentName] == nil then
+		M.print("Could not adjust transform because component is undefined")
+	else	
+		local handStr = hand == Handed.Left and "Left" or "Right"
+		local definition = handDefinitions[componentName][handStr]
+		if definition ~= nil then
+			local jointName = definition["Name"]
+			if jointName ~= nil and jointName ~= "" then
+				local currentTransforms = {}
+				currentTransforms["Location"] = getValidArray(definition, "Location", {0,0,0})
+				currentTransforms["Rotation"] = getValidArray(definition, "Rotation", {0,0,0})
+				currentTransforms["Scale"] = getValidArray(definition, "Scale", {1,1,1})
+				handDefinitions[componentName][handStr][transformType] = currentTransforms[transformType]
+				if isDelta then
+					handDefinitions[componentName][handStr][transformType][axis] = handDefinitions[componentName][handStr][transformType][axis] + delta
+				else
+					handDefinitions[componentName][handStr][transformType][axis] = val
+				end
+				
+				local taperOffset = getValidVector(definition, "TaperOffset", {0,0,0})
+				local component = M.getHandComponent(hand, componentName)
+				animation.transformBoneToRoot(component, jointName, uevrUtils.vector(currentTransforms["Location"]), uevrUtils.rotator(currentTransforms["Rotation"]), uevrUtils.vector(currentTransforms["Scale"]), taperOffset)		
+				-- print(handDefinitions[componentName][handStr]["Rotation"][1], handDefinitions[componentName][handStr]["Rotation"][2], handDefinitions[componentName][handStr]["Rotation"][3])
+				-- print(handDefinitions[componentName][handStr]["Location"][1], handDefinitions[componentName][handStr]["Location"][2], handDefinitions[componentName][handStr]["Location"][3])
+				-- print(handDefinitions[componentName][handStr]["Scale"][1], handDefinitions[componentName][handStr]["Scale"][2], handDefinitions[componentName][handStr]["Scale"][3])
+				M.printHandTranforms(handDefinitions[componentName][handStr])
+			else
+				M.print("Could not adjust bone in adjustRotation() because joint name is invalid" )
+			end
+		end
+	end
+
+end
+
+
+function M.setRotation(hand, axis, rot, componentName)
+	M.setTransform(hand, axis, rot, "Rotation", false, componentName)
+	
+	-- componentName = getComponentName(componentName)
+	-- print(componentName)
+	-- if componentName == nil or componentName == "" or handDefinitions[componentName] == nil then
+		-- M.print("Could not adjust rotation because component is undefined")
+	-- else	
+		-- local handStr = hand == Handed.Left and "Left" or "Right"
+		-- local definition = handDefinitions[componentName][handStr]
+		-- if definition ~= nil then
+			-- local jointName = definition["Name"]
+			-- if jointName ~= nil and jointName ~= "" then
+				-- local location = getValidVector(definition, "Location", {0,0,0})
+				-- --local rotation = getValidRotator(definition, "Rotation", {0,0,0})
+				-- if handDefinitions[componentName][handStr]["Rotation"] == nil then
+					-- handDefinitions[componentName][handStr]["Rotation"] = {0,0,0}
+				-- end
+				-- handDefinitions[componentName][handStr]["Rotation"][axis] = rot
+				-- local rotation = uevrUtils.rotator(handDefinitions[componentName][handStr]["Rotation"][1], handDefinitions[componentName][handStr]["Rotation"][2], handDefinitions[componentName][handStr]["Rotation"][3])
+				-- local scale = getValidVector(definition, "Scale", {1,1,1})
+				-- local taperOffset = getValidVector(definition, "TaperOffset", {0,0,0})
+				-- local component = M.getHandComponent(hand, componentName)
+				-- animation.transformBoneToRoot(component, jointName, location, rotation, scale, taperOffset)		
+				-- M.printHandTranforms(handDefinitions[componentName][handStr])
+			-- else
+				-- M.print("Could not adjust bone in adjustRotation() because joint name is invalid" )
+			-- end
+		-- end
+	-- end
 end
 
 function M.adjustRotation(hand, axis, delta, componentName)
-	componentName = getComponentName(componentName)
-	if componentName == "" then
-		M.print("Could not adjust rotation because component is undefined")
-	else	
-		local handStr = hand == Handed.Left and "Left" or "Right"
-		local definition = handDefinitions[componentName][handStr]
-		if definition ~= nil then
-			local jointName = definition["Name"]
-			if jointName ~= nil and jointName ~= "" then
-				local location = getValidVector(definition, "Location", {0,0,0})
-				--local rotation = getValidRotator(definition, "Rotation", {0,0,0})
-				if handDefinitions[componentName][handStr]["Rotation"] == nil then
-					handDefinitions[componentName][handStr]["Rotation"] = {0,0,0}
-				end
-				handDefinitions[componentName][handStr]["Rotation"][axis] = handDefinitions[componentName][handStr]["Rotation"][axis] + delta
-				local rotation = uevrUtils.rotator(handDefinitions[componentName][handStr]["Rotation"][1], handDefinitions[componentName][handStr]["Rotation"][2], handDefinitions[componentName][handStr]["Rotation"][3])
-				local scale = getValidVector(definition, "Scale", {1,1,1})
-				local taperOffset = getValidVector(definition, "TaperOffset", {0,0,0})
-				local component = M.getHandComponent(hand, componentName)
-				animation.transformBoneToRoot(component, jointName, location, rotation, scale, taperOffset)		
-				M.printHandTranforms(handDefinitions[componentName][handStr])
-			else
-				M.print("Could not adjust bone in adjustRotation() because joint name is invalid" )
-			end
-		end
-	end
+	M.setTransform(hand, axis, delta, "Rotation", true, componentName)
+
+	-- componentName = getComponentName(componentName)
+	-- if componentName == "" then
+		-- M.print("Could not adjust rotation because component is undefined")
+	-- else	
+		-- local handStr = hand == Handed.Left and "Left" or "Right"
+		-- local definition = handDefinitions[componentName][handStr]
+		-- if definition ~= nil then
+			-- local jointName = definition["Name"]
+			-- if jointName ~= nil and jointName ~= "" then
+				-- local location = getValidVector(definition, "Location", {0,0,0})
+				-- --local rotation = getValidRotator(definition, "Rotation", {0,0,0})
+				-- if handDefinitions[componentName][handStr]["Rotation"] == nil then
+					-- handDefinitions[componentName][handStr]["Rotation"] = {0,0,0}
+				-- end
+				-- handDefinitions[componentName][handStr]["Rotation"][axis] = handDefinitions[componentName][handStr]["Rotation"][axis] + delta
+				-- local rotation = uevrUtils.rotator(handDefinitions[componentName][handStr]["Rotation"][1], handDefinitions[componentName][handStr]["Rotation"][2], handDefinitions[componentName][handStr]["Rotation"][3])
+				-- local scale = getValidVector(definition, "Scale", {1,1,1})
+				-- local taperOffset = getValidVector(definition, "TaperOffset", {0,0,0})
+				-- local component = M.getHandComponent(hand, componentName)
+				-- animation.transformBoneToRoot(component, jointName, location, rotation, scale, taperOffset)		
+				-- M.printHandTranforms(handDefinitions[componentName][handStr])
+			-- else
+				-- M.print("Could not adjust bone in adjustRotation() because joint name is invalid" )
+			-- end
+		-- end
+	-- end
 end
+
+function M.setLocation(hand, axis, loc, componentName)
+	M.setTransform(hand, axis, loc, "Location", false, componentName)
+
+	-- componentName = getComponentName(componentName)
+	-- if componentName == nil or componentName == "" or handDefinitions[componentName] == nil then
+		-- M.print("Could not adjust rotation because component is undefined")
+	-- else	
+		-- local handStr = hand == Handed.Left and "Left" or "Right"
+		-- local definition = handDefinitions[componentName][handStr]
+		-- if definition ~= nil then
+			-- local jointName = definition["Name"]
+			-- if jointName ~= nil and jointName ~= "" then
+				-- --local location = getValidVector(definition, "Location", {0,0,0})
+				-- if handDefinitions[componentName][handStr]["Location"] == nil then
+					-- handDefinitions[componentName][handStr]["Location"] = {0,0,0}
+				-- end
+				-- handDefinitions[componentName][handStr]["Location"][axis] = loc
+				-- local location = uevrUtils.vector(handDefinitions[componentName][handStr]["Location"][1], handDefinitions[componentName][handStr]["Location"][2], handDefinitions[componentName][handStr]["Location"][3])
+				-- local rotation = getValidRotator(definition, "Rotation", {0,0,0})
+				-- local scale = getValidVector(definition, "Scale", {1,1,1})
+				-- local taperOffset = getValidVector(definition, "TaperOffset", {0,0,0})
+				-- local component = M.getHandComponent(hand, componentName)
+				-- animation.transformBoneToRoot(component, jointName, location, rotation, scale, taperOffset)		
+				-- M.printHandTranforms(handDefinitions[componentName][handStr])
+			-- else
+				-- M.print("Could not adjust bone in adjustRotation() because joint name is invalid" )
+			-- end
+		-- end
+	-- end
+end
+
 
 function M.adjustLocation(hand, axis, delta, componentName)
-	componentName = getComponentName(componentName)
-	if componentName == "" then
-		M.print("Could not adjust rotation because component is undefined")
-	else	
-		local handStr = hand == Handed.Left and "Left" or "Right"
-		local definition = handDefinitions[componentName][handStr]
-		if definition ~= nil then
-			local jointName = definition["Name"]
-			if jointName ~= nil and jointName ~= "" then
-				--local location = getValidVector(definition, "Location", {0,0,0})
-				if handDefinitions[componentName][handStr]["Location"] == nil then
-					handDefinitions[componentName][handStr]["Location"] = {0,0,0}
-				end
-				handDefinitions[componentName][handStr]["Location"][axis] = handDefinitions[componentName][handStr]["Location"][axis] + delta
-				local location = uevrUtils.vector(handDefinitions[componentName][handStr]["Location"][1], handDefinitions[componentName][handStr]["Location"][2], handDefinitions[componentName][handStr]["Location"][3])
-				local rotation = getValidRotator(definition, "Rotation", {0,0,0})
-				local scale = getValidVector(definition, "Scale", {1,1,1})
-				local taperOffset = getValidVector(definition, "TaperOffset", {0,0,0})
-				local component = M.getHandComponent(hand, componentName)
-				animation.transformBoneToRoot(component, jointName, location, rotation, scale, taperOffset)		
-				M.printHandTranforms(handDefinitions[componentName][handStr])
-			else
-				M.print("Could not adjust bone in adjustRotation() because joint name is invalid" )
-			end
-		end
-	end
+	M.setTransform(hand, axis, delta, "Location", true, componentName)
+
+	-- componentName = getComponentName(componentName)
+	-- if componentName == "" then
+		-- M.print("Could not adjust rotation because component is undefined")
+	-- else	
+		-- local handStr = hand == Handed.Left and "Left" or "Right"
+		-- local definition = handDefinitions[componentName][handStr]
+		-- if definition ~= nil then
+			-- local jointName = definition["Name"]
+			-- if jointName ~= nil and jointName ~= "" then
+				-- --local location = getValidVector(definition, "Location", {0,0,0})
+				-- if handDefinitions[componentName][handStr]["Location"] == nil then
+					-- handDefinitions[componentName][handStr]["Location"] = {0,0,0}
+				-- end
+				-- handDefinitions[componentName][handStr]["Location"][axis] = handDefinitions[componentName][handStr]["Location"][axis] + delta
+				-- local location = uevrUtils.vector(handDefinitions[componentName][handStr]["Location"][1], handDefinitions[componentName][handStr]["Location"][2], handDefinitions[componentName][handStr]["Location"][3])
+				-- local rotation = getValidRotator(definition, "Rotation", {0,0,0})
+				-- local scale = getValidVector(definition, "Scale", {1,1,1})
+				-- local taperOffset = getValidVector(definition, "TaperOffset", {0,0,0})
+				-- local component = M.getHandComponent(hand, componentName)
+				-- animation.transformBoneToRoot(component, jointName, location, rotation, scale, taperOffset)		
+				-- M.printHandTranforms(handDefinitions[componentName][handStr])
+			-- else
+				-- M.print("Could not adjust bone in adjustRotation() because joint name is invalid" )
+			-- end
+		-- end
+	-- end
 end
 
-function M.debug(skeletalMeshComponent, hand, rightTargetJoint)
+function M.setScale(hand, axis, scale, componentName)
+	M.setTransform(hand, axis, scale, "Scale", false, componentName)
+end
+
+function M.adjustScale(hand, axis, delta, componentName)
+	M.setTransform(hand, axis, delta, "Scale", true, componentName)
+end
+
+function M.debug(skeletalMeshComponent, hand, rightTargetJoint, disableVisualization)
 	local definition = nil
 	if rightTargetJoint ~= nil then 
 		definition = { Name = rightTargetJoint }
@@ -427,13 +665,25 @@ function M.debug(skeletalMeshComponent, hand, rightTargetJoint)
 		handComponents["Arms"][hand] = M.createComponent(skeletalMeshComponent, "Arms", hand, definition)
 
 		animation.logBoneNames(skeletalMeshComponent)
-		M.createSkeletalVisualization(hand)
+		if disableVisualization ~= true then
+			M.createSkeletalVisualization(hand)
+		end
 	else
 		M.print("SkeletalMesh component is nil in create" )
 	end
 end
 
+uevr.params.sdk.callbacks.on_script_reset(function()
+	M.destroyHands()
+end)
+
+uevrUtils.registerPreLevelChangeCallback(function(level)
+	M.print("Pre-Level changed in hands")
+	M.reset()
+end)
+
 return M
+
 
 --deprecated code
 -- local currentRightRotation = {0, 0, 0}

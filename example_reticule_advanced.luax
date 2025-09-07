@@ -9,7 +9,7 @@ local flickerFixer = require("libs/flicker_fixer")
 local configDefinition = {
 	{
 		panelLabel = "Reticule Config", 
-		saveFile = "config_hogwarts", 
+		saveFile = "config_reticule", 
 		layout = 
 		{
 			{
@@ -31,6 +31,14 @@ local configDefinition = {
 				-- label = "Type",
 				-- initialValue = true
 			-- },
+			{
+				widgetType = "slider_int",
+				id = "reticuleCollisionChannel",
+				label = "Collision Channel",
+				speed = 1.0,
+				range = {0, 40},
+				initialValue = 0
+			},
 			{
 				widgetType = "slider_int",
 				id = "reticuleDistance",
@@ -71,7 +79,7 @@ configui.onUpdate("reticuleStyle", function(value)
 end)
 	
 function on_pre_engine_tick(engine, delta)
-	reticule.update(nil, nil, nil, nil, configui.getValue("reticuleDistance"), {configui.getValue("reticuleScale"),configui.getValue("reticuleScale"),configui.getValue("reticuleScale")},configui.getValue("reticuleRotation"))
+	reticule.update(nil, nil, configui.getValue("reticuleDistance"), {configui.getValue("reticuleScale"),configui.getValue("reticuleScale"),configui.getValue("reticuleScale")},configui.getValue("reticuleRotation"))
 end
 
 function on_level_change(level)
@@ -87,7 +95,8 @@ print(reticuleType)
 		local options = {
 			materialName = "Material /Engine/EngineDebugMaterials/WireframeMaterial.WireframeMaterial",
 			scale = {.03, .03, .03},
-			rotation = {Pitch=0,Yaw=0,Roll=0}
+			rotation = {Pitch=0,Yaw=0,Roll=0},
+			collisionChannel = configui.getValue("reticuleCollisionChannel")
 		}
 		reticule.createFromMesh(meshName, options )				
 	elseif reticuleType == 3 then		
@@ -95,7 +104,8 @@ print(reticuleType)
 		local options = {
 			materialName = "Material /Engine/EngineMaterials/Widget3DPassThrough.Widget3DPassThrough",
 			scale = {.05, .05, .05},
-			rotation = {Pitch=90,Yaw=0,Roll=0}
+			rotation = {Pitch=90,Yaw=0,Roll=0},
+			collisionChannel = configui.getValue("reticuleCollisionChannel")
 		}
 		local mesh = uevrUtils.find_instance_of("Class /Script/Engine.StaticMesh", meshName) 
 		if uevrUtils.getValid(mesh) ~= nil then
@@ -106,6 +116,7 @@ print(reticuleType)
 			removeFromViewport = true,
 			twoSided = true,
 			drawSize = vector_2(600, 600),
+			collisionChannel = configui.getValue("reticuleCollisionChannel"),
 			--position = {X=0.0, Y=0.0, Z=7.0}
 		}
 		local widgetName = "WidgetBlueprintGeneratedClass /Game/UI/HUD/Reticle/Reticle_BP.Reticle_BP_C" --The Outer Worlds
@@ -114,6 +125,7 @@ print(reticuleType)
 		local options = {
 			removeFromViewport = true,
 			twoSided = true,
+			collisionChannel = configui.getValue("reticuleCollisionChannel"),
 			--position = {X=0.0, Y=0.0, Z=7.0}
 		}
 		local className = "WidgetBlueprintGeneratedClass /Game/UI/HUD/Reticle/Reticle_BP.Reticle_BP_C" --The Outer Worlds

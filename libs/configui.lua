@@ -75,6 +75,8 @@ local itemMap = {}
 local panelList = {}
 local layoutDefinitions = {}
 local updateFunctions = {}
+local createFunctions = {}
+local createOrUpdateFunctions = {}
 local defaultFilename = "config_default"
 local treeInitialized = {}
 
@@ -82,7 +84,7 @@ local defaultPanelList = {}
 local framePanelList = {}
 local customPanelList = {}
 
-local function doUpdate(panelID, widgetID, value, updateConfigValue)
+local function doUpdate(panelID, widgetID, value, updateConfigValue, noCallbacks)
 	if panelID ~= nil then
 		if updateConfigValue == nil then updateConfigValue = true end
 		if updateConfigValue == true then
@@ -93,10 +95,18 @@ local function doUpdate(panelID, widgetID, value, updateConfigValue)
 			configValues[panelID][widgetID] = value
 		end
 		
-		local funcList = updateFunctions[widgetID]
-		if funcList ~= nil and #funcList > 0 then
-			for i = 1, #funcList do
-				funcList[i](value)
+		if noCallbacks ~= true then
+			local funcList = updateFunctions[widgetID]
+			if funcList ~= nil and #funcList > 0 then
+				for i = 1, #funcList do
+					funcList[i](value)
+				end
+			end
+			funcList = createOrUpdateFunctions[widgetID]
+			if funcList ~= nil and #funcList > 0 then
+				for i = 1, #funcList do
+					funcList[i](value)
+				end
 			end
 		end
 		panelList[panelID].isDirty = true
@@ -164,10 +174,29 @@ end
 local function drawUI(panelID)
 	local treeDepth = 0
 	local treeState = {}
+	local groupHide = 0
 	local isTreeOpen = false
+
 	for _, item in ipairs(layoutDefinitions[panelID]) do
+		if item.widgetType == "begin_group" and (groupHide > 0 or item.isHidden) then 
+			groupHide = groupHide + 1 
+		end
+		if groupHide > 0 then goto continue end
+		
 		if item.isHidden ~= true and (treeDepth == 0 or treeState[treeDepth] == true or item.widgetType == "tree_node" or item.widgetType == "tree_node_ptr_id" or item.widgetType == "tree_node_str_id" or item.widgetType == "tree_pop") then 
 			if item.label == "" then item.label = " " end --with an empty label, combos wont open
+			if item.disabled == true then
+				imgui.begin_disabled()
+			end
+
+			if item.id ~= nil and item.id ~= "" then
+				imgui.push_id(item.id)
+			end
+			
+			if item.width ~= nil and item.widgetType ~= "unindent" and item.widgetType ~= "indent" then
+				imgui.set_next_item_width(item.width)
+			end
+			
 			if item.widgetType == "checkbox" then
 				local changed, newValue = imgui.checkbox(item.label, configValues[panelID][item.id])
 				if changed then 
@@ -295,7 +324,17 @@ local function drawUI(panelID)
 			elseif item.widgetType == "spacing" then
 				imgui.spacing()
 			elseif item.widgetType == "same_line" then
-				imgui.same_line()
+				if item.spacing ~= nil then
+					imgui.same_line(item.spacing)
+				else
+					imgui.same_line()
+				end
+			elseif item.widgetType == "spacing" then
+				if item.spacing ~= nil then
+					imgui.spacing(item.spacing)
+				else
+					imgui.spacing()
+				end
 			elseif item.widgetType == "text" then
 				imgui.text(item.label)
 			elseif item.widgetType == "indent" then
@@ -304,6 +343,21 @@ local function drawUI(panelID)
 				imgui.unindent(item.width)
 			elseif item.widgetType == "text_colored" then
 				imgui.text_colored(item.label, colorStringToInteger(item.color))
+			end
+			
+			if item.id ~= nil and item.id ~= "" then
+				imgui.pop_id()
+			end
+
+			if item.disabled == true then
+				imgui.end_disabled()
+			end
+		end
+		::continue::
+		
+		if item.widgetType == "end_group" then 
+			if groupHide > 0 then
+				groupHide = groupHide - 1
 			end
 		end
 	end
@@ -320,6 +374,77 @@ local function getDefinitionElement(panelID, id)
 		end
 	end
     return nil -- Return nil if the id is not found
+end
+
+local function wrapTextOnWordBoundary(text, maxCharsPerLine)
+	if text == nil then text = "" end
+ 	if maxCharsPerLine == nil then maxCharsPerLine = 73 end
+    local wrapped_text = ""
+    local current_line_length = 0
+    local words = {}
+
+    -- Split the text into words, preserving spaces
+    for word in string.gmatch(text .. " ", "([^%s]+%s*)") do
+        table.insert(words, word)
+    end
+
+    for i, word in ipairs(words) do
+        local word_length = string.len(word)
+
+        if current_line_length + word_length > maxCharsPerLine and current_line_length > 0 then
+            wrapped_text = wrapped_text .. "\n"
+            current_line_length = 0
+        end
+
+        wrapped_text = wrapped_text .. word
+        current_line_length = current_line_length + word_length
+    end
+
+    return wrapped_text
+end
+
+function M.updatePanel(panelDefinition)
+	local label = panelDefinition["panelLabel"]
+	local fileName = panelDefinition["saveFile"]
+	if label == nil or label == "" or label == "Script UI" then
+		label = "__default__"
+		fileName = defaultFilename
+	end
+
+	local panelID = panelDefinition["id"]
+	if panelID == nil or panelID == "" then 		
+		panelID = fileName
+		if panelID == nil or panelID == "" then 
+			panelID = label
+		end
+	end
+	
+	layoutDefinitions[panelID] = panelDefinition["layout"]
+
+	panelList[panelID] = {isDirty=false, timeSinceLastSave=0, fileName=fileName, isHidden=panelDefinition["isHidden"]}
+
+	for _, item in ipairs(layoutDefinitions[panelID]) do
+		if item.id ~= nil then
+			if item.widgetType == "drag_float2" then
+				configValues[panelID][item.id] = getVector2FromArray(item.initialValue)
+			elseif item.widgetType == "drag_float3" then
+				configValues[panelID][item.id] = getVector3FromArray(item.initialValue)
+			elseif item.widgetType == "drag_float4" then
+				configValues[panelID][item.id] = getVector4FromArray(item.initialValue)
+			elseif item.widgetType == "color_picker" then
+				configValues[panelID][item.id] = colorStringToInteger(item.initialValue)
+			else
+				configValues[panelID][item.id] = item.initialValue
+			end
+			itemMap[item.id] = panelID
+		end
+		if item.widgetType == "text" and item.wrapped == true then
+			item.label = wrapTextOnWordBoundary(item.label, item.textWidth)
+		end
+	end
+
+
+	M.load(panelID, fileName)
 end
 
 function M.createPanel(panelDefinition)
@@ -389,11 +514,31 @@ function M.createPanel(panelDefinition)
 			end
 			itemMap[item.id] = panelID
 		end
+		if item.widgetType == "text" and item.wrapped == true then
+			item.label = wrapTextOnWordBoundary(item.label, item.textWidth)
+		end
 	end
 
 
 	M.load(panelID, fileName)
 	
+end
+
+function M.update(configDefinition)
+	
+	if configDefinition ~= nil then
+		for _, panel in ipairs(configDefinition) do
+			M.updatePanel(panel)
+		end
+	else
+		print("Cant create create UI because no definition provided")
+	end
+	
+	--Makes sure the default file is loaded if it exists so that dynamic config items can be loaded if necessary
+	if configValues[defaultFilename] == nil then
+		configValues[defaultFilename] = {}
+		M.load(defaultFilename, defaultFilename)
+	end
 end
 
 function M.create(configDefinition)
@@ -436,6 +581,21 @@ function M.load(panelID, fileName)
 				else
 					configValues[panelID][key] = val
 				end
+			end
+		end
+	end
+	
+	for widgetID, value in pairs(configValues[panelID]) do
+		local funcList = createFunctions[widgetID]
+		if funcList ~= nil and #funcList > 0 then
+			for i = 1, #funcList do
+				funcList[i](value)
+			end
+		end
+		funcList = createOrUpdateFunctions[widgetID]
+		if funcList ~= nil and #funcList > 0 then
+			for i = 1, #funcList do
+				funcList[i](value)
 			end
 		end
 	end
@@ -482,6 +642,20 @@ function M.onUpdate(widgetID, funcDef)
 	table.insert(updateFunctions[widgetID], funcDef)
 end
 
+function M.onCreate(widgetID, funcDef)
+	if createFunctions[widgetID] == nil then
+		createFunctions[widgetID] = {}
+	end
+	table.insert(createFunctions[widgetID], funcDef)
+end
+
+function M.onCreateOrUpdate(widgetID, funcDef)
+	if createOrUpdateFunctions[widgetID] == nil then
+		createOrUpdateFunctions[widgetID] = {}
+	end
+	table.insert(createOrUpdateFunctions[widgetID], funcDef)
+end
+
 function M.getPanelID(widgetID)
 	local panelID = itemMap[widgetID]
 	if panelID == nil then
@@ -508,18 +682,39 @@ function M.getValue(widgetID)
 	return nil
 end
 
-function M.setValue(widgetID, value)
-	doUpdate(M.getPanelID(widgetID), widgetID, value)
+function M.setValue(widgetID, value, noCallbacks)
+	local item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
+	if item.widgetType == "drag_float2" and type(value) == "table" then
+		value = getVector2FromArray(value)
+	elseif item.widgetType == "drag_float3" and type(value) == "table" then
+		value = getVector3FromArray(value)
+	elseif item.widgetType == "drag_float4" and type(value) == "table" then
+		value = getVector4FromArray(value)
+	elseif item.widgetType == "color_picker" and type(value) == "table" then
+		value = colorStringToInteger(value)
+	end
+	doUpdate(M.getPanelID(widgetID), widgetID, value, nil, noCallbacks)
 end
 
 function M.setSelections(widgetID, selections)
-	item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
-	item.selections = selections
+	local item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
+	if item ~= nil then
+		item.selections = selections
+	end
 end
 
 function M.hideWidget(widgetID, value)
-	item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
-	item.isHidden = value
+	local item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
+	if item ~= nil then
+		item.isHidden = value
+	end
+end
+
+function M.disableWidget(widgetID, value)
+	local item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
+	if item ~= nil then
+		item.disabled = value
+	end
 end
 
 function M.hidePanel(panelID, value)
@@ -532,8 +727,31 @@ function M.togglePanel(panelID)
 end
 
 function M.setLabel(widgetID, newLabel)
-	item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
-	item.label = newLabel
+	local item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
+	if item ~= nil then
+		if item.widgetType == "text" and item.wrapped == true then
+			newLabel = wrapTextOnWordBoundary(newLabel, item.textWidth)
+		end
+		item.label = newLabel
+	end
+end
+
+function M.applyOptionsToConfigWidgets(configWidgets, options)
+	if options ~= nil then
+		for index, item in ipairs(options) do
+			local id = item.id
+			if id ~= nil then
+				for j, configItem in ipairs(configWidgets) do
+					if configItem.id == id then
+						for name, value in pairs(item) do
+							configItem[name] = value
+						end
+					end
+				end
+			end
+		end
+	end
+	return configWidgets
 end
 
 function M.intToAARRGGBB(num)

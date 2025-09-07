@@ -29,6 +29,49 @@ Usage
 			setInterval(1000, function()
 				print("repeats one second delay")
 			end)
+			
+	doOnce(func, (optional)scopeType) - executes the function once, no matter how many times it is called.
+		scopeType can be Once.EVER and the function will only execute once ever, or Once.PER_LEVEL and the
+		function will execute only once each time there is a new level. Your function can return values
+		example:
+			local initGlobal = doOnce(function()
+				print("Global init")
+				return "Hello"
+			end, Once.EVER)
+
+			local initLevel = doOnce(function()
+				print("Level init")
+			end, Once.PER_LEVEL)
+
+			local retValue = initGlobal()  	-- prints Global init
+			print(retVal)					-- prinst Hello
+			retValue = initGlobal()  		-- does not print anything
+			print(retVal)					-- prints nil
+			initLevel()   -- prints Level init
+			initLevel()   -- does nothing
+			-- game level changes
+			initLevel()   -- prints Level init again 
+			initGlobal.reset() -- even though this function was set as Once.EVER you can manually reset it
+			initGlobal()  -- prints Global init
+			
+			-- doOnce is also fault tolerant and can re-execute on failure. Just call error() on failure. 
+			
+			local failCount = 0
+			local canFail = doOnce(function()
+				if failCount < 3 then
+					failCount = failCount + 1
+					print("canFail failed.")
+					error()
+				end
+				print("canFail succeeded")
+			end, Once.EVER)
+
+			canFail()   -- prints canFail failed.
+			canFail()   -- prints canFail failed.
+			canFail()   -- prints canFail failed.   
+			canFail() 	-- prints canFail succeeded 
+			canFail()   -- does nothing
+			canFail()   -- does nothing
 
 	uevrUtils.vector_2(x, y, reuseable) - returns a CoreUObject.Vector2D structure with the given params
 		example:
@@ -220,6 +263,10 @@ Usage
 			parent(object) 
 			tag(string)
 			showDebug(bool)
+			useDefaultPose(bool) - By default the function will take the current bone transforms of the source skeletalmeshcomponent and apply them 
+				to the poseablemeshcomponent. For example if your source is gripping a gun then the copy will also be gripping. 
+				If you do not want this and just want the default skeleton then set options.useDefaultPose to true
+
 		example:
 			poseableComponent = uevrUtils.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, {showDebug=false})
 	
@@ -302,6 +349,21 @@ Usage
 			end)
 			
 
+	spliceableInlineArray, expandArray - is a utility that enables declarative construction 
+		of Lua arrays by allowing inline expansion of multiple return values such as those from functions 
+		or generators at arbitrary positions within a table. This circumvents Lua’s native limitation 
+		where multiple return values are only expanded in the final position of a table constructor.
+		example:
+			local function getWidgets()
+				return { {type="button"}, {type="slider"}, {type="checkbox"} }
+			end
+			local ui = spliceableInlineArray {
+				{type="label"},
+				expandArray(getWidgets),
+				{type="footer"}
+			}
+
+
 	Callbacks:	
 		The following functions can be added to you main script. They are optional and will only be called if you add them
 		
@@ -330,12 +392,25 @@ Usage
 		end
 
 		-- function that gets called when the level changes
-		function on_level_change(level)
+		function on_level_change(level, levelName)
 		end
 
 		-- function that gets called when this library has finished initializing
 		function UEVRReady(instance)
 		end
+	
+
+	
+		UEVR lifecycle
+			Pre engine
+			Early Stereo --one eye
+			Pre Stereo --one eye
+			Post Stereo --one eye
+			Early Stereo --other eye
+			Pre Stereo --other eye
+			Post Stereo --other eye
+			Post engine
+
 ]]--
 
 
@@ -495,6 +570,78 @@ local function updateLerp(delta)
 		--print("Deleted lerp\n")
 	end
 end
+function M.cancelLerp(lerpID)
+	lerpList[lerpID] = nil
+end
+
+-- Do Once 
+Once = {
+    EVER = 0,
+    PER_LEVEL = 1
+}
+
+local perLevelDoOnceRegistry = {}
+function doOnce(func, scopeType)
+    local hasRun = false
+    local succeeded = false
+
+    local obj = {
+        scopeType = scopeType or Once.EVER
+    }
+
+    -- function obj:run()
+        -- if not hasRun then
+            -- hasRun = true
+            -- func()
+        -- end
+    -- end
+
+   function obj:run()
+        if not hasRun or not succeeded then
+            hasRun = true
+            local ok, result = pcall(func)
+
+            if not ok then
+                -- Failure detected, reset so we can try again later
+                hasRun = false
+                succeeded = false
+            else
+                succeeded = true
+            end
+            return result
+        end
+    end
+
+    function obj:reset()
+        hasRun = false
+        succeeded = false
+    end
+
+    setmetatable(obj, {
+        __call = function(self)
+            self:run()
+        end
+    })
+
+
+    -- Register with external scope tracker if needed
+    if obj.scopeType == Once.PER_LEVEL then
+        table.insert(perLevelDoOnceRegistry, obj)
+    end
+
+    return obj
+end
+
+local function resetPerLevelDoOnce()
+    for _, obj in ipairs(perLevelDoOnceRegistry) do
+        obj:reset()
+    end
+end
+
+function M.doOnce(func, scopeType)
+	return doOnce(func, scopeType)
+end
+-- end Do Once
 
 -- function delay(seconds, func)
   -- local co = coroutine.create(function()
@@ -553,10 +700,16 @@ end
 local function updateCurrentLevel()
 	local level = getCurrentLevel()
 	if lastLevel ~= level then
-		executeUEVRCallbacks("on_level_change", level)
+		resetPerLevelDoOnce()
+		
+		local levelName = M.getShortName(level:get_outer())
+		executeUEVRCallbacks("on_pre_level_change", level, levelName)
+		
 		if on_level_change ~= nil then
-			on_level_change(level)
+			on_level_change(level, levelName)
 		end
+		
+		executeUEVRCallbacks("on_level_change", level, levelName)
 	end	
 	lastLevel = level
 end
@@ -644,9 +797,9 @@ function M.initUEVR(UEVR, callbackFunc)
 			
 			executeUEVRCallbacks("postCalculateStereoView", device, view_index, world_to_meters, position, rotation, is_double)
 		end)
-		-- if success == false then
-			-- M.print("[on_pre_engine_tick] " .. response, LogLevel.Error)
-		-- end
+		if success == false then
+			M.print("[on_pre_engine_tick] " .. response, LogLevel.Error)
+		end
 	end)
 
 	uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
@@ -709,7 +862,7 @@ function M.print(str, logLevel)
 				if logLevel == LogLevel.Error or logLevel == LogLevel.Critical then
 					uevr.params.functions.log_error("[" .. LogLevelString[logLevel] .. "] " .. str)
 				elseif logLevel == LogLevel.Warning then
-					uevr.params.functions.log_warning("[" .. LogLevelString[logLevel] .. "] " .. str)
+					uevr.params.functions.log_warn("[" .. LogLevelString[logLevel] .. "] " .. str)
 				else
 					uevr.params.functions.log_info("[" .. LogLevelString[logLevel] .. "] " .. str)
 				end
@@ -742,6 +895,10 @@ end
 
 function M.registerLevelChangeCallback(func)
 	registerUEVRCallback("on_level_change", func)
+end
+
+function M.registerPreLevelChangeCallback(func)
+	registerUEVRCallback("on_pre_level_change", func)
 end
 
 function vector_2(x, y, reuseable)
@@ -884,8 +1041,43 @@ function M.rotator(...)
 	return kismet_math_library:MakeRotator(roll, pitch, yaw)
 end
 
+-- Converts degrees to radians
+local function deg2rad(deg)
+    return deg * math.pi / 180
+end
+
+-- Converts a rotator (pitch, yaw, roll) to a quaternion
+function rotatorToQuaternion(pitch, yaw, roll)
+    -- Convert to radians
+    local p = deg2rad(pitch)
+    local y = deg2rad(yaw)
+    local r = deg2rad(roll)
+
+    -- Half angles
+    local cy = math.cos(y * 0.5)
+    local sy = math.sin(y * 0.5)
+    local cp = math.cos(p * 0.5)
+    local sp = math.sin(p * 0.5)
+    local cr = math.cos(r * 0.5)
+    local sr = math.sin(r * 0.5)
+
+    -- Quaternion components
+    local qw = cr * cp * cy + sr * sp * sy
+    local qx = sr * cp * cy - cr * sp * sy
+    local qy = cr * sp * cy + sr * cp * sy
+    local qz = cr * cp * sy - sr * sp * cy
+
+    return {x = qx, y = qy, z = qz, w = qw}
+end
+
 function M.rotatorFromQuat(x, y, z, w)
 	return kismet_math_library:Quat_Rotator(M.quat(x, y, z, w))
+end
+
+function M.quatFromRotator(pitch, yaw, roll)
+	local quat = rotatorToQuaternion(pitch, yaw, roll)
+	return M.quatf(quat.x, quat.y, quat.z, quat.w)
+	--return kismet_math_library:Conv_VectorToQuaternion(M.vector(x, y, z))
 end
 
 function M.quat(x, y, z, w, reuseable)
@@ -973,6 +1165,64 @@ function M.set_component_relative_transform(component, position, rotation, scale
 	M.set_component_relative_location(component, position)
 	M.set_component_relative_rotation(component, rotation)
 	M.set_component_relative_scale(component, scale)
+end
+
+function M.distanceBetween(vector1, vector2)
+	return kismet_math_library:Vector_Distance(M.vector(vector1), M.vector(vector2))
+end
+
+function M.getForwardVector(rotator)
+	if rotator ~= nil then
+		return kismet_math_library:GetForwardVector(rotator)
+	else
+		return M.vector(0,0,0)
+	end
+end
+
+function M.clampAngle180(angle)
+    angle = angle % 360
+    if angle > 180 then
+        angle = angle - 360
+    end
+    return angle
+end
+
+-- The following two function allow you to create an array that can have a function as an element
+--and that function can return more array elements that get spliced in
+-- Marks a function call for expansion
+function expandArray(f, ...)
+    return {__expand = true, values = {table.unpack(f(...))}}
+end
+
+-- Processes a mixed list of values and expansion markers
+function spliceableInlineArray(t)
+    local result = {}
+    for _, v in ipairs(t) do
+        if type(v) == "table" and v.__expand then
+            for _, val in ipairs(v.values) do
+                result[#result + 1] = val
+            end
+        else
+            result[#result + 1] = v
+        end
+    end
+    return result
+end
+
+
+function M.getShortName(object)
+	if M.getValid(object) ~= nil then
+		local name = object:get_fname():to_string()
+		if name ~= nil then return name end
+	end
+	return ""
+end
+
+function M.getFullName(object)
+	if M.getValid(object) ~= nil then
+		return object:get_full_name()
+	end
+	return ""
 end
 
 function M.getUEVRParam_bool(paramName)
@@ -1171,9 +1421,14 @@ function M.create_component_of_class(class, manualAttachment, relativeTransform,
 	if baseActor == nil then baseActor = M.spawn_actor( nil, 1, nil, tag) end
 	local component = nil
 	if baseActor.AddComponentByClass == nil then
-		component = uevr.api:add_component_by_class(baseActor, class, manualAttachment)
+		component = uevr.api:add_component_by_class(baseActor, class, deferredFinish)
+		--print("Used uevr.api:add_component_by_class to create component", baseActor,component, class)
+		-- if component == nil then --what is templateName
+			-- baseActor:AddComponent(templateName, manualAttachment, relativeTransform, deferredFinish)
+		-- end
 	else
 		component = baseActor:AddComponentByClass(class, manualAttachment, relativeTransform, deferredFinish)
+		--print("Used AddComponentByClass to create component",component)
 	end
 	if component ~= nil then
 		component:SetVisibility(true)
@@ -1185,6 +1440,10 @@ function M.create_component_of_class(class, manualAttachment, relativeTransform,
 		M.print("Failed to create_component_of_class because component was nil")
 	end
 	return component
+end
+
+function M.getEngineVersion()
+	return kismet_system_library:GetEngineVersion()
 end
 
 function M.find_required_object(name)
@@ -1247,7 +1506,7 @@ function M.find_all_of(className, includeDefault)
 	return {}
 end
 
-function splitOnLastPeriod(input)
+function M.splitOnLastPeriod(input)
     local lastPeriodIndex = input:match(".*()%.") -- Find the last period's position
     if not lastPeriodIndex then
         return input, nil -- No period found
@@ -1263,7 +1522,7 @@ function M.find_instance_of(className, objectName)
 	local instances = M.find_all_of(className, true)
 	for i, instance in ipairs(instances) do
 		if isShortName then
-			local before, after = splitOnLastPeriod(instance:get_full_name())
+			local before, after = M.splitOnLastPeriod(instance:get_full_name())
 			if after ~= nil and after == objectName then
 				return instance
 			end
@@ -1511,13 +1770,45 @@ function M.getChildComponent(parent, name)
 	local childComponent = nil
 	if M.validate_object(parent) ~= nil and name ~= nil then
 		local children = parent.AttachChildren
-		for i, child in ipairs(children) do
-			if  string.find(child:get_full_name(), name) then
-				childComponent = child
+		if children ~= nil then
+			for i, child in ipairs(children) do
+				if  string.find(child:get_full_name(), name) then
+					childComponent = child
+				end
 			end
 		end
 	end
 	return childComponent
+end
+
+-- className and excludeInherited are optional
+function M.getPropertiesOfClass(object, className, excludeInherited)
+	local propertiesList = {}
+	if M.getValid(object) ~= nil then
+		local propertyClass = nil
+		if className ~= nil then 
+			propertyClass = M.get_class(className)
+		end
+		local class = object:get_class()
+		while M.getValid(class) ~= nil do
+			local property = class:get_child_properties()
+			while property ~= nil do
+				if property:get_class():get_name() == "ObjectProperty" then
+					local value = object[property:get_fname():to_string()]
+					if value ~= nil and (propertyClass == nil or value:is_a(propertyClass)) then
+						table.insert(propertiesList, property:get_fname():to_string()) 
+					end
+				end
+				property = property:get_next()
+			end	
+			if excludeInherited == true then
+				class = nil
+			else
+				class = class:get_super_struct()
+			end
+		end
+	end
+	return propertiesList
 end
 
 function M.destroyComponent(component, destroyOwner, destroyChildren)
@@ -1576,7 +1867,7 @@ function M.detachAndDestroyComponent(component, destroyOwner, destroyChildren)
 	end
 end
 
---options are manualAttachment, relativeTransform, deferredFinish, parent, tag, showDebug
+--options are manualAttachment, relativeTransform, deferredFinish, parent, tag, showDebug, useDefaultPose
 function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, options)
 	if options == nil then options = {} end
 	local showDebug = options.showDebug
@@ -1600,8 +1891,14 @@ function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, options)
 				if showDebug == true then M.print("Master pose updated") end
 				
 				pcall(function()
-					poseableComponent:CopyPoseFromSkeletalComponent(skeletalMeshComponent)	
-					if showDebug == true then M.print("Pose copied") end
+					-- CopyPoseFromSkeletalComponent will take the current bone transforms
+					-- of the source skeletalmeshcomponent and apply them to the poseablemeshcomponent
+					-- For example if your source is gripping a gun then the copy will also be gripping
+					-- If you do not want this and just want the default skeleton then set options.useDefaultPose to true
+					if options.useDefaultPose ~= true then
+						poseableComponent:CopyPoseFromSkeletalComponent(skeletalMeshComponent)	
+						if showDebug == true then M.print("Pose copied") end
+					end
 				end)	
 			
 				M.copyMaterials(skeletalMeshComponent, poseableComponent, showDebug)
@@ -1868,6 +2165,124 @@ function M.cloneComponent(component, options)
 	-- end
 	return clone
 end
+
+function M.getArrayRange(arr, startIndex, endIndex)
+    local result = {}
+    -- Ensure startIndex and endIndex are within valid bounds
+    startIndex = math.max(1, startIndex)
+    endIndex = math.min(#arr, endIndex)
+
+    for i = startIndex, endIndex do
+        table.insert(result, arr[i])
+    end
+    return result
+end
+
+function M.wrapTextOnWordBoundary(text, maxCharsPerLine)
+	if text == nil then text = "" end
+ 	if maxCharsPerLine == nil then maxCharsPerLine = 80 end
+    local wrapped_text = ""
+    local current_line_length = 0
+    local words = {}
+
+    -- Split the text into words, preserving spaces
+    for word in string.gmatch(text .. " ", "([^%s]+%s*)") do
+        table.insert(words, word)
+    end
+
+    for i, word in ipairs(words) do
+        local word_length = string.len(word)
+
+        if current_line_length + word_length > maxCharsPerLine and current_line_length > 0 then
+            wrapped_text = wrapped_text .. "\n"
+            current_line_length = 0
+        end
+
+        wrapped_text = wrapped_text .. word
+        current_line_length = current_line_length + word_length
+    end
+
+    return wrapped_text
+end
+
+function M.parseHierarchyString(str)
+	if str == nil then str = "" end
+    local tokens = {}
+    for token in str:gmatch("[^%.]+") do
+        table.insert(tokens, token)
+    end
+
+    local root = nil
+    local current = nil
+
+    for _, token in ipairs(tokens) do
+        local parent, child = token:match("^(%w+)%((%w+)%)$")
+        local node
+
+        if parent and child then
+            node = { name = parent, child = { name = child } }
+        else
+            node = { name = token }
+        end
+
+        if not root then
+            root = node
+            current = root
+        else
+            if current.child then
+                current = current.child
+            elseif current.property then
+                current = current.property
+            end
+
+            if parent and child then
+                current.property = node
+                current = node.child
+            else
+                current.property = node
+                current = node
+            end
+        end
+    end
+
+    return root
+end
+
+function M.getObjectFromHierarchy(node, object, showDebug)
+	if node ~= nil then
+		if node.name then
+			if object == nil then
+				if node.name == "Pawn" then
+					if showDebug == true then M.print("[getObjectFromHierarchy] Node name " .. node.name) end
+					object = pawn
+				end
+			end
+			if object == nil then 
+				if showDebug == true then M.print("[getObjectFromHierarchy] Object not found " .. node.name) end
+				return object 
+			end
+			if showDebug == true then M.print("[getObjectFromHierarchy] " .. object:get_full_name()) end
+		end
+		if node.child then
+			if showDebug == true then M.print("[getObjectFromHierarchy] Attached child " .. node.child.name) end
+			object = M.getChildComponent(object, node.child.name)
+			object = M.getObjectFromHierarchy(node.child, object, showDebug)
+		end
+		if node.property then
+			if showDebug == true then M.print("[getObjectFromHierarchy] Property " .. node.property.name) end
+			object = object[node.property.name]
+			object = M.getObjectFromHierarchy(node.property, object, showDebug)
+		end
+	end
+	return object
+end
+
+-- "Pawn.Mesh(Arm).Glove"
+function M.getObjectFromDescriptor(descriptor, showDebug)
+	return M.getObjectFromHierarchy(M.parseHierarchyString(descriptor), nil, showDebug)
+end
+
+
 
 -- Following code is coutesy of markmon 
 ------------------------------------------------------------------------------------

@@ -565,8 +565,8 @@ function M.displayWidgets(searchText)
 	end
 --	print(#widgetNames)
 	
-	configui.setLabel("uevr_dev_widget_total_count", "Total static meshes:" .. #widgets)
-	configui.setLabel("uevr_dev_widget_filtered_count", "Filtered static meshes:" .. #widgetNames)
+	configui.setLabel("uevr_dev_widget_total_count", "Total widgets:" .. #widgets)
+	configui.setLabel("uevr_dev_widget_filtered_count", "Filtered widgets:" .. #widgetNames)
 	configui.setSelections("uevr_dev_widget_list", widgetNames)
 end
 
@@ -579,7 +579,7 @@ function M.displayReticules(searchText)
 	
 	for name, widget in pairs(widgets) do
 		local widgetName = widget:get_full_name()
-		if string.find(widgetName, "Reticule") or  string.find(widgetName, "Reticle") or string.find(widgetName, "Crosshair") or (searchText ~= nil and searchText ~= "" and string.find(widgetName, searchText)) then
+		if string.find(widgetName, "Cursor") or string.find(widgetName, "Reticule") or string.find(widgetName, "Reticle") or string.find(widgetName, "Crosshair") or (searchText ~= nil and searchText ~= "" and string.find(widgetName, searchText)) then
 			if configui.getValue("uevr_dev_reticule_active") == true then
 				local isActive = false
 				if uevrUtils.getValid(pawn) ~= nil and widget.GetOwningPlayerPawn ~= nil then
