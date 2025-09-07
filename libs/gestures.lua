@@ -42,6 +42,10 @@ function M.print(text, logLevel)
 	end
 end
 
+local autoDetect = {}
+local hasPunchGesture = false
+local punchStrengthPercent = 0
+
 local punchDetector = {
     prevLocalPos = nil,
     cooldown = 0,
@@ -332,6 +336,11 @@ function detectFace(state, hand, continuous)
 	return gripMouth, gripEyes, gripHead, gripEar, triggerMouth, triggerEyes, triggerHead, triggerEar
 end
 
+function M.getGesture(id)
+	if id == M.Gesture.PUNCH then
+		 return hasPunchGesture, punchStrengthPercent
+	end
+end
 
 function M.detectGesture(id, deltaTime, hand, currentPos, currentRot, pawnPos, pawnRot )
 	if hand == nil then hand = Handed.Right end
@@ -352,7 +361,8 @@ function M.detectGesture(id, deltaTime, hand, currentPos, currentRot, pawnPos, p
 		return false
 	else
 		if id == M.Gesture.PUNCH then
-			return punchDetector:update(currentPos, currentRot, pawnPos, pawnRot, deltaTime)
+			 hasPunchGesture, punchStrengthPercent = punchDetector:update(currentPos, currentRot, pawnPos, pawnRot, deltaTime)
+			 return hasPunchGesture, punchStrengthPercent
 		end
 	end
 	return false
@@ -393,5 +403,16 @@ end
 function M.getHeadGestures(state, hand, continuous)
 	return detectFace(state, hand, continuous)
 end
+
+function M.autoDetectGesture(id, val)
+	if val == nil then val = true end
+	autoDetect[id] = val
+end
+
+uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
+	if autoDetect[M.Gesture.PUNCH] == true then
+		M.detectGesture(M.Gesture.PUNCH, delta)
+	end
+end)
 
 return M

@@ -457,7 +457,7 @@ local function updatePawnPositionRoomscale(world_to_meters)
 		forwardVector.Z = 0 --do not affect up/down
 		if pawnPositionMode == M.PawnPositionMode.ANIMATED then
 			pawn:AddMovementInput(forwardVector, pawnPositionAnimationScale, false) --dont need to check for pawn because if rootComponent exists then pawn exists
-		elseif pawnPositionMode == M.PawnPositionMode.FOLLOWS then
+		elseif pawnPositionMode == M.PawnPositionMode.FOLLOWS and rootComponent.K2_AddWorldOffset ~= nil then
 			rootComponent:K2_AddWorldOffset(forwardVector, pawnPositionSweepMovement, reusable_hit_result, false)
 			--rootComponent:K2_SetWorldLocation(uevrUtils.vector(pawnPos.X+forwardVector.X,pawnPos.Y+forwardVector.Y,pawnPos.Z),pawnPositionSweepMovement,reusable_hit_result,false)
 		end
