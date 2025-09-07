@@ -1987,6 +1987,31 @@ function M.createSkeletalMeshComponent(mesh, options)
 	return component
 end
 
+function M.getRootBoneOfBone(skeletalMeshComponent, boneName)
+	local fName = M.fname_from_string(boneName)
+	local boneName = fName
+	while fName:to_string() ~= "None" do
+		boneName = fName
+		fName = skeletalMeshComponent:GetParentBone(fName)
+	end
+	return boneName
+end
+
+function M.getBoneNames(skeletalMeshComponent)
+	local boneNames = {}
+	if skeletalMeshComponent ~= nil then
+		local count = skeletalMeshComponent:GetNumBones()
+		for index = 0 , count - 1 do
+			table.insert(boneNames, skeletalMeshComponent:GetBoneName(index):to_string()) 
+		end
+	else
+		M.print("Can't get bone names because skeletalMeshComponent was nil", LogLevel.Warning)
+	end
+	return boneNames
+end
+
+
+
 --options are width, height, format
 function M.createRenderTarget2D(options)
      return kismet_rendering_library:CreateRenderTarget2D( M.get_world(), options.width, options.height, options.format, zero_color, false)

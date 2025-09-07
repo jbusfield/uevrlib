@@ -8,7 +8,7 @@ local BASE_LERP_SPEED   = 10      -- minimum lerp speed
 local MAX_LERP_SPEED    = 150     -- maximum lerp speed
 local SPEED_SCALE       = 5       -- multiplier for head velocity
 
-local minAngularDeviation = 45  -- Minimum yaw difference to trigger rotation. Prevents small movements of the head from triggering body rotation
+local minAngularDeviation = 50  -- Minimum yaw difference to trigger rotation. Prevents small movements of the head from triggering body rotation
 
 -- alignConfidenceThreshold is the minimum confidence value required to trigger body yaw alignment. It acts as a gatekeeper for gesture 
 -- intent ensuring that the body only begins rotating when the hands are clearly aligned with the head’s facing direction.
