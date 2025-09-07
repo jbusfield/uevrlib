@@ -448,8 +448,9 @@ end)
 
 uevr.params.sdk.callbacks.on_early_calculate_stereo_view_offset(function(device, view_index, world_to_meters, position, rotation, is_double)	
 	if aimMethod ~= M.AimMethod.UEVR and view_index == 1 then
+		--isolate this
 		local rootComponent = uevrUtils.getValid(pawn,{"RootComponent"})
-		if rootComponent ~= nil and decoupledYaw ~= nil and pawn.Mesh ~= nil and rootComponent.K2_GetComponentLocation ~= nil and rootComponent.K2_GetComponentRotation ~= nil then
+		if rootComponent ~= nil and decoupledYaw ~= nil and pawn.Mesh ~= nil and rootComponent.K2_GetComponentLocation ~= nil and rootComponent.K2_GetComponentRotation ~= nil then			
 			if pawnPositionMode ~= M.PawnPositionMode.NONE then			
 				uevr.params.vr.get_standing_origin(temp_vec3f)
 				
@@ -505,9 +506,9 @@ uevr.params.sdk.callbacks.on_early_calculate_stereo_view_offset(function(device,
 			--done with mesh
 
 		end
-	-- end
+	end
 
-	-- if aimMethod ~= M.AimMethod.UEVR then
+	if aimMethod ~= M.AimMethod.UEVR then
 		local rootComponent = uevrUtils.getValid(pawn,{"RootComponent"})
 		if bodyRotationOffset ~= nil and rootComponent ~= nil and rootComponent.K2_GetComponentLocation ~= nil and rootComponent.K2_GetComponentRotation ~= nil then
 			local pawnPos = rootComponent:K2_GetComponentLocation()	
