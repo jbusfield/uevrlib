@@ -2307,8 +2307,20 @@ function M.getObjectFromDescriptor(descriptor, showDebug)
 	return M.getObjectFromHierarchy(M.parseHierarchyString(descriptor), nil, showDebug)
 end
 
+function M.getControllerIndex(controllerID)
+	if controllerID == 0 then
+		return uevr.params.vr.get_left_controller_index()
+	elseif controllerID == 1 then
+		return uevr.params.vr.get_right_controller_index()
+	elseif controllerID == 2 then
+		return uevr.params.vr.get_hmd_index()
+	end
+	return nil
+end
 
-
+function M.dumpJson(filename, jsonData)
+	json.dump_file(filename .. ".json", jsonData, 4)
+end
 -- Following code is coutesy of markmon 
 ------------------------------------------------------------------------------------
 -- Helper section

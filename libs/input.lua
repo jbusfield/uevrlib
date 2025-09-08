@@ -56,6 +56,7 @@ local adjustForEyeOffset = false
 local currentHeadRotator = uevrUtils.rotator(0,0,0)
 local headBoneName = ""
 local rootBoneName = ""
+local meshName = "Mesh"
 local boneList = {}
 
 local configWidgets = spliceableInlineArray{
@@ -124,7 +125,7 @@ local configWidgets = spliceableInlineArray{
 					selections = {"Game", "Right Controller", "Left Controller", "Head/HMD", "Follows Body (Simple)", "Follows Body (Advanced)"},
 					initialValue = pawnRotationMode
 				},
-				expandArray(pawnModule.getConfigWidgets),
+				expandArray(pawnModule.getConfigurationWidgets),
 		{
 			widgetType = "tree_pop"
 		},
@@ -227,8 +228,26 @@ function M.print(text, logLevel)
 	end
 end
 
-function M.getConfigWidgets(options)
+function M.getConfigurationWidgets(options)
 	return configui.applyOptionsToConfigWidgets(configWidgets, options)
+end
+
+function M.showConfiguration(saveFileName, options)
+	local configDefinition = {
+		{
+			panelLabel = "Input Config", 
+			saveFile = saveFileName, 
+			layout = spliceableInlineArray{
+				expandArray(M.getConfigurationWidgets, options)
+			}
+		}
+	}
+	--uevrUtils.dumpJson("test", configDefinition)
+	configui.create(configDefinition)
+end
+
+function M.setMeshName(val)
+	meshName = val
 end
 
 function M.setAimMethod(val)
@@ -347,7 +366,7 @@ end
 
 local function setCurrentHeadBone(value)
 	headBoneName = boneList[value]
-	local mesh = uevrUtils.getValid(pawn,{"Mesh"})
+	local mesh = uevrUtils.getValid(pawn,{meshName})
 	if mesh ~= nil then
 		local rootBoneFName = uevrUtils.getRootBoneOfBone(mesh, headBoneName)
 		if rootBoneFName ~= nil then
@@ -357,7 +376,7 @@ local function setCurrentHeadBone(value)
 end
 
 local setBoneNames = doOnce(function ()
-	local mesh = uevrUtils.getValid(pawn,{"Mesh"})
+	local mesh = uevrUtils.getValid(pawn,{meshName})
 	if mesh ~= nil then
 		boneList = uevrUtils.getBoneNames(mesh)
 		if #boneList == 0 then error() end
@@ -375,22 +394,24 @@ end, Once.PER_LEVEL)
 -- mesh can be moved to keep the neck in its proper place with respect to the pawn. Concept courtesy of Pande4360
 local function getAnimationHeadDelta(pawn, pawnYaw)
 	if headBoneName ~= "" and rootBoneName ~= "" and adjustForAnimation == true then
-		local baseRotationOffsetRotatorYaw = 0
-		if pawn.BaseRotationOffset ~= nil then
-			baseRotationOffsetRotator = kismet_math_library:Quat_Rotator(pawn.BaseRotationOffset)
-			if baseRotationOffsetRotator ~= nil then				
-				baseRotationOffsetRotatorYaw = baseRotationOffsetRotator.Yaw
+		local mesh = uevrUtils.getValid(pawn,{meshName})
+		if mesh ~= nil then
+			local baseRotationOffsetRotatorYaw = 0
+			if pawn.BaseRotationOffset ~= nil then
+				baseRotationOffsetRotator = kismet_math_library:Quat_Rotator(pawn.BaseRotationOffset)
+				if baseRotationOffsetRotator ~= nil then				
+					baseRotationOffsetRotatorYaw = baseRotationOffsetRotator.Yaw
+				end
 			end
-		end
 
-		local headSocketLocation = pawn.Mesh:GetSocketLocation(uevrUtils.fname_from_string(headBoneName))
-		local rootSocketLocation = pawn.Mesh:GetSocketLocation(uevrUtils.fname_from_string(rootBoneName))
-		local socketDelta = uevrUtils.vector(headSocketLocation.Y - rootSocketLocation.Y, headSocketLocation.X - rootSocketLocation.X, headSocketLocation.Z - rootSocketLocation.Z)
-		socketDelta = kismet_math_library:RotateAngleAxis(socketDelta, pawnYaw - baseRotationOffsetRotatorYaw, uevrUtils.vector(0,0,1))
-		return socketDelta
-	else
-		return uevrUtils.vector(0,0,0)
+			local headSocketLocation = mesh:GetSocketLocation(uevrUtils.fname_from_string(headBoneName))
+			local rootSocketLocation = mesh:GetSocketLocation(uevrUtils.fname_from_string(rootBoneName))
+			local socketDelta = uevrUtils.vector(headSocketLocation.Y - rootSocketLocation.Y, headSocketLocation.X - rootSocketLocation.X, headSocketLocation.Z - rootSocketLocation.Z)
+			socketDelta = kismet_math_library:RotateAngleAxis(socketDelta, pawnYaw - baseRotationOffsetRotatorYaw, uevrUtils.vector(0,0,1))
+			return socketDelta
+		end
 	end
+	return uevrUtils.vector(0,0,0)
 end
 
 --because the eyes may not be centered on the origin, an hmd rotation can cause unexpected movement of the pawn mesh. This compensates for that movement
@@ -458,7 +479,9 @@ local function updatePawnPositionRoomscale(world_to_meters)
 		if pawnPositionMode == M.PawnPositionMode.ANIMATED then
 			pawn:AddMovementInput(forwardVector, pawnPositionAnimationScale, false) --dont need to check for pawn because if rootComponent exists then pawn exists
 		elseif pawnPositionMode == M.PawnPositionMode.FOLLOWS and rootComponent.K2_AddWorldOffset ~= nil then
-			rootComponent:K2_AddWorldOffset(forwardVector, pawnPositionSweepMovement, reusable_hit_result, false)
+			pcall(function()	
+				rootComponent:K2_AddWorldOffset(forwardVector, pawnPositionSweepMovement, reusable_hit_result, false)
+			end)
 			--rootComponent:K2_SetWorldLocation(uevrUtils.vector(pawnPos.X+forwardVector.X,pawnPos.Y+forwardVector.Y,pawnPos.Z),pawnPositionSweepMovement,reusable_hit_result,false)
 		end
 		
@@ -469,32 +492,39 @@ local function updatePawnPositionRoomscale(world_to_meters)
 end
 
 local function updateMeshRelativePosition()
-	if rootComponent ~= nil and decoupledYaw ~= nil and pawn.Mesh ~= nil then						
-		local pawnRot = rootComponent:K2_GetComponentRotation()
-		local animationDelta = getAnimationHeadDelta(pawn, pawnRot.Yaw)
-		local eyeOffsetDelta = getEyeOffsetDelta(pawn, pawnRot.Yaw) 
-						
-		temp_vec3:set(0, 0, 1) --the axis to rotate around
-		--headOffset is a global defining how far the head is offset from the mesh
-		local forwardVector = kismet_math_library:RotateAngleAxis(headOffset, pawnRot.Yaw - bodyRotationOffset - decoupledYaw, temp_vec3)
+	if rootComponent ~= nil and decoupledYaw ~= nil then	
+		local mesh = uevrUtils.getValid(pawn,{meshName})
+		if mesh ~= nil then		
+			local pawnRot = rootComponent:K2_GetComponentRotation()
+			local animationDelta = getAnimationHeadDelta(pawn, pawnRot.Yaw)
+			local eyeOffsetDelta = getEyeOffsetDelta(pawn, pawnRot.Yaw) 
+							
+			temp_vec3:set(0, 0, 1) --the axis to rotate around
+			--headOffset is a global defining how far the head is offset from the mesh
+			local forwardVector = kismet_math_library:RotateAngleAxis(headOffset, pawnRot.Yaw - bodyRotationOffset - decoupledYaw, temp_vec3)
 
-		--dont worry about Z here. Z is applied directly to the RootComponent later
-		pawn.Mesh.RelativeLocation.X = -forwardVector.X + animationDelta.X + eyeOffsetDelta.X 
-		pawn.Mesh.RelativeLocation.Y = -forwardVector.Y + animationDelta.Y - eyeOffsetDelta.Y 
+			--dont worry about Z here. Z is applied directly to the RootComponent later
+			mesh.RelativeLocation.X = -forwardVector.X + animationDelta.X + eyeOffsetDelta.X 
+			mesh.RelativeLocation.Y = -forwardVector.Y + animationDelta.Y - eyeOffsetDelta.Y 
+		end
 	end
 end
 
 local function updateAim()
 	local controllerID = aimMethod == M.AimMethod.LEFT_CONTROLLER and 0 or (aimMethod == M.AimMethod.HEAD and 2 or 1)
 	local rotation = controllers.getControllerRotation(controllerID)
+	--print(pawn,pawn.Controller,rotation)
 	if uevrUtils.getValid(pawn) ~= nil and pawn.Controller ~= nil and pawn.Controller.SetControlRotation ~= nil and rotation ~= nil then			
 		--disassociates the rotation of the pawn from the rotation set by pawn.Controller:SetControlRotation()
 		pawn.bUseControllerRotationPitch = false
 		pawn.bUseControllerRotationYaw = false
 		pawn.bUseControllerRotationRoll = false
 		
-		pawn.CharacterMovement.bOrientRotationToMovement = false
-		pawn.CharacterMovement.bUseControllerDesiredRotation = false
+		if pawn.CharacterMovement ~= nil then
+			pawn.CharacterMovement.bOrientRotationToMovement = false
+			pawn.CharacterMovement.bUseControllerDesiredRotation = false
+		end
+		--print(rotation.X,rotation.Y,rotation.Z)
 		pawn.Controller:SetControlRotation(rotation) --because the previous booleans were set, aiming with the hand or head doesnt affect the rotation of the pawn
 	end
 end
@@ -545,6 +575,7 @@ end)
 uevr.sdk.callbacks.on_xinput_get_state(function(retval, user_index, state)
 	if aimMethod ~= M.AimMethod.UEVR then
 		local yawChange = updateDecoupledYaw(state)		
+	
 		if yawChange~= 0 and decoupledYaw~= nil and rootComponent ~= nil then
 			rootComponent:K2_SetWorldRotation(uevrUtils.rotator(0,decoupledYaw+bodyRotationOffset,0),false,reusable_hit_result,false)
 		end
@@ -573,6 +604,11 @@ end)
 configui.onCreateOrUpdate("aimMethod", function(value)
 	M.setAimMethod(value)
 	configui.hideWidget("advanced_input", value == M.AimMethod.UEVR)
+	if value ~= M.AimMethod.UEVR then
+		controllers.createController(0)
+		controllers.createController(1)
+		controllers.createController(2)
+	end
 end)
 
 configui.onCreateOrUpdate("useSnapTurn", function(value)
@@ -631,6 +667,54 @@ end)
 
 uevrUtils.registerLevelChangeCallback(function(level)
 	setBoneNames() 
+	if aimMethod ~= M.AimMethod.UEVR then
+		controllers.createController(0)
+		controllers.createController(1)
+		controllers.createController(2)
+	end
 end)
 
 return M
+
+	-- local controllerID = 1
+	-- local rotation1 = controllers.getControllerRotation(controllerID)
+	-- local direction1 = controllers.getControllerDirection(controllerID)
+	-- local location1 = controllers.getControllerLocation(controllerID)
+	-- local rotation2 = nil
+	-- local location2 = nil
+	-- local direction2 = nil
+	-- local index = uevrUtils.getControllerIndex(controllerID)
+	-- if index ~= nil then
+		-- uevr.params.vr.get_pose(index, temp_vec3f, temp_quatf)
+		-- local poseQuat = uevrUtils.quat(temp_quatf.Z, temp_quatf.X, -temp_quatf.Y, -temp_quatf.W)  --reordered terms to convert UEVR to unreal coord system
+		-- print(temp_quatf.X,temp_quatf.Y,temp_quatf.Z,temp_quatf.W)
+		-- direction2 = kismet_math_library:Quat_RotateVector(poseQuat, uevrUtils.vector(1, 0, 0)) --converts UEVR to Unreal coord system
+		-- location2 = uevrUtils.vector(temp_vec3f.X*100,temp_vec3f.Z*100,temp_vec3f.Y*100)
+		-- location2 = kismet_math_library:Quat_RotateVector(poseQuat,location2) --converts UEVR to Unreal coord system
+		-- rotation2 = kismet_math_library:Quat_Rotator(poseQuat)
+	-- end	
+	-- uevr.params.vr.get_rotation_offset(temp_quatf) --This is how much the head was twisted from the pose quat the last time "recenter view" was performed
+	-- local headQuat = uevrUtils.quat(temp_quatf.Z, temp_quatf.X, -temp_quatf.Y, temp_quatf.W) --reordered terms to convert UEVR to unreal coord system
+	-- local headRotator = kismet_math_library:Quat_Rotator(headQuat)
+
+	-- if rotation1 ~= nil then
+		-- print("ROT1",rotation1.Pitch,rotation1.Yaw,rotation1.Roll)
+	-- end
+	-- -- if rotation2 ~= nil then
+		-- -- print("ROT2",rotation2.Pitch,rotation2.Yaw,rotation2.Roll)
+	-- -- end
+	-- -- if location1 ~= nil then
+		-- -- print("LOC1",location1.X,location1.Y,location1.Z)
+	-- -- end
+	-- -- if location2 ~= nil then
+		-- -- print("LOC2",location2.X,location2.Y,location2.Z)
+	-- -- end
+	-- -- if direction1 ~= nil then
+		-- -- print("DIR1",direction1.X,direction1.Y,direction1.Z)
+	-- -- end
+	-- -- if direction2 ~= nil then
+		-- -- print("DIR2",direction2.X,direction2.Y,direction2.Z)
+	-- -- end
+	-- -- if headRotator ~= nil then
+		-- -- print("HEAD",headRotator.Pitch,headRotator.Yaw,headRotator.Roll)
+	-- -- end

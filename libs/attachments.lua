@@ -186,10 +186,12 @@ function getAttachmentNames(attachment)
 	local attachmentChildName = ""
 	if attachment.StaticMesh ~= nil then
 		attachmentChildName = uevrUtils.getShortName(attachment.StaticMesh)
-	else
+	elseif attachment.SkeletalMesh ~= nil then
 		attachmentChildName = uevrUtils.getShortName(attachment.SkeletalMesh)
+	else
+		attachmentChildName = uevrUtils.getShortName(attachment)
 	end
-		
+	print("getAttachmentNames",attachmentParentName, attachmentChildName)
 	return attachmentParentName, attachmentChildName
 end
 
@@ -198,25 +200,27 @@ function M.addAttachmentToConfig(attachment)
 		local attachmentParentName, attachmentChildName = getAttachmentNames(attachment)
 
 		local exists = false
-		for i = 1, #configuration["attachmentOffsets"] do
-			if attachmentParentName == attachmentOffsets[i]["parent"] and attachmentChildName == attachmentOffsets[i]["child"] then
-				exists = true
+		--if configuration["attachmentOffsets"] == nil then configuration["attachmentOffsets"] = {} end
+		if configuration["attachmentOffsets"] ~= nil then
+			for i = 1, #configuration["attachmentOffsets"] do
+				if attachmentParentName == attachmentOffsets[i]["parent"] and attachmentChildName == attachmentOffsets[i]["child"] then
+					exists = true
+				end
 			end
-		end
-		
-		if not exists then
-			M.print("Adding attachment to config " .. attachmentParentName .. " - " .. attachmentChildName)
-			attachmentLocation =  defaultLocation or {attachment.RelativeLocation.X, attachment.RelativeLocation.Y, attachment.RelativeLocation.Z}
-			attachmentRotation = defaultRotation or {attachment.RelativeRotation.Pitch, attachment.RelativeRotation.Yaw, attachment.RelativeRotation.Roll}
-			attachmentScale = defaultScale or {attachment.RelativeScale3D.X, attachment.RelativeScale3D.Y, attachment.RelativeScale3D.Z}
+			if not exists then
+				M.print("Adding attachment to config " .. attachmentParentName .. " - " .. attachmentChildName)
+				attachmentLocation =  defaultLocation or {attachment.RelativeLocation.X, attachment.RelativeLocation.Y, attachment.RelativeLocation.Z}
+				attachmentRotation = defaultRotation or {attachment.RelativeRotation.Pitch, attachment.RelativeRotation.Yaw, attachment.RelativeRotation.Roll}
+				attachmentScale = defaultScale or {attachment.RelativeScale3D.X, attachment.RelativeScale3D.Y, attachment.RelativeScale3D.Z}
 
-			table.insert(configuration["attachmentOffsets"], {parent=attachmentParentName, child=attachmentChildName, location=attachmentLocation, rotation=attachmentRotation, scale=attachmentScale})	
-			isConfigurationDirty = true
-			
-			attachmentOffsets = configuration["attachmentOffsets"]
-			local configDefinition = M.addAttachmentOffsetsToConfigUI(getDefaultConfig())
-			configui.update(configDefinition)
-		end
+				table.insert(configuration["attachmentOffsets"], {parent=attachmentParentName, child=attachmentChildName, location=attachmentLocation, rotation=attachmentRotation, scale=attachmentScale})	
+				isConfigurationDirty = true
+				
+				attachmentOffsets = configuration["attachmentOffsets"]
+				local configDefinition = M.addAttachmentOffsetsToConfigUI(getDefaultConfig())
+				configui.update(configDefinition)
+			end
+		end	
 	end
 end
 
@@ -229,6 +233,7 @@ function M.setAttachmentNames(attachmentNamesList)
 end
 
 local function hasNamedObject(attachment, parentName, childName)
+	M.print("Called hasNamedObject with parent: " .. parentName .. " child: " .. childName)
 	local result = false
 	if parentName == nil or parentName == "" then
 		result = true
@@ -239,15 +244,19 @@ local function hasNamedObject(attachment, parentName, childName)
 	if result then
 		if not(childName == nil or childName == "") then
 			if attachment.StaticMesh ~= nil then
+				print("Static Mesh",attachment.StaticMesh:get_full_name())
 				result = string.find(attachment.StaticMesh:get_full_name(), childName)
 			elseif attachment.SkeletalMesh ~= nil then
+				print("Skeletal Mesh",attachment.SkeletalMesh:get_full_name())
 				result = string.find(attachment.SkeletalMesh:get_full_name(), childName)
 			else
-				result = false
+				result = string.find(attachment:get_full_name(), childName)
 			end
+		else
+			result = false
 		end
 	end
-	
+	M.print("hasNamedObject result is " .. (result and "true" or "false"))
 	return result
 end
 
@@ -255,6 +264,7 @@ function M.getAttachmentOffset(attachment)
 	local attachmentLocation = {0,0,0}
 	local attachmentRotation = {0,0,0}
 	local attachmentScale = {1,1,1}
+
 	if uevrUtils.getValid(attachment) ~= nil then
 		for i = 1, #attachmentOffsets do
 			local parent = attachmentOffsets[i]["parent"]
@@ -340,7 +350,7 @@ end
 function M.attachToMesh(attachment, mesh, socketName) 
 	local success = false
 	if uevrUtils.getValid(attachment) ~= nil and uevrUtils.getValid(mesh) ~= nil  then
-		uevrUtils.print("Attaching attachment to mesh: " .. attachment:get_full_name() .. " to " .. mesh:get_full_name())
+		M.print("Attaching attachment to mesh: " .. attachment:get_full_name() .. " to " .. mesh:get_full_name())
 		if type(socketName) == "string" then
 			socketName = uevrUtils.fname_from_string(socketName)
 		end
@@ -356,7 +366,7 @@ end
 
 function M.attachToController(attachment, controllerID)
 	if uevrUtils.getValid(attachment) ~= nil then
-		uevrUtils.print("Attaching " .. attachment:get_full_name() .. " to controller with ID " .. controllerID)
+		M.print("Attaching " .. attachment:get_full_name() .. " to controller with ID " .. controllerID)
 		controllers.attachComponentToController(controllerID, attachment, nil, nil, nil, true)
 		attachType = M.AttachType.CONTROLLER
 		M.setActiveAttachment(attachment)
@@ -364,5 +374,21 @@ function M.attachToController(attachment, controllerID)
 		M.print("Failed to attach attachment to controller")
 	end
 end
+
+local autoUpdateCallbackCreated = false
+local autoUpdateCurrentAttachment = nil
+function M.autoUpdate(callback)
+	if not autoUpdateCallbackCreated then
+		uevrUtils.setInterval(1000, function()
+			local attachment, mesh, socketName = callback()
+			if attachment ~= nil and mesh ~= nil and autoUpdateCurrentAttachment ~= attachment then
+			--print("here",attachment:get_full_name(),mesh:get_full_name())
+				M.attachToMesh(attachment, mesh, socketName) 
+			end
+			autoUpdateCurrentAttachment = attachment
+		end)
+	end
+end
+
 
 return M

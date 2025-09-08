@@ -49,7 +49,7 @@ function M.print(text, logLevel)
 	end
 end
 
-function M.getConfigWidgets()
+function M.getConfigurationWidgets()
 	return configWidgets
 end
 
@@ -100,7 +100,7 @@ function M.createFromWidget(widget, options)
 			reticuleRotation = uevrUtils.rotator(options.rotation)
 			reticulePosition = uevrUtils.vector(options.position)		
 			if options.scale ~= nil then --default return from vector() is 0,0,0 so need to do special check
-				reticuleScale = uevrUtils.vector(options.scale)
+				reticuleScale = kismet_math_library:Multiply_VectorVector(uevrUtils.vector(options.scale), uevrUtils.vector(-1,-1, 1))
 			else
 				reticuleScale = uevrUtils.vector(-0.1,-0.1,0.1) 
 			end
@@ -232,7 +232,7 @@ function M.getOriginPositionFromController()
 	return controllers.getControllerLocation(2)
 end
 
-function getTargetLocationFromController(handed)
+function M.getTargetLocationFromController(handed)
 	if not controllers.controllerExists(handed) then
 		controllers.createController(handed)
 	end
@@ -257,7 +257,7 @@ function getTargetLocationFromController(handed)
 	end
 end
 
-function getTargetLocation(originPosition, originDirection)	
+function M.getTargetLocation(originPosition, originDirection)	
 	local endLocation = originPosition + (originDirection * 8192.0)
 	
 	local ignore_actors = {}
@@ -275,72 +275,31 @@ end
 function M.update(originLocation, targetLocation, distance, scale, rotation )
 	if uevrUtils.getValid(reticuleComponent) ~= nil and reticuleComponent.K2_SetWorldLocationAndRotation ~= nil then
 		if distance == nil then distance = 200 end
+		if scale == nil then scale = {1,1,1} end
 		rotation = uevrUtils.rotator(rotation)
 		
-		local playerController = nil --uevr.api:get_player_controller(0)
-		local playerCameraManager = nil
-		if playerController ~= nil then
-			playerCameraManager = playerController.PlayerCameraManager
-		end
-		
-		-- if originLocation == nil then
-			-- --if playerCameraManager ~= nil and playerCameraManager.GetCameraLocation ~= nil then
-				-- --originLocation = playerCameraManager:GetCameraLocation()
-			-- --else
-				-- originLocation = M.getOriginPositionFromController()
-			-- --end
-			-- --print(originLocation.X,originLocation.Y,originLocation.Z)
-		-- end
-		-- if targetLocation == nil then
-			-- local direction = kismet_math_library:GetForwardVector(pawn.Controller:GetControlRotation())
-			-- if isReady then
-			-- targetLocation = getTargetLocation(originLocation, direction)
-			-- M.print("One "..targetLocation.X.." "..targetLocation.Y.." "..targetLocation.Z)
-			-- else
--- targetLocation = getTargetLocationFromController(Handed.Right)
-			-- M.print("Two "..targetLocation.X.." "..targetLocation.Y.." "..targetLocation.Z)
-			-- end
-			-- -- if playerCameraManager ~= nil and playerCameraManager.GetCameraRotation ~= nil then
-				-- -- local direction = kismet_math_library:GetForwardVector(pawn.Controller:GetControlRotation())
-				-- -- --local direction = kismet_math_library:GetForwardVector(playerCameraManager:GetCameraRotation())
-				-- -- targetLocation = getTargetLocation(originLocation, direction)
-			-- -- else
-				-- -- targetLocation = getTargetLocationFromController(Handed.Right)
-			-- -- end
-		-- end
-
-
-		local playerController = uevr.api:get_player_controller(0)
-		local playerCameraManager = nil
-		if playerController ~= nil then
-			playerCameraManager = playerController.PlayerCameraManager
-		end
-		
-		if originLocation == nil then
-			if playerCameraManager ~= nil and playerCameraManager.GetCameraLocation ~= nil then
-				originLocation = playerCameraManager:GetCameraLocation()
-			else
-				originLocation = M.getOriginPositionFromController()
+		if originLocation == nil or targetLocation == nil then
+			local playerController = uevr.api:get_player_controller(0)
+			local playerCameraManager = nil
+			if playerController ~= nil then
+				playerCameraManager = playerController.PlayerCameraManager
 			end
-			--print(originLocation.X,originLocation.Y,originLocation.Z)
-		end
-		if targetLocation == nil then
-			--For some insane reason, if the controllers dont exist at this point, even when using playerCameraManager, 
-			--all locomotion becomes broken (in Hello Neighbor at least)
-			--This was a result of controllers being internally reset in on_level_change instead of on_pre_level_change
-			-- if not controllers.controllerExists(Handed.Right) then
-				-- controllers.createController(Handed.Right)
-			-- end
-			-- if not controllers.controllerExists(Handed.Left) then
-				-- controllers.createController(Handed.Left)
-			-- end
-			----
 			
-			if playerCameraManager ~= nil and playerCameraManager.GetCameraRotation ~= nil then
-				local direction = kismet_math_library:GetForwardVector(playerCameraManager:GetCameraRotation())
-				targetLocation = getTargetLocation(originLocation, direction)
-			else
-				targetLocation = getTargetLocationFromController(Handed.Right)
+			if originLocation == nil then
+				if playerCameraManager ~= nil and playerCameraManager.GetCameraLocation ~= nil then
+					originLocation = playerCameraManager:GetCameraLocation()
+				else
+					originLocation = M.getOriginPositionFromController()
+				end
+			end
+			
+			if targetLocation == nil then
+				if playerCameraManager ~= nil and playerCameraManager.GetCameraRotation ~= nil then
+					local direction = kismet_math_library:GetForwardVector(playerCameraManager:GetCameraRotation())
+					targetLocation = M.getTargetLocation(originLocation, direction)
+				else
+					targetLocation = M.getTargetLocationFromController(Handed.Right)
+				end
 			end
 		end
 
@@ -349,15 +308,11 @@ function M.update(originLocation, targetLocation, distance, scale, rotation )
 			local maxDistance =  kismet_math_library:Vector_Distance(uevrUtils.vector(originLocation), uevrUtils.vector(targetLocation))
 			--print(maxDistance)
 			local hmdToTargetDirection = kismet_math_library:GetDirectionUnitVector(uevrUtils.vector(originLocation), uevrUtils.vector(targetLocation))
-			if distance > maxDistance - 10 then distance = maxDistance - 10 end
-			--wrong use hmdToTargetDirection
-			--temp_vec3f:set(weaponDirection.X,weaponDirection.Y,weaponDirection.Z) 
+			if distance > maxDistance - 10 then distance = maxDistance - 10 end --move target distance back slightly so reticule doesnt go through the target
 			temp_vec3f:set(hmdToTargetDirection.X,hmdToTargetDirection.Y,hmdToTargetDirection.Z) 
 			local rot = kismet_math_library:Conv_VectorToRotator(temp_vec3f)
 			rot = uevrUtils.sumRotators(rot, reticuleRotation, rotation)
 			temp_vec3f:set(originLocation.X + (hmdToTargetDirection.X * distance) + reticulePosition.X, originLocation.Y + (hmdToTargetDirection.Y * distance) + reticulePosition.Y, originLocation.Z + (hmdToTargetDirection.Z * distance) + reticulePosition.Z)
-
-			--reticuleComponent:GetOwner():K2_SetActorLocation(temp_vec3f, false, reusable_hit_result, false)	
 			reticuleComponent:K2_SetWorldLocationAndRotation(temp_vec3f, rot, false, reusable_hit_result, false)
 			if scale ~= nil then
 				reticuleComponent:SetWorldScale3D(kismet_math_library:Multiply_VectorVector(uevrUtils.vector(scale), reticuleScale))

@@ -346,6 +346,13 @@ function M.getControllerLocation(controllerID)
 	local controller = M.getController(controllerID, true)
 	if controller ~= nil then
 		return controller:K2_GetComponentLocation()
+	-- else
+		-- --try getting the pose directly
+		-- local index = uevrUtils.getControllerIndex(controllerID)
+		-- if index ~= nil then
+			-- uevr.params.vr.get_pose(index, temp_vec3f, temp_quatf)
+			-- return uevrUtils.vector(temp_vec3f.X,temp_vec3f.Y,temp_vec3f.Z)
+		-- end	
 	end
 	return nil
 end
@@ -354,6 +361,15 @@ function M.getControllerRotation(controllerID)
 	local controller = M.getController(controllerID, true)
 	if controller ~= nil then
 		return controller:K2_GetComponentRotation()
+	-- else
+		-- --try getting the pose directly
+		-- local index = uevrUtils.getControllerIndex(controllerID)
+		-- if index ~= nil then
+			-- uevr.params.vr.get_pose(index, temp_vec3f, temp_quatf)
+			-- local poseQuat = uevrUtils.quat(temp_quatf.Z, temp_quatf.X, -temp_quatf.Y, -temp_quatf.W)  --reordered terms to convert UEVR to unreal coord system
+			-- local poseRotator = kismet_math_library:Quat_Rotator(poseQuat)
+			-- return poseRotator
+		-- end	
 	end
 	return nil
 end

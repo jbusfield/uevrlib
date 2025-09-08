@@ -77,7 +77,7 @@ function M.print(text, logLevel)
 	end
 end
 
-function M.getConfigWidgets(options)
+function M.getConfigurationWidgets(options)
 	return configui.applyOptionsToConfigWidgets(configWidgets, options)
 end
 
