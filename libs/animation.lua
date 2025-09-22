@@ -66,22 +66,60 @@ function M.initPoseableComponent(poseableComponent, boneName, shoulderBoneName, 
 	end
 end
 
-function M.transformBoneToRoot(poseableComponent, targetBoneName, location, rotation, scale, taperOffset)
+-- use transformBoneToRoot with parentPathOnly = true instead
+-- function M.transformBoneToRootOptimized(poseableComponent, targetBoneName, location, rotation, scale, taperOffset)
+-- 	if uevrUtils.validate_object(poseableComponent) ~= nil then
+-- 		local boneSpace = 0
+-- 		local rootBoneName = M.getRootBoneOfBone(poseableComponent, targetBoneName) --should always be the 0 index bone but just to be safe we trace it back
+-- 		--M.print("Found root bone " .. rootBoneName:to_string())		
+-- 		local rootTransform = poseableComponent:GetBoneTransformByName(rootBoneName, boneSpace)
+				
+-- 		local parentFName = poseableComponent:GetParentBone(uevrUtils.fname_from_string(targetBoneName)) --the bone above the target bone
+		
+-- 		local boneName = parentFName
+-- 		local localTransform = kismet_math_library:MakeTransform(uevrUtils.vector(0, 0, 0), uevrUtils.rotator(0,0,0), uevrUtils.vector(0.001, 0.001, 0.001))
+-- 		while boneName:to_string() ~= "None" do
+-- 			M.setBoneSpaceLocalTransform(poseableComponent, boneName, localTransform, boneSpace, rootTransform)
+-- 			boneName = poseableComponent:GetParentBone(boneName)
+-- 		end
+
+-- 		--special handling for the bone above the target bone to allow for a taper
+-- 		if taperOffset == nil then taperOffset = uevrUtils.vector(0, 0, 0) end
+-- 		localTransform = kismet_math_library:MakeTransform(kismet_math_library:Add_VectorVector(location, taperOffset), uevrUtils.rotator(0,0,0), uevrUtils.vector(0.001, 0.001, 0.001))
+-- 		M.setBoneSpaceLocalTransform(poseableComponent, parentFName, localTransform, boneSpace, rootTransform)
+		
+-- 		--apply a transform of the target bone with respect the the tranform of the root bone of the skeleton
+-- 		local localTransform = kismet_math_library:MakeTransform(location, rotation, scale)
+-- 		M.setBoneSpaceLocalTransform(poseableComponent, uevrUtils.fname_from_string(targetBoneName), localTransform, boneSpace, rootTransform)
+-- 	end
+-- end
+
+function M.transformBoneToRoot(poseableComponent, targetBoneName, location, rotation, scale, taperOffset, parentPathOnly)
 	if uevrUtils.validate_object(poseableComponent) ~= nil then
 		local boneSpace = 0
-		rootBoneName = M.getRootBoneOfBone(poseableComponent, targetBoneName) --should always be the 0 index bone but just to be safe we trace it back
+		local rootBoneName = M.getRootBoneOfBone(poseableComponent, targetBoneName) --should always be the 0 index bone but just to be safe we trace it back
 		--M.print("Found root bone " .. rootBoneName:to_string())		
 		local rootTransform = poseableComponent:GetBoneTransformByName(rootBoneName, boneSpace)
 				
 		local parentFName = poseableComponent:GetParentBone(uevrUtils.fname_from_string(targetBoneName)) --the bone above the target bone
 		
-		--loop through all other bones of the skeleton and set their transforms with respect to the root to 0. Do not do this for bones that are children of the target
-		local localTransform = kismet_math_library:MakeTransform(uevrUtils.vector(0, 0, 0), uevrUtils.rotator(0,0,0), uevrUtils.vector(0.001, 0.001, 0.001))
-		local count = poseableComponent:GetNumBones()
-		for index = 1 , count do	
-			local childFName = poseableComponent:GetBoneName(index)
-			if not poseableComponent:BoneIsChildOf(childFName, parentFName) then	
-				M.setBoneSpaceLocalTransform(poseableComponent, childFName, localTransform, boneSpace, rootTransform)
+		if parentPathOnly == true then
+			--only affect bones in the parent hierarchy
+			local boneName = parentFName
+			local localTransform = kismet_math_library:MakeTransform(uevrUtils.vector(0, 0, 0), uevrUtils.rotator(0,0,0), uevrUtils.vector(0.001, 0.001, 0.001))
+			while boneName:to_string() ~= "None" do
+				M.setBoneSpaceLocalTransform(poseableComponent, boneName, localTransform, boneSpace, rootTransform)
+				boneName = poseableComponent:GetParentBone(boneName)
+			end
+		else
+			--loop through all other bones of the skeleton and set their transforms with respect to the root to 0. Do not do this for bones that are children of the target
+			local localTransform = kismet_math_library:MakeTransform(uevrUtils.vector(0, 0, 0), uevrUtils.rotator(0,0,0), uevrUtils.vector(0.001, 0.001, 0.001))
+			local count = poseableComponent:GetNumBones()
+			for index = 1 , count do	
+				local childFName = poseableComponent:GetBoneName(index)
+				if not poseableComponent:BoneIsChildOf(childFName, parentFName) then	
+					M.setBoneSpaceLocalTransform(poseableComponent, childFName, localTransform, boneSpace, rootTransform)
+				end
 			end
 		end
 
@@ -222,6 +260,7 @@ function M.doAnimate(anim, component, mirrorPitch, mirrorYaw, mirrorRoll)
 end
 
 function M.doAnimateForFinger(anim, component, boneList, fingerIndex)
+	local boneSpace = 0
 	local filteredAnim = {}
 	local bone1Name = component:GetBoneName(boneList[fingerIndex], boneSpace):to_string()
 	local bone2Name = component:GetBoneName(boneList[fingerIndex] + 1, boneSpace):to_string()
@@ -259,8 +298,8 @@ function M.animate(animID, animName, val)
 	end
 end
 
-function lerpAnimation(animID, animName, alpha)
-	--M.print("Called lerp with " .. animID .. " " .. animName .. " " .. alpha, LogLevel.Info)
+local function lerpAnimation(animID, animName, alpha)
+	M.print("Called lerp with " .. animID .. " " .. animName .. " " .. alpha, LogLevel.Info)
 	local animation = animations[animID]
 	if animation ~= nil then
 		local component = animation["component"]
@@ -270,6 +309,11 @@ function lerpAnimation(animID, animName, alpha)
 			if subAnim ~= nil then
 				local startPose = subAnim["off"]
 				local endPose = subAnim["on"]
+				if startPose == nil and endPose ~= nil then
+					startPose = endPose
+				elseif endPose == nil and startPose ~= nil then
+					endPose = startPose
+				end
 				if startPose ~= nil and endPose ~= nil then
 					for boneName, angles in pairs(startPose) do
 						local startRotator = uevrUtils.rotator(angles[1], angles[2], angles[3])
@@ -288,7 +332,8 @@ end
 
 function M.pose(animID, poseID)
 	M.print("Called pose " .. poseID .. " for animationID " .. animID, LogLevel.Debug)
-	if animations ~= nil and animations[animID] ~= nil  and animations[animID]["definitions"]["poses"][poseID] ~= nil then
+	--uevrUtils.dumpJson("test", animations)
+	if animations ~= nil and animations[animID] ~= nil and animations[animID]["definitions"] ~= nil and animations[animID]["definitions"]["poses"] ~= nil then
 		local pose = animations[animID]["definitions"]["poses"][poseID]
 		if pose ~= nil then
 			M.print("Found pose " .. poseID, LogLevel.Debug)
@@ -377,10 +422,10 @@ end
 
 local animStates = {}
 function M.updateAnimation(animID, animName, isPressed, lerpParam)
-	if animStates[animID] == nil then 
-		animStates[animID] = {} 
-		if animStates[animID][animName] == nil then 
-			animStates[animID][animName] = false 
+	if animStates[animID] == nil then
+		animStates[animID] = {}
+		if animStates[animID][animName] == nil then
+			animStates[animID][animName] = false
 		end
 	end
 	if isPressed then

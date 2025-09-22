@@ -1,8 +1,11 @@
 local uevrUtils = require("libs/uevr_utils")
 local controllers = require("libs/controllers")
 local animation = require("libs/animation")
+local attachments = require("libs/attachments")
 
 local M = {}
+
+local autoHandleInput = true
 
 local handComponents = {}
 local handDefinitions = {}
@@ -10,6 +13,7 @@ local handBoneList = {} --used for debugging
 local offset={X=0, Y=0, Z=0, Pitch=0, Yaw=0, Roll=0}
 local inputHandlerAnimID = {} --list of animID only used for the default input handler
 local handsConfig = nil -- the configuration tool for creating hands in game
+local holdingAttachment = {}
 
 local currentLogLevel = LogLevel.Error
 function M.setLogLevel(val)
@@ -21,6 +25,28 @@ function M.print(text, logLevel)
 		uevrUtils.print("[hands] " .. text, logLevel)
 	end
 end
+
+local createInputHandler = doOnce(function()
+	attachments.registerGripAnimationCallback(function(gripAnimation, gripHand)
+		M.print("Grip animation changed to " .. gripAnimation .. " for " .. (gripHand == Handed.Left and "Left" or "Right") .. " hand", LogLevel.Debug)
+		M.updateAnimationState(gripHand)
+	end)
+
+	uevrUtils.registerOnInputGetStateCallback(function(retval, user_index, state)
+		if autoHandleInput and M.exists() then
+			local rightAttachment = holdingAttachment[Handed.Right]
+			local leftAttachment = holdingAttachment[Handed.Left]
+			if rightAttachment == nil then
+				rightAttachment = attachments.getCurrentGripAnimation(Handed.Left)
+			end
+			if leftAttachment == nil then
+				leftAttachment = attachments.getCurrentGripAnimation(Handed.Right)
+			end
+			--M.handleInput(state, attachment, Handed.Right, nil, true)
+			M.handleInputTwoHanded(state, rightAttachment, leftAttachment, nil, true)
+		end
+	end)
+end, Once.EVER)
 
 local function getValidVector(definition, id, default)
 	if definition == nil or id == nil or definition[id] == nil then
@@ -56,6 +82,14 @@ function M.enableConfigurationTool()
 	handsConfig = require('libs/config/hands_config')
 end
 
+function M.setAutoHandleInput(val)
+	autoHandleInput = val
+end
+
+function M.setHoldingAttachment(hand, val)
+	holdingAttachment[hand] = val
+end
+
 function M.reset()
 	handComponents = {}
 	definition = {}
@@ -68,19 +102,19 @@ function M.exists()
 	return M.getHandComponent(Handed.Left) ~= nil or M.getHandComponent(Handed.Right) ~= nil
 end
 
--- if using multiple component like hands and gloves then include componentName or which one is picked will be random
+-- if using multiple components like hands and gloves then include componentName or which one is picked will be random
 function M.getHandComponent(hand, componentName)
 	componentName = getComponentName(componentName)
 	if handComponents[componentName] ~= nil then
 		return handComponents[componentName][hand]
 	end
-end 
+end
 
 local fixEnabled = false
 local currentProfile = nil
 local function registerFOVFix(profile)
 	currentProfile = profile
-	
+
 	if currentProfile ~= nil and fixEnabled == false then
 		setInterval(1000, function()
 			if currentProfile ~= nil then
@@ -93,8 +127,31 @@ local function registerFOVFix(profile)
 					end
 				end
 			end
-		end)	
+		end)
 		fixEnabled = true
+	end
+end
+
+function M.updateAnimationState(hand)
+	if autoHandleInput and M.exists() then
+		local attachment = holdingAttachment[hand]
+		if attachment == nil then
+			attachment = attachments.getCurrentGripAnimation(hand)
+		end
+		local isHoldingAttachment = false
+		local attachmentExtension = ""
+		if type(attachment) == "boolean" then
+			isHoldingAttachment = attachment
+		elseif type(attachment) == "string" and attachment ~= "" then
+			isHoldingAttachment = true
+			attachmentExtension = "_" .. attachment
+		end
+		if isHoldingAttachment then
+			for id, target in pairs(inputHandlerAnimID) do
+				local handStr = hand == Handed.Left and "left" or "right"
+				animation.pose(handStr .. "_" .. target, "grip_" .. handStr .. "_weapon" .. attachmentExtension)
+			end
+		end
 	end
 end
 
@@ -104,7 +161,7 @@ function M.createFromConfig(configuration, profileName, animationName)
 	end
 	if configuration ~= nil and configuration["profiles"] ~= nil then
 		local profile = configuration["profiles"][profileName]
-		if profile ~= nil then 
+		if profile ~= nil then
 			local components = {}
 			for key, mesh in pairs(profile) do
 				--key = "Arms"
@@ -114,9 +171,9 @@ function M.createFromConfig(configuration, profileName, animationName)
 					if component ~= nil then
 						components[key] = component
 					end
-				end		
+				end
 			end
-			
+
 			local animations = nil
 			if configuration["animations"] ~= nil and animationName ~= nil and animationName ~= "" then
 				animations = configuration["animations"][animationName]
@@ -130,9 +187,11 @@ function M.createFromConfig(configuration, profileName, animationName)
 				-- animDef.positions = animations
 				-- animDef.poses = poses
 			end
-			
+
+			attachments.setAnimationIDs(configuration["attachments"])
+
 			M.create(components, profile, animations)
-			
+
 			--going to need to call fixMeshFOV on lazy poll
 			for name, components in pairs(handComponents) do
 				--print(name, profileName, components[0], components[1])
@@ -167,27 +226,38 @@ function M.create(skeletalMeshComponent, definition, handAnimations)
 			end
 			if uevrUtils.validate_object(component) ~= nil then
 				handComponents[name] = {}
-				for index = 0 , 1 do
-					handComponents[name][index] = M.createComponent(component, name, index, skeletalMeshDefinition[index==0 and "Left" or "Right"])
+				for index = Handed.Left , Handed.Right do
+					handComponents[name][index] = M.createComponent(component, name, index, skeletalMeshDefinition[index==Handed.Left and "Left" or "Right"])
 					if handComponents[name][index] ~= nil then
-						M.print("Created " .. name .. " component: " .. (index==0 and "Left" or "Right"), LogLevel.Info )
+						M.print("Created " .. name .. " component: " .. (index==Handed.Left and "Left" or "Right"), LogLevel.Info )
 						if skeletalMeshDefinition["FOV"] ~= nil and skeletalMeshDefinition["FOV"] ~= "" then
-							uevrUtils.fixMeshFOV(handComponents[name][index], skeletalMeshDefinition["FOV"], 0.0, true, true, false)					
+							uevrUtils.fixMeshFOV(handComponents[name][index], skeletalMeshDefinition["FOV"], 0.0, true, true, false)
 						end
 
-						local animID = skeletalMeshDefinition[index==0 and "Left" or "Right"]["AnimationID"]
+						local initialTransform = skeletalMeshDefinition["InitialTransform"]
+						if initialTransform ~= nil then
+							animation.initializeBones(handComponents[name][index], initialTransform[index==Handed.Left and "left_hand" or "right_hand"])
+						end
+
+						local animID = skeletalMeshDefinition[index==Handed.Left and "Left" or "Right"]["AnimationID"]
 						if animID ~= nil then
 							local suffix = getAnimIDSuffix(animID)
 							if suffix ~= nil then inputHandlerAnimID[animID] = suffix end
 							animation.add(animID, handComponents[name][index], handAnimations)
 							animation.initialize(animID, handComponents[name][index])
-						end 
+						end
 					end
+				end
+				if autoHandleInput == true then
+					createInputHandler()
+					M.updateAnimationState(Handed.Left)
+					M.updateAnimationState(Handed.Right)
 				end
 			else
 				M.print("Call to create " .. name .. " failed, invalid skeletalMeshComponent", LogLevel.Info )
 			end
 		end
+
 		handDefinitions = definition
 	else
 		M.print("Call to create failed, invalid definiton", LogLevel.Warning )
@@ -207,7 +277,7 @@ function M.createComponent(skeletalMeshComponent, name, hand, definition)
 
 			controllers.attachComponentToController(hand, component)
 			local baseRotation = skeletalMeshComponent.RelativeRotation
-			uevrUtils.set_component_relative_transform(component, offset, {Pitch=baseRotation.Pitch+offset.Pitch, Yaw=baseRotation.Yaw+offset.Yaw,Roll=baseRotation.Roll+offset.Roll})	
+			uevrUtils.set_component_relative_transform(component, offset, {Pitch=baseRotation.Pitch+offset.Pitch, Yaw=baseRotation.Yaw+offset.Yaw,Roll=baseRotation.Roll+offset.Roll})
 
 			if definition ~= nil then
 				local jointName = definition["Name"]
@@ -216,7 +286,7 @@ function M.createComponent(skeletalMeshComponent, name, hand, definition)
 					local rotation = getValidRotator(definition, "Rotation", {0,0,0})
 					local scale = getValidVector(definition, "Scale", {1,1,1})
 					local taperOffset = getValidVector(definition, "TaperOffset", {0,0,0})
-					animation.transformBoneToRoot(component, jointName, location, rotation, scale, taperOffset)		
+					animation.transformBoneToRoot(component, jointName, location, rotation, scale, taperOffset)
 				else
 					M.print("Could not initialize bone in createComponent() because joint name is invalid" )
 				end
@@ -228,6 +298,19 @@ function M.createComponent(skeletalMeshComponent, name, hand, definition)
 	return component
 end
 
+function M.setInitialTransform(hand, componentName)
+	componentName = getComponentName(componentName)
+	if componentName == nil or componentName == "" or handDefinitions[componentName] == nil then
+		M.print("Could not update set initial transform because component is undefined")
+	else
+		local initialTransform = handDefinitions[componentName]["InitialTransform"]
+		if initialTransform ~= nil then
+			local component = M.getHandComponent(hand, componentName)
+			local handStr = hand == Handed.Left and "left_hand" or "right_hand"
+			animation.initializeBones(component, initialTransform[handStr])
+		end
+	end
+end
 
 --if, in debug mode, the skeleton is not pointed forward when the wrist is pointed forward then make adjustments with this function
 function  M.setOffset(newOffset)
@@ -239,7 +322,7 @@ function M.updateOffset(skeletalMeshComponent, newOffset)
 	if skeletalMeshComponent ~= nil then
 		local baseRotation = skeletalMeshComponent.RelativeRotation
 		local component = handComponents["Arms"][Handed.Right]
-		uevrUtils.set_component_relative_transform(component, newOffset, {Pitch=baseRotation.Pitch+newOffset.Pitch, Yaw=baseRotation.Yaw+newOffset.Yaw,Roll=baseRotation.Roll+newOffset.Roll})	
+		uevrUtils.set_component_relative_transform(component, newOffset, {Pitch=baseRotation.Pitch+newOffset.Pitch, Yaw=baseRotation.Yaw+newOffset.Yaw,Roll=baseRotation.Roll+newOffset.Roll})
 	end
 end
 
@@ -247,8 +330,50 @@ function M.addRealism()
 
 end
 
+function M.updateAnimationFromMesh(hand, mesh, componentName)
+	if mesh ~= nil then
+		componentName = getComponentName(componentName)
+		if componentName == nil or componentName == "" or handDefinitions[componentName] == nil then
+			M.print("Could not update Animation From Mesh because component is undefined")
+		else
+			local component = M.getHandComponent(hand, componentName)
+			local handStr = hand == Handed.Left and "Left" or "Right"
+			local definition = handDefinitions[componentName][handStr]
+			if definition ~= nil then
+				local jointName = definition["Name"]
+				if jointName ~= nil and jointName ~= "" then
+					local success, response = pcall(function()		
+						component:CopyPoseFromSkeletalComponent(mesh)
+						local location = getValidVector(definition, "Location", {0,0,0})
+						local rotation = getValidRotator(definition, "Rotation", {0,0,0})
+						local scale = getValidVector(definition, "Scale", {1,1,1})
+						local taperOffset = getValidVector(definition, "TaperOffset", {0,0,0})
+						animation.transformBoneToRoot(component, jointName, location, rotation, scale, taperOffset, true)
+					end)
+					if success == false then
+						M.print("[hands] " .. response, LogLevel.Error)
+					end
+				end
+			end
+		end
+	end
+end
+
 --set overrideTrigger to true if the default triggers have already been swapped (ie a plugin or code aleady makes the game do right trigger actions when the left trigger is pulled)
-function M.handleInput(state, isHoldingWeapon, hand, overrideTrigger)
+function M.handleInput(state, attachment, hand, overrideTrigger, allowAutoHandle)
+	if allowAutoHandle ~= true then
+		autoHandleInput = false --if something else is calling this then dont auto handle input
+	end
+
+	local isHoldingAttachment = false
+	local attachmentExtension = ""
+	if type(attachment) == "boolean" then
+		isHoldingAttachment = attachment
+	elseif type(attachment) == "string" and attachment ~= "" then
+		isHoldingAttachment = true
+		attachmentExtension = "_" .. attachment
+	end
+
 	if hand == nil then hand = Handed.Right end
 	if overrideTrigger == nil then overrideTrigger = false end
 	local isRightHanded = hand == Handed.Right
@@ -261,28 +386,70 @@ function M.handleInput(state, isHoldingWeapon, hand, overrideTrigger)
 
 		animation.updateAnimation(offHandStr.."_"..target, offHandStr.."_grip", uevrUtils.isButtonPressed(state, isRightHanded and XINPUT_GAMEPAD_LEFT_SHOULDER or XINPUT_GAMEPAD_RIGHT_SHOULDER), {duration=animDuration})
 
-		local offhandController = uevr.params.vr.get_left_joystick_source() 
+		local offhandController = uevr.params.vr.get_left_joystick_source()
 		if not isRightHanded then offhandController = uevr.params.vr.get_right_joystick_source() end
-		local offhandRest = uevr.params.vr.get_action_handle(isRightHanded and "/actions/default/in/ThumbrestTouchLeft" or "/actions/default/in/ThumbrestTouchRight")    
+		local offhandRest = uevr.params.vr.get_action_handle(isRightHanded and "/actions/default/in/ThumbrestTouchLeft" or "/actions/default/in/ThumbrestTouchRight")
 		animation.updateAnimation(offHandStr.."_"..target, offHandStr.."_thumb", uevr.params.vr.is_action_active(offhandRest, offhandController), {duration=animDuration})
 
-		if not isHoldingWeapon then
+		if not isHoldingAttachment then
 			local weaponHandTriggerValue = (isRightHanded or overrideTrigger) and state.Gamepad.bRightTrigger or state.Gamepad.bLeftTrigger
 			animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_trigger", weaponHandTriggerValue > 100, {duration=animDuration})
 
 			animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_grip", uevrUtils.isButtonPressed(state, isRightHanded and XINPUT_GAMEPAD_RIGHT_SHOULDER or XINPUT_GAMEPAD_LEFT_SHOULDER), {duration=animDuration})
 
-			local weaponhandController = uevr.params.vr.get_right_joystick_source() 
+			local weaponhandController = uevr.params.vr.get_right_joystick_source()
 			if not isRightHanded then weaponhandController = uevr.params.vr.get_left_joystick_source() end
-			local weaponhandRest = uevr.params.vr.get_action_handle(isRightHanded and "/actions/default/in/ThumbrestTouchRight" or "/actions/default/in/ThumbrestTouchLeft")  
+			local weaponhandRest = uevr.params.vr.get_action_handle(isRightHanded and "/actions/default/in/ThumbrestTouchRight" or "/actions/default/in/ThumbrestTouchLeft")
 			animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_thumb", uevr.params.vr.is_action_active(weaponhandRest, weaponhandController), {duration=animDuration})
 		else
 			local weaponHandTriggerValue = (isRightHanded or overrideTrigger) and state.Gamepad.bRightTrigger or state.Gamepad.bLeftTrigger
-			animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_trigger_weapon", weaponHandTriggerValue > 100, {duration=animDuration})
-			if uevrUtils.isButtonPressed(state, isRightHanded and XINPUT_GAMEPAD_RIGHT_SHOULDER or XINPUT_GAMEPAD_LEFT_SHOULDER) then 
-				animation.resetAnimation(weaponHandStr.."_"..target, weaponHandStr.."_grip_weapon", false) --forces an update regardless of current state
---print("Here",weaponHandStr.."_"..target,weaponHandStr.."_grip_weapon")
-				animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_grip_weapon", true, {duration=animDuration})
+			animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_trigger_weapon" .. attachmentExtension, weaponHandTriggerValue > 100, {duration=animDuration})
+			if uevrUtils.isButtonPressed(state, isRightHanded and XINPUT_GAMEPAD_RIGHT_SHOULDER or XINPUT_GAMEPAD_LEFT_SHOULDER) then
+				animation.resetAnimation(weaponHandStr.."_"..target, weaponHandStr.."_grip_weapon" .. attachmentExtension, false) --forces an update regardless of current state
+--print("Here",weaponHandStr.."_"..target,weaponHandStr.."_grip_weapon" .. attachmentExtension)
+				animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_grip_weapon" .. attachmentExtension, true, {duration=animDuration})
+			end
+		end
+	end
+end
+
+function M.handleInputTwoHanded(state, rightAttachment, leftAttachment, overrideTrigger, allowAutoHandle)
+	if allowAutoHandle ~= true then
+		autoHandleInput = false --if something else is calling this then dont auto handle input
+	end
+
+	if overrideTrigger == nil then overrideTrigger = false end
+	local animDuration = 0.1
+	for id, target in pairs(inputHandlerAnimID) do
+		for hand = Handed.Left, Handed.Right do
+			local handStr = hand == Handed.Right and "right" or "left"
+			local isHoldingAttachment = false
+			local attachmentExtension = ""
+			local attachment = hand == Handed.Right and rightAttachment or leftAttachment
+			if type(attachment) == "boolean" then
+				isHoldingAttachment = attachment
+			elseif type(attachment) == "string" and attachment ~= "" then
+				isHoldingAttachment = true
+				attachmentExtension = "_" .. attachment
+			end
+			if not isHoldingAttachment then
+				local weaponHandTriggerValue = (hand == Handed.Right or overrideTrigger) and state.Gamepad.bRightTrigger or state.Gamepad.bLeftTrigger
+				animation.updateAnimation(handStr.."_"..target, handStr.."_trigger", weaponHandTriggerValue > 100, {duration=animDuration})
+
+				animation.updateAnimation(handStr.."_"..target, handStr.."_grip", uevrUtils.isButtonPressed(state, hand == Handed.Right and XINPUT_GAMEPAD_RIGHT_SHOULDER or XINPUT_GAMEPAD_LEFT_SHOULDER), {duration=animDuration})
+
+				local weaponhandController = uevr.params.vr.get_right_joystick_source()
+				if not (hand == Handed.Right) then weaponhandController = uevr.params.vr.get_left_joystick_source() end
+				local weaponhandRest = uevr.params.vr.get_action_handle(hand == Handed.Right and "/actions/default/in/ThumbrestTouchRight" or "/actions/default/in/ThumbrestTouchLeft")
+				animation.updateAnimation(handStr.."_"..target, handStr.."_thumb", uevr.params.vr.is_action_active(weaponhandRest, weaponhandController), {duration=animDuration})
+			else
+				local weaponHandTriggerValue = (hand == Handed.Right or overrideTrigger) and state.Gamepad.bRightTrigger or state.Gamepad.bLeftTrigger
+				animation.updateAnimation(handStr.."_"..target, handStr.."_trigger_weapon" .. attachmentExtension, weaponHandTriggerValue > 100, {duration=animDuration})
+				if uevrUtils.isButtonPressed(state, hand == Handed.Right and XINPUT_GAMEPAD_RIGHT_SHOULDER or XINPUT_GAMEPAD_LEFT_SHOULDER) then
+					animation.resetAnimation(handStr.."_"..target, handStr.."_grip_weapon" .. attachmentExtension, false) --forces an update regardless of current state
+	--print("Here",weaponHandStr.."_"..target,weaponHandStr.."_grip_weapon" .. attachmentExtension)
+					animation.updateAnimation(handStr.."_"..target, handStr.."_grip_weapon" .. attachmentExtension, true, {duration=animDuration})
+				end
 			end
 		end
 	end
@@ -292,10 +459,10 @@ function M.hideHands(val)
 	for name, components in pairs(handComponents) do
 		if uevrUtils.getValid(components[0]) ~= nil and components[0].SetVisibility ~= nil then
 			M.print((val and "Hiding " or "Showing ") .. components[0]:get_full_name() .. " hand components", LogLevel.Debug)
-			components[0]:SetVisibility(not val, true)	
+			components[0]:SetVisibility(not val, true)
 		end
 		if uevrUtils.getValid(components[1]) ~= nil and components[1].SetVisibility ~= nil then
-			components[1]:SetVisibility(not val, true)	
+			components[1]:SetVisibility(not val, true)
 		end
 	end
 end
@@ -304,8 +471,8 @@ function M.destroyHands()
 	--since we didnt use an existing actor as parent in createComponent(), destroy the owner actor too
 	for name, components in pairs(handComponents) do
 		M.print("Destroying " .. name .. " hand components", LogLevel.Debug)
-		uevrUtils.detachAndDestroyComponent(components[0], true)	
-		uevrUtils.detachAndDestroyComponent(components[1], true)	
+		uevrUtils.detachAndDestroyComponent(components[0], true)
+		uevrUtils.detachAndDestroyComponent(components[1], true)
 	end
 	M.reset()
 end
@@ -314,8 +481,8 @@ local visualCallbackExists = false
 function M.createSkeletalVisualization(hand, scale, componentName)
 	animation.destroySkeletalVisualization()
 	if M.exists() then
-		if hand == null then hand = Handed.Right end
-		if scale == null then scale = 0.003 end
+		if hand == nil then hand = Handed.Right end
+		if scale == nil then scale = 0.003 end
 		animation.createSkeletalVisualization(M.getHandComponent(hand, componentName), scale)
 		if not visualCallbackExists then
 			uevrUtils.registerPostEngineTickCallback(function()
@@ -339,7 +506,7 @@ local positionDelta = 0.2
 local rotationDelta = 45
 local jointAngleDelta = 5
 
-function M.enableHandAdjustments(boneList, componentName)	
+function M.enableHandAdjustments(boneList, componentName)
 	handBoneList = boneList
 	local logLevel = LogLevel.Critical
 	M.print("Adjust Mode " .. adjustModeLabels[adjustMode], logLevel)
@@ -348,7 +515,7 @@ function M.enableHandAdjustments(boneList, componentName)
 	else
 		M.print("Current hand: " .. currentHandLabels[currentHand+1], logLevel)
 	end
-	
+
 	register_key_bind("NumPadFive", function()
 		M.print("Num5 pressed")
 		adjustMode = (adjustMode % 3) + 1
@@ -371,7 +538,7 @@ function M.enableHandAdjustments(boneList, componentName)
 		if adjustMode == 3 then
 			currentFinger = (currentFinger % 10) + 1
 			M.print("Current finger:" .. currentFingerLabels[currentFinger] .. " finger joint:" .. currentIndex, logLevel)
-		else 
+		else
 			currentHand = (currentHand + 1) % 2
 			M.print("Current hand: " .. currentHandLabels[currentHand+1], logLevel)
 		end
@@ -448,7 +615,7 @@ function M.setFingerAngles(fingerIndex, jointIndex, angleID, angle, componentNam
 		componentName = getComponentName(componentName)
 		if componentName == "" then
 			M.print("Could not adjust rotation because component is undefined")
-		else	
+		else
 			local component = M.getHandComponent(fingerIndex < 6 and 0 or 1, componentName)
 			animation.setFingerAngles(component, handBoneList, fingerIndex, jointIndex, angleID, angle)
 		end
@@ -486,7 +653,7 @@ function M.setTransform(hand, axis, val, transformType, isDelta, componentName)
 	--print(componentName)
 	if componentName == nil or componentName == "" or handDefinitions[componentName] == nil then
 		M.print("Could not adjust transform because component is undefined")
-	else	
+	else
 		local handStr = hand == Handed.Left and "Left" or "Right"
 		local definition = handDefinitions[componentName][handStr]
 		if definition ~= nil then
@@ -498,14 +665,14 @@ function M.setTransform(hand, axis, val, transformType, isDelta, componentName)
 				currentTransforms["Scale"] = getValidArray(definition, "Scale", {1,1,1})
 				handDefinitions[componentName][handStr][transformType] = currentTransforms[transformType]
 				if isDelta then
-					handDefinitions[componentName][handStr][transformType][axis] = handDefinitions[componentName][handStr][transformType][axis] + delta
+					handDefinitions[componentName][handStr][transformType][axis] = handDefinitions[componentName][handStr][transformType][axis] + val
 				else
 					handDefinitions[componentName][handStr][transformType][axis] = val
 				end
-				
+
 				local taperOffset = getValidVector(definition, "TaperOffset", {0,0,0})
 				local component = M.getHandComponent(hand, componentName)
-				animation.transformBoneToRoot(component, jointName, uevrUtils.vector(currentTransforms["Location"]), uevrUtils.rotator(currentTransforms["Rotation"]), uevrUtils.vector(currentTransforms["Scale"]), taperOffset)		
+				animation.transformBoneToRoot(component, jointName, uevrUtils.vector(currentTransforms["Location"]), uevrUtils.rotator(currentTransforms["Rotation"]), uevrUtils.vector(currentTransforms["Scale"]), taperOffset)
 				-- print(handDefinitions[componentName][handStr]["Rotation"][1], handDefinitions[componentName][handStr]["Rotation"][2], handDefinitions[componentName][handStr]["Rotation"][3])
 				-- print(handDefinitions[componentName][handStr]["Location"][1], handDefinitions[componentName][handStr]["Location"][2], handDefinitions[componentName][handStr]["Location"][3])
 				-- print(handDefinitions[componentName][handStr]["Scale"][1], handDefinitions[componentName][handStr]["Scale"][2], handDefinitions[componentName][handStr]["Scale"][3])
@@ -521,7 +688,7 @@ end
 
 function M.setRotation(hand, axis, rot, componentName)
 	M.setTransform(hand, axis, rot, "Rotation", false, componentName)
-	
+
 	-- componentName = getComponentName(componentName)
 	-- print(componentName)
 	-- if componentName == nil or componentName == "" or handDefinitions[componentName] == nil then
@@ -655,12 +822,12 @@ end
 
 function M.debug(skeletalMeshComponent, hand, rightTargetJoint, disableVisualization)
 	local definition = nil
-	if rightTargetJoint ~= nil then 
+	if rightTargetJoint ~= nil then
 		definition = { Name = rightTargetJoint }
 	end
 	if hand == nil then hand = Handed.Right end
 	if uevrUtils.validate_object(skeletalMeshComponent) ~= nil then
-		M.print("Creating hands from " .. skeletalMeshComponent:get_full_name() )	
+		M.print("Creating hands from " .. skeletalMeshComponent:get_full_name() )
 		handComponents["Arms"] = {}
 		handComponents["Arms"][hand] = M.createComponent(skeletalMeshComponent, "Arms", hand, definition)
 
@@ -713,7 +880,7 @@ return M
 		-- rightHandComponent = M.createComponent(skeletalMeshComponent, "Arms", 1)
 		-- if rightHandComponent ~= nil then
 			-- leftHandComponent = M.createComponent(skeletalMeshComponent, "Arms", 0)	
-			
+
 			-- animation.add("right_hand", rightHandComponent, handAnimations)
 			-- animation.add("left_hand", leftHandComponent, handAnimations)			
 		-- end

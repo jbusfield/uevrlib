@@ -25,6 +25,10 @@ Usage
 	configui.create(configDefinition) creates the imgui UI in the UEVR overlay based on the layout provided in the configDefinition
 		example: 
 			configui.create(configDefinition)
+			
+	configui.update(configDefinition) updates the imgui UI in the UEVR overlay based on the layout provided in the configDefinition
+		example: 
+			configui.update(configDefinition)
 
 	configui.getValue(itemID) -- gets the current value of the item with the id field matching itemID. When creating id values in a configuration
 		layout try to ensure uniqueness so that if multiple people are creating configs for the same project, the ids wont conflict. Be aware that
@@ -65,6 +69,77 @@ Usage
 					print("New count", count)
 				end
 			end)
+
+	configui.onCreate(widgetID, callbackFunction) -- registers a callback function that triggers when a widget is first created
+		example:
+			configui.onCreate("use_hands", function(value)
+				print("Hands widget created with initial value:", value)
+			end)
+
+	configui.onCreateOrUpdate(widgetID, callbackFunction) -- registers a callback that triggers both on widget creation and value updates
+		example:
+			configui.onCreateOrUpdate("use_hands", function(value)
+				print("Hands widget created or updated:", value)
+			end)
+
+
+	configui.updatePanel(panelDefinition) -- updates an existing panel with new layout or configuration
+		example:
+			local updatedDef = {
+				panelLabel = "Updated Panel",
+				layout = {
+					{
+						widgetType = "checkbox",
+						id = "new_option",
+						label = "New Option",
+						initialValue = true
+					}
+				}
+			}
+			configui.updatePanel(updatedDef)
+
+	configui.load(panelID, fileName) -- loads configuration values from a JSON file for a specific panel
+		example:
+			configui.load("hands_panel", "config_hands")
+
+	configui.save(panelID) -- saves current configuration values for a panel to its associated JSON file
+		example:
+			configui.save("hands_panel")
+
+	configui.getPanelID(widgetID) -- gets the panel ID associated with a widget ID
+		example:
+			local panelID = configui.getPanelID("use_hands")
+
+	configui.setHidden(widgetID, value) -- sets whether a widget is hidden (alias for hideWidget)
+		example:
+			configui.setHidden("use_hands", true)
+
+	configui.disableWidget(widgetID, value) -- sets whether a widget is disabled/grayed out
+		example:
+			configui.disableWidget("use_hands", true)
+
+	configui.hidePanel(panelID, value) -- sets whether an entire panel is hidden
+		example:
+			configui.hidePanel("hands_panel", true)
+
+	configui.togglePanel(panelID) -- toggles visibility of a panel
+		example:
+			configui.togglePanel("hands_panel")
+
+	configui.applyOptionsToConfigWidgets(configWidgets, options) -- applies a set of options to multiple config widgets
+		example:
+			local widgets = {{id="eyeOffset"}, {id="use_hands"}}
+			local options = {{id="eyeOffset",isHidden=false}, {id="use_hands", disabled=true}}
+			configui.applyOptionsToConfigWidgets(widgets, options)
+
+	configui.createConfigPanel(label, saveFileName, widgets) -- creates a new config panel with specified widgets
+		example:
+			local widgets = {{
+				widgetType = "checkbox",
+				id = "headLockedUI",
+				label = "Enable Head Locked UI",
+			}}
+			configui.createConfigPanel("My Panel", "my_config", widgets)
 
 ]]--
 
@@ -121,7 +196,7 @@ local function colorStringToInteger(colorString)
 	end
     -- Remove the '#' character
     local hex = colorString:sub(2)
-    
+
     -- Convert hex string to integer
     return tonumber(hex, 16)
 end
@@ -536,7 +611,6 @@ function M.update(configDefinition)
 	
 	--Makes sure the default file is loaded if it exists so that dynamic config items can be loaded if necessary
 	if configValues[defaultFilename] == nil then
-		configValues[defaultFilename] = {}
 		M.load(defaultFilename, defaultFilename)
 	end
 end
@@ -553,12 +627,14 @@ function M.create(configDefinition)
 	
 	--Makes sure the default file is loaded if it exists so that dynamic config items can be loaded if necessary
 	if configValues[defaultFilename] == nil then
-		configValues[defaultFilename] = {}
 		M.load(defaultFilename, defaultFilename)
 	end
 end
 
 function M.load(panelID, fileName)
+	if configValues[panelID] == nil then
+		configValues[panelID] = {}
+	end
 	--print("Loading config")
 	-- if json == nil then
 		-- json = require("jsonStorage")
@@ -567,7 +643,7 @@ function M.load(panelID, fileName)
 		local loadConfig = json.load_file(fileName .. ".json")
 		if loadConfig ~= nil then
 			for key, val in pairs(loadConfig) do
-				item = getDefinitionElement(panelID, key)
+				local item = getDefinitionElement(panelID, key)
 				if item ~= nil then
 					if item.widgetType == "drag_float2" then
 						configValues[panelID][key] = getVector2FromArray(val)
@@ -684,16 +760,18 @@ end
 
 function M.setValue(widgetID, value, noCallbacks)
 	local item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
-	if item.widgetType == "drag_float2" and type(value) == "table" then
-		value = getVector2FromArray(value)
-	elseif item.widgetType == "drag_float3" and type(value) == "table" then
-		value = getVector3FromArray(value)
-	elseif item.widgetType == "drag_float4" and type(value) == "table" then
-		value = getVector4FromArray(value)
-	elseif item.widgetType == "color_picker" and type(value) == "table" then
-		value = colorStringToInteger(value)
+	if item ~= nil then
+		if item.widgetType == "drag_float2" and type(value) == "table" then
+			value = getVector2FromArray(value)
+		elseif item.widgetType == "drag_float3" and type(value) == "table" then
+			value = getVector3FromArray(value)
+		elseif item.widgetType == "drag_float4" and type(value) == "table" then
+			value = getVector4FromArray(value)
+		elseif item.widgetType == "color_picker" and type(value) == "table" then
+			value = colorStringToInteger(value)
+		end
+		doUpdate(M.getPanelID(widgetID), widgetID, value, nil, noCallbacks)
 	end
-	doUpdate(M.getPanelID(widgetID), widgetID, value, nil, noCallbacks)
 end
 
 function M.setSelections(widgetID, selections)
@@ -708,6 +786,10 @@ function M.hideWidget(widgetID, value)
 	if item ~= nil then
 		item.isHidden = value
 	end
+end
+
+function M.setHidden(widgetID, value)
+	M.hideWidget(widgetID, value)
 end
 
 function M.disableWidget(widgetID, value)
@@ -754,6 +836,17 @@ function M.applyOptionsToConfigWidgets(configWidgets, options)
 	return configWidgets
 end
 
+function M.createConfigPanel(label, saveFileName, widgets)
+	local configDefinition = {
+		{
+			panelLabel = label,
+			saveFile = saveFileName,
+			layout = widgets
+		}
+	}
+	M.create(configDefinition)
+end
+
 function M.intToAARRGGBB(num)
     local a = (num >> 24) & 0xFF
     local b = (num >> 16) & 0xFF
@@ -773,6 +866,8 @@ uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
         end
     end
 end)
+
+
 
 -- uevr.sdk.callbacks.on_draw_ui(function()
 	-- for index, panelID in ipairs(defaultPanelList) do

@@ -1,40 +1,61 @@
 local uevrUtils = require("libs/uevr_utils")
 local controllers = require("libs/controllers")
 local debugModule = require("libs/uevr_debug")
+local configui = require("libs/configui")
 
 local M = {}
+---@class reticuleComponent
+---@field [any] any
 local reticuleComponent = nil
 local reticuleRotation = nil
 local reticulePosition = nil
 local reticuleScale = nil
 local reticuleCollisionChannel = 0
 
+local reticuleUpdateDistance = 200
+local reticuleUpdateScale = 1.0
+local reticuleUpdateRotation = {0.0, 0.0, 0.0}
+
+local autoHandleInput = true
+
 local configWidgets = {
 	{
 		widgetType = "slider_int",
-		id = "reticuleDistance",
+		id = "reticuleUpdateDistance",
 		label = "Distance",
 		speed = 1.0,
 		range = {0, 1000},
-		initialValue = 200
+		initialValue = reticuleUpdateDistance
 	},
 	{
 		widgetType = "slider_float",
-		id = "reticuleScale",
+		id = "reticuleUpdateScale",
 		label = "Scale",
 		speed = 0.01,
 		range = {0.01, 5.0},
-		initialValue = 1.0
+		initialValue = reticuleUpdateScale
 	},
 	{
 		widgetType = "drag_float3",
-		id = "reticuleRotation",
+		id = "reticuleUpdateRotation",
 		label = "Rotation",
 		speed = 1,
 		range = {0, 360},
-		initialValue = {0.0, 0.0, 0.0}
+		initialValue = reticuleUpdateRotation
 	}
 }
+
+function M.setDistance(val)
+	reticuleUpdateDistance = val
+end
+
+function M.setScale(val)
+	reticuleUpdateScale = val
+end
+
+function M.setRotation(val)
+	reticuleUpdateRotation = val
+end
 
 local defaultMeshMaterial = "Material /Engine/EngineMaterials/Widget3DPassThrough.Widget3DPassThrough"
 
@@ -49,8 +70,21 @@ function M.print(text, logLevel)
 	end
 end
 
-function M.getConfigurationWidgets()
-	return configWidgets
+function M.getConfigurationWidgets(options)
+	return configui.applyOptionsToConfigWidgets(configWidgets, options)
+end
+
+function M.showConfiguration(saveFileName, options)
+	local configDefinition = {
+		{
+			panelLabel = "Reticule Config", 
+			saveFile = saveFileName, 
+			layout = spliceableInlineArray{
+				expandArray(M.getConfigurationWidgets, options)
+			}
+		}
+	}
+	configui.create(configDefinition)
 end
 
 function M.reset()
@@ -272,10 +306,15 @@ function M.getTargetLocation(originPosition, originDirection)
 	return endLocation
 end
 
-function M.update(originLocation, targetLocation, distance, scale, rotation )
+function M.update(originLocation, targetLocation, distance, scale, rotation, allowAutoHandle )
+	if allowAutoHandle ~= true then
+		autoHandleInput = false --if something else is calling this then dont auto handle input
+	end
+
 	if uevrUtils.getValid(reticuleComponent) ~= nil and reticuleComponent.K2_SetWorldLocationAndRotation ~= nil then
-		if distance == nil then distance = 200 end
-		if scale == nil then scale = {1,1,1} end
+		if distance == nil then distance = reticuleUpdateDistance end
+		if scale == nil then scale = {reticuleUpdateScale,reticuleUpdateScale,reticuleUpdateScale} end
+		if rotation == nil then rotation = reticuleUpdateRotation end
 		rotation = uevrUtils.rotator(rotation)
 		
 		if originLocation == nil or targetLocation == nil then
@@ -323,9 +362,28 @@ function M.update(originLocation, targetLocation, distance, scale, rotation )
 	end
 end
 
+configui.onCreateOrUpdate("reticuleUpdateDistance", function(value)
+	M.setDistance(value)
+end)
+
+configui.onCreateOrUpdate("reticuleUpdateScale", function(value)
+	M.setScale(value)
+end)
+
+configui.onCreateOrUpdate("reticuleUpdateRotation", function(value)
+	M.setRotation(value)
+end)
+
+
 uevrUtils.registerPreLevelChangeCallback(function(level)
 	M.print("Pre-Level changed in reticule")
 	M.reset()
+end)
+
+uevrUtils.registerPreEngineTickCallback(function(engine, delta)
+	if autoHandleInput == true then
+		M.update(nil, nil, nil, nil, nil, true)
+	end
 end)
 
 return M

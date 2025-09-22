@@ -15,6 +15,7 @@ attachments.setLogLevel(LogLevel.Debug)
 attachments.enableConfiguration() 
 input.setMeshName("TPVMesh")
 input.showConfiguration("config_outer_worlds")
+
 attachments.autoUpdate(function()
 	if uevrUtils.getValid(pawn) ~= nil and pawn.GetCurrentWeapon ~= nil then
 		local currentWeapon = pawn:GetCurrentWeapon()

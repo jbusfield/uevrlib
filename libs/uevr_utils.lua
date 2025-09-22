@@ -1,3 +1,4 @@
+
 -- The following code includes contributions from markmon and Pande4360
 
 --[[ 
@@ -97,8 +98,53 @@ Usage
 	uevrUtils.rotator(pitch, yaw, roll, reuseable) - returns a CoreUObject.Rotator with the given params
 		If reuseable is true a cached struct is returned. This is faster but if you need two instances for the same function call this would not work
 		example:
+			print("Pitch value is",uevrUtils.rotator(30, 0, 0).Pitch)
 			print("Yaw value is",uevrUtils.rotator(30, 40, 50).Yaw)
-	
+			
+	uevrUtils.lerp(lerpID, startAlpha, endAlpha, duration, userdata, callback) - smoothly interpolates from startAlpha to endAlpha over duration seconds
+		lerpID is a unique identifier to track this lerp operation
+		userdata is optional data passed to the callback function
+		callback is called each frame during interpolation with current alpha value and userdata
+		example:
+			uevrUtils.lerp("fade", 0, 1, 2.0, nil, function(alpha, data)
+				print("Current fade alpha:", alpha)  
+			end)
+			
+	uevrUtils.cancelLerp(lerpID) - cancels an active lerp operation
+		example:
+			uevrUtils.cancelLerp("fade")
+			
+	uevrUtils.enableDebug(val) - enables/disables debug logging (true = LogLevel.Debug, false = LogLevel.Off)
+		example:
+			uevrUtils.enableDebug(true)  -- Enable debug logging
+			
+	uevrUtils.getEngineVersion() - returns the current Unreal Engine version number as a string
+		example:
+			local version = uevrUtils.getEngineVersion()
+			print("Running on UE version:", version)
+			
+	uevrUtils.setLogLevel(val) - sets the log level filtering (LogLevel.Off, LogLevel.Debug, LogLevel.Info, etc)
+		example:
+			uevrUtils.setLogLevel(LogLevel.Info)  -- Only show Info level and above
+			
+	uevrUtils.setLogToFile(val) - enables/disables logging to file in addition to console
+		example:
+			uevrUtils.setLogToFile(true)  -- Also write logs to file
+			
+	uevrUtils.print(str, logLevel) - prints a message with the specified log level (defaults to Debug)
+		example:
+			uevrUtils.print("Starting initialization", LogLevel.Info)
+			
+	uevrUtils.setDeveloperMode(val) - enables/disables developer mode features
+		example:
+			uevrUtils.setDeveloperMode(true)
+			
+	uevrUtils.getDeveloperMode() - returns current developer mode state
+		example:
+			if uevrUtils.getDeveloperMode() then
+				-- Do developer-only things
+			end
+			
 	uevrUtils.vector(x, y, z, (optional)reuseable) - returns a CoreUObject.Vector with the given params
 		If reuseable is true a cached struct is returned. This is faster but if you need two instances for the same function call this would not work
 		example:
@@ -237,6 +283,12 @@ Usage
 			
 	uevrUtils.PrintInstanceNames(class_to_search) - Print all instance names of a class to debug console
 	
+	uevrUtils.dumpJson(filename, jsonData) - Converts any lua table to a json structure and dumps it to a file.
+		Useful for saving configuration data or for debugging a table structure
+		example:
+			local configDefinition = {name = "Hello", data = {1,2,3}}
+			uevrUtils.dumpJson("test", configDefinition)
+	
 	uevrUtils.getAssetDataFromPath(pathStr) - converts a path string into an AssetData structure
 		example:
 			local fAssetData = uevrUtils.getAssetDataFromPath("StaticMesh /Game/Environment/Hogwarts/Meshes/Statues/SM_HW_Armor_Sword.SM_HW_Armor_Sword")
@@ -248,6 +300,92 @@ Usage
 	uevrUtils.copyMaterials(fromComponent, toComponent) - Copy Materials from one component to another
 		example:
 			uevrUtils.copyMaterials(wand.SK_Wand, component)
+
+	uevrUtils.sumRotators(...) - adds multiple rotators together, handling both uppercase and lowercase field names
+		example:
+			local totalRot = uevrUtils.sumRotators({Pitch=10, Yaw=20, Roll=0}, {pitch=5, yaw=10, roll=15})
+			
+	uevrUtils.distanceBetween(vector1, vector2) - calculates the distance between two vectors
+		example:
+			local dist = uevrUtils.distanceBetween(player:K2_GetActorLocation(), target:K2_GetActorLocation())
+			
+	uevrUtils.getForwardVector(rotator) - gets the forward vector from a rotator
+		example:
+			local fwd = uevrUtils.getForwardVector(camera:K2_GetActorRotation())
+			
+	uevrUtils.clampAngle180(angle) - clamps an angle to the range -180 to 180 degrees
+		example:
+			local normalizedAngle = uevrUtils.clampAngle180(370)  -- returns 10
+			
+	uevrUtils.getShortName(object) - gets the short name of a UObject
+		example:
+			local name = uevrUtils.getShortName(actor)  -- returns just the object name without path
+			
+	uevrUtils.getFullName(object) - gets the full path name of a UObject
+		example:
+			local fullName = uevrUtils.getFullName(actor)  -- returns complete object path
+			
+	uevrUtils.isGamePaused() - returns whether the game is currently paused
+		example:
+			if uevrUtils.isGamePaused() then
+				print("Game is paused")
+			end
+			
+	uevrUtils.isFadeHardLocked() - returns whether the camera fade is currently hard locked
+		example:
+			if uevrUtils.isFadeHardLocked() then
+				uevrUtils.stopFadeCamera()
+			end
+			
+	uevrUtils.stopFadeCamera() - stops any active camera fade effect and removes fade locks
+		example:
+			uevrUtils.stopFadeCamera()  -- immediately removes any camera fade
+			
+	uevrUtils.enableCameraLerp(state, pitch, yaw, roll) - enables/disables camera lerping for specified axes
+		example:
+			uevrUtils.enableCameraLerp(true, true, true, false)  -- enable lerp for pitch and yaw only
+			
+	uevrUtils.enableUIFollowsView(state) - enables/disables UI following the view direction
+		example:
+			uevrUtils.enableUIFollowsView(true)  -- UI will follow player's view
+			
+	uevrUtils.setUIFollowsViewOffset(offset) - sets the offset position for UI following view
+		example:
+			uevrUtils.setUIFollowsViewOffset({X=0, Y=0, Z=100})  -- offset UI 100 units forward
+			
+	uevrUtils.setUIFollowsViewSize(size) - sets the scale of UI when following view
+		example:
+			uevrUtils.setUIFollowsViewSize(1.5)  -- make UI 1.5x normal size
+			
+	uevrUtils.isThumbpadTouched(state, hand) - checks if the thumbpad is being touched for specified hand
+		example:
+			if uevrUtils.isThumbpadTouched(state, Handed.Right) then
+				print("Right thumbpad touched")
+			end
+			
+	uevrUtils.triggerHapticVibration(hand, secondsFromNow, duration, frequency, amplitude) - triggers controller haptic feedback
+		example:
+			uevrUtils.triggerHapticVibration(Handed.Left, 0, 0.1, 1000, 1.0)  -- immediate short vibration
+			
+	uevrUtils.getUEVRParam_bool(paramName) - gets a boolean UEVR parameter value
+		example:
+			local isEnabled = uevrUtils.getUEVRParam_bool("VR_EnableFeature")
+			
+	uevrUtils.getUEVRParam_int(paramName, default) - gets an integer UEVR parameter value with optional default
+		example:
+			local value = uevrUtils.getUEVRParam_int("VR_Quality", 2)
+			
+	uevrUtils.PositiveIntegerMask(text) - filters text to only allow positive integers and minus sign
+		example:
+			local number = uevrUtils.PositiveIntegerMask("abc123def-456")  -- returns "123-456"
+			
+	uevrUtils.splitStr(inputstr, sep) - splits a string by a separator into a table
+		example:
+			local parts = uevrUtils.splitStr("a,b,c", ",")  -- returns {"a", "b", "c"}
+			
+	uevrUtils.intToHexString(num) - converts an integer to "#RRGGBBAA" color format
+		example:
+			local hex = uevrUtils.intToHexString(0xFF0000FF)  -- returns "#FF0000FF"
 	
 	uevrUtils.getChildComponent(parent, name) - gets a child component of a given parent component (from AttachChildren param) using partial name
 		example:
@@ -314,20 +452,62 @@ Usage
 		example:
 			uevrUtils.fixMeshFOV(hands.getHandComponent(0), "UsePanini", 0.0, true, true, true)
 	
-	uevrUtils.registerOnInputGetStateCallback(func) - register for a your own callback when the uevr callback fires
-
-	uevrUtils.registerPreEngineTickCallback(func) - register for a your own callback when the uevr callback fires
-
-	uevrUtils.registerPostEngineTickCallback(func) - register for a your own callback when the uevr callback fires
-
-	uevrUtils.registerPreCalculateStereoViewCallback(func) - register for a your own callback when the uevr callback fires
-
-	uevrUtils.registerPostCalculateStereoViewCallback(func) - register for a your own callback when the uevr callback fires
+	uevrUtils.registerOnInputGetStateCallback(func) - registers a callback for input state changes
+		func receives (retval, user_index, state) parameters
+		example:
+			uevrUtils.registerOnInputGetStateCallback(function(retval, user_index, state)
+				print("Input state changed for user", user_index)
+			end)
+			
+	uevrUtils.registerPreEngineTickCallback(func) - registers a callback before each engine tick
+		func receives (engine, delta) parameters
 		example:
 			uevrUtils.registerPreEngineTickCallback(function(engine, delta)
-				print("Delta is",delta)
+				print("Pre-tick with delta:", delta)
 			end)
-
+			
+	uevrUtils.registerPostEngineTickCallback(func) - registers a callback after each engine tick
+		func receives (engine, delta) parameters
+		example:
+			uevrUtils.registerPostEngineTickCallback(function(engine, delta)
+				print("Post-tick with delta:", delta) 
+			end)
+			
+	uevrUtils.registerPreCalculateStereoViewCallback(func) - registers a callback before stereo view calculations
+		func receives (device, view_index, world_to_meters, position, rotation, is_double) parameters
+		example:
+			uevrUtils.registerPreCalculateStereoViewCallback(function(device, view_index, ...)
+				print("Pre-calculate stereo view for device", device)
+			end)
+			
+	uevrUtils.registerPostCalculateStereoViewCallback(func) - registers a callback after stereo view calculations
+		func receives (device, view_index, world_to_meters, position, rotation, is_double) parameters
+		example:
+			uevrUtils.registerPostCalculateStereoViewCallback(function(device, view_index, ...)
+				print("Post-calculate stereo view for device", device)
+			end)
+			
+	uevrUtils.registerLevelChangeCallback(func) - registers a callback for when the game level changes
+		func receives the new level name
+		example:
+			uevrUtils.registerLevelChangeCallback(function(levelName)
+				print("Level changed to:", levelName)
+			end)
+			
+	uevrUtils.registerPreLevelChangeCallback(func) - registers a callback before the game level changes
+		func receives the new level name
+		example:
+			uevrUtils.registerPreLevelChangeCallback(function(levelName)
+				print("Level about to change to:", levelName)
+			end)
+			
+	uevrUtils.registerGamePausedCallback(func) - registers a callback for when the game is paused/unpaused 
+		func receives a boolean indicating pause state
+		example:
+			uevrUtils.registerGamePausedCallback(function(isPaused)
+				print("Game paused:", isPaused)
+			end)
+	
 
 	hook_function(class_name, function_name, native, prefn, postfn, dbgout)	- a method of getting a function callback from the game engine
 		example:
@@ -413,19 +593,29 @@ Usage
 
 ]]--
 
-
+require("libs/enums/unreal")
 -------------------------------
 -- Globals
 --  These exist for backwards compatability with existing scripts 
 --  The functions in this library provide better ways than using these globals
+---@class temp_vec3
+---@field [any] any
 temp_vec3 = nil
+---@class temp_vec3f
+---@field [any] any
 temp_vec3f = nil
+---@class temp_quatf
+---@field [any] any
 temp_quatf = nil
 
+---@class reusable_hit_result
+---@field [any] any
 reusable_hit_result = nil
 temp_transform = nil
 zero_color = nil
 
+---@class game_engine
+---@field [any] any
 game_engine = nil
 
 static_mesh_component_c = nil
@@ -434,12 +624,24 @@ scene_component_c = nil
 actor_c = nil
 
 -- These are useful as is
+---@class pawn
+---@field [any] any
 pawn = nil -- updated every tick 
+---@class Statics
+---@field [any] any
 Statics = nil
 WidgetBlueprintLibrary = nil
+---@class kismet_system_library
+---@field [any] any
 kismet_system_library = nil
+---@class kismet_math_library
+---@field [any] any
 kismet_math_library = nil
+---@class kismet_string_library
+---@field [any] any
 kismet_string_library = nil 
+---@class kismet_rendering_library
+---@field [any] any
 kismet_rendering_library = nil
 --uevr = nil
 -------------------------------
@@ -472,7 +674,8 @@ local uevrCallbacks = {}
 local keyBindList = {}
 local usingLuaVR = false
 local isPaused = false
-
+local isInCutscene = false
+local isDeveloperMode = nil
 
 function register_key_bind(keyName, callbackFunc)
 	keyBindList[keyName] = {}
@@ -487,9 +690,11 @@ function unregister_key_bind(keyName)
 end
 
 local function updateKeyPress()
-	local pc = uevr.api:get_player_controller(0)
-	local keyStruct = M.get_reuseable_struct_object("ScriptStruct /Script/InputCore.Key")
+	local pc = nil
+	local keyStruct = nil
 	for key, elem in pairs(keyBindList) do
+		if pc == nil then pc = uevr.api:get_player_controller(0) end -- dont allocate until we know its needed
+		if keyStruct == nil then keyStruct = M.get_reuseable_struct_object("ScriptStruct /Script/InputCore.Key") end
 		keyStruct.KeyName = M.fname_from_string(key)
 		if pc:IsInputKeyDown(keyStruct) then
 			if elem.isPressed == false then
@@ -660,7 +865,7 @@ end
 local lazyElapsedTime = 0.0
 local lazyPollTime = 1.0
 local function updateLazyPoll(delta)
-	if on_lazy_poll ~= nil then
+	if on_lazy_poll ~= nil then --don't bother doing anything if nothing is listening
 		lazyElapsedTime = lazyElapsedTime + delta
 		if lazyElapsedTime > lazyPollTime then
 			on_lazy_poll()
@@ -688,6 +893,13 @@ local function executeUEVRCallbacks(callbackName, ...)
 	end
 end
 
+local function hasUEVRCallbacks(callbackName)
+	if uevrCallbacks[callbackName] ~= nil then
+		return true
+	end
+	return false
+end
+
 
 local function getCurrentLevel()
 	local world = M.get_world()
@@ -697,37 +909,87 @@ local function getCurrentLevel()
 	return nil
 end
 
+local lastLevel = nil
 local function updateCurrentLevel()
-	local level = getCurrentLevel()
-	if lastLevel ~= level then
-		resetPerLevelDoOnce()
-		
-		local levelName = M.getShortName(level:get_outer())
-		executeUEVRCallbacks("on_pre_level_change", level, levelName)
-		
-		if on_level_change ~= nil then
-			on_level_change(level, levelName)
-		end
-		
-		executeUEVRCallbacks("on_level_change", level, levelName)
-	end	
-	lastLevel = level
+	if on_level_change ~= nil or hasUEVRCallbacks("on_pre_level_change") or hasUEVRCallbacks("on_level_change") then --don't bother doing anything if nothing is listening
+		local level = getCurrentLevel()
+		if level ~= nil and lastLevel ~= level then
+			resetPerLevelDoOnce()
+			
+			local levelName = M.getShortName(level:get_outer())
+			executeUEVRCallbacks("on_pre_level_change", level, levelName)
+			
+			if on_level_change ~= nil then
+				on_level_change(level, levelName)
+			end
+			
+			executeUEVRCallbacks("on_level_change", level, levelName)
+		end	
+		lastLevel = level
+	end
 end
 
 local function updateGamePaused()
-	local m_isPaused = false
-	local world = M.get_world()
-	if world ~= nil then
-		m_isPaused = Statics:IsGamePaused(world)
-	end
-	if isPaused ~= m_isPaused then
-		if on_game_paused ~= nil then
-			on_game_paused(m_isPaused)
+	if on_game_paused ~= nil or hasUEVRCallbacks("on_game_paused") then --don't bother doing anything if nothing is listening
+		local m_isPaused = false
+		local world = M.get_world()
+		if world ~= nil then
+			m_isPaused = Statics:IsGamePaused(world)
 		end
-	end	
-	isPaused = m_isPaused
+		if isPaused ~= m_isPaused then
+			if on_game_paused ~= nil then
+				on_game_paused(m_isPaused)
+			end
+			executeUEVRCallbacks("on_game_paused", m_isPaused)
+		end	
+		isPaused = m_isPaused
+	end
 end
 
+local function updateCutscene()
+	if on_cutscene_change ~= nil or hasUEVRCallbacks("on_cutscene_change") then --don't bother doing anything if nothing is listening
+		if M.getValid(pawn) ~= nil then
+			local playerController = pawn.Controller
+			if playerController ~= nil then	
+				local cameraManager = playerController.PlayerCameraManager
+				if cameraManager ~= nil then
+					local target = cameraManager.ViewTarget.Target
+					--print(target:get_class():get_full_name())
+					local m_isInCutscene = false
+					if target:is_a(M.get_class("Class /Script/CinematicCamera.CineCameraActor")) then
+						m_isInCutscene = true
+						--print("In Cinematic")
+					end
+					
+					if isInCutscene ~= m_isInCutscene then
+						if on_cutscene_change ~= nil then
+							on_cutscene_change(m_isInCutscene)
+						end
+						executeUEVRCallbacks("on_cutscene_change", m_isInCutscene)
+					end		
+					isInCutscene = m_isInCutscene					
+				end
+			end
+		end
+	end
+end
+
+local currentMontage = nil
+local function updateMontage()
+	if on_montage_change ~= nil or hasUEVRCallbacks("on_montage_change") then --don't bother doing anything if nothing is listening
+		if M.getValid(pawn) ~= nil and pawn.GetCurrentMontage ~= nil then
+			local montage = pawn:GetCurrentMontage()
+			if currentMontage ~= montage then
+				local montageName = montage and M.getShortName(montage) or ""
+				if on_montage_change ~= nil then
+					on_montage_change(montage, montageName)
+				end
+				executeUEVRCallbacks("on_montage_change", montage, montageName)
+			end		
+			currentMontage = montage	
+		end
+	end
+end
 
 
 local isInitialized = false
@@ -812,6 +1074,8 @@ function M.initUEVR(UEVR, callbackFunc)
 			updateKeyPress()
 			updateLerp(delta)
 			updateGamePaused()
+			updateCutscene()
+			updateMontage()
 			if on_pre_engine_tick ~= nil then
 				on_pre_engine_tick(engine, delta)
 			end
@@ -873,6 +1137,14 @@ function M.print(str, logLevel)
 	end
 end
 
+function M.setDeveloperMode(val)
+	isDeveloperMode = val
+end
+
+function M.getDeveloperMode()
+	return isDeveloperMode
+end
+
 function M.registerOnInputGetStateCallback(func)
 	registerUEVRCallback("onInputGetState", func)
 end
@@ -900,6 +1172,20 @@ end
 function M.registerPreLevelChangeCallback(func)
 	registerUEVRCallback("on_pre_level_change", func)
 end
+
+function M.registerGamePausedCallback(func)
+	registerUEVRCallback("on_game_paused", func)
+end
+
+function M.registerCutsceneChangeCallback(func)
+	registerUEVRCallback("on_cutscene_change", func)
+end
+
+function M.registerMontageChangeCallback(func)
+	registerUEVRCallback("on_montage_change", func)
+end
+
+
 
 function vector_2(x, y, reuseable)
 	local vector = M.get_struct_object("ScriptStruct /Script/CoreUObject.Vector2D", reuseable)
@@ -946,13 +1232,10 @@ function M.vector(...)
 	local reuseable = false
 
 	if #arg == 1 or #arg == 2 then
-		if type(arg[1]) == "userdata" then --maybe a vector was sent in
-			--if arg[1]:is_a(M.get_class("ScriptStruct /Script/CoreUObject.Vector")) then
-			return arg[1]
-		elseif type(arg[1]) == "table" then
-			x = (arg[1].X ~= nil) and arg[1].X or ((arg[1].x ~= nil) and arg[1].x or ((#arg[1] > 0) and arg[1][1]))
-			y = (arg[1].Y ~= nil) and arg[1].Y or ((arg[1].y ~= nil) and arg[1].y or ((#arg[1] > 1) and arg[1][2]))
-			z = (arg[1].Z ~= nil) and arg[1].Z or ((arg[1].z ~= nil) and arg[1].z or ((#arg[1] > 2) and arg[1][3]))
+		if type(arg[1]) == "table" or type(arg[1]) == "userdata" then 
+			x = (arg[1].X ~= nil) and arg[1].X or ((arg[1].x ~= nil) and arg[1].x or ((#arg[1] > 0) and arg[1][1] or 0.0))
+			y = (arg[1].Y ~= nil) and arg[1].Y or ((arg[1].y ~= nil) and arg[1].y or ((#arg[1] > 1) and arg[1][2] or 0.0))
+			z = (arg[1].Z ~= nil) and arg[1].Z or ((arg[1].z ~= nil) and arg[1].z or ((#arg[1] > 2) and arg[1][3] or 0.0))
 		else
 			M.print("Invalid argument 1 passed to vector function", LogLevel.Warning)
 		end
@@ -1003,9 +1286,9 @@ function M.rotator(...)
 			--if arg[1]:is_a(M.get_class("ScriptStruct /Script/CoreUObject.Rotator")) then
 			return arg[1]
 		elseif type(arg[1]) == "table" then
-			pitch = (arg[1].Pitch ~= nil) and arg[1].Pitch or ((arg[1].X ~= nil) and arg[1].X or ((arg[1].x ~= nil) and arg[1].x or ((#arg[1] > 0) and arg[1][1])))
-			yaw = (arg[1].Yaw ~= nil) and arg[1].Yaw or ((arg[1].Y ~= nil) and arg[1].Y or ((arg[1].y ~= nil) and arg[1].y or ((#arg[1] > 1) and arg[1][2])))
-			roll = (arg[1].Roll ~= nil) and arg[1].Roll or ((arg[1].Z ~= nil) and arg[1].Z or ((arg[1].z ~= nil) and arg[1].z or ((#arg[1] > 2) and arg[1][3])))
+			pitch = (arg[1].Pitch ~= nil) and arg[1].Pitch or ((arg[1].X ~= nil) and arg[1].X or ((arg[1].x ~= nil) and arg[1].x or ((#arg[1] > 0) and arg[1][1] or 0.0)))
+			yaw = (arg[1].Yaw ~= nil) and arg[1].Yaw or ((arg[1].Y ~= nil) and arg[1].Y or ((arg[1].y ~= nil) and arg[1].y or ((#arg[1] > 1) and arg[1][2] or 0.0)))
+			roll = (arg[1].Roll ~= nil) and arg[1].Roll or ((arg[1].Z ~= nil) and arg[1].Z or ((arg[1].z ~= nil) and arg[1].z or ((#arg[1] > 2) and arg[1][3] or 0.0)))
 		else
 			M.print("Invalid argument 1 passed to rotator function", LogLevel.Warning)
 		end
@@ -1047,7 +1330,7 @@ local function deg2rad(deg)
 end
 
 -- Converts a rotator (pitch, yaw, roll) to a quaternion
-function rotatorToQuaternion(pitch, yaw, roll)
+local function rotatorToQuaternion(pitch, yaw, roll)
     -- Convert to radians
     local p = deg2rad(pitch)
     local y = deg2rad(yaw)
@@ -1121,25 +1404,29 @@ function M.get_transform(position, rotation, scale, reuseable)
 	if position == nil then position = {X=0.0, Y=0.0, Z=0.0} end 
 	if scale == nil then scale = {X=1.0, Y=1.0, Z=1.0} end
 	local transform = M.get_struct_object("ScriptStruct /Script/CoreUObject.Transform", reuseable)
-	transform.Translation = vector_3f(position.X, position.Y, position.Z)
-	if rotation == nil then
-		transform.Rotation.X = 0.0
-		transform.Rotation.Y = 0.0
-		transform.Rotation.Z = 0.0
-		transform.Rotation.W = 1.0
-	else
-		transform.Rotation = rotation
+	if transform ~= nil then
+		transform.Translation = vector_3f(position.X, position.Y, position.Z)
+		if rotation == nil then
+			transform.Rotation.X = 0.0
+			transform.Rotation.Y = 0.0
+			transform.Rotation.Z = 0.0
+			transform.Rotation.W = 1.0
+		else
+			transform.Rotation = rotation
+		end
+		transform.Scale3D = vector_3f(scale.X, scale.Y, scale.Z)
 	end
-	transform.Scale3D = vector_3f(scale.X, scale.Y, scale.Z)
 	return transform
 end
 
 function M.set_component_relative_location(component, position)
 	if component ~= nil and component.RelativeLocation ~= nil then
-		if position == nil then position = {X=0.0, Y=0.0, Z=0.0} else position = M.vector(position) end 
-		component.RelativeLocation.X = position.X
-		component.RelativeLocation.Y = position.Y
-		component.RelativeLocation.Z = position.Z
+		if position == nil then position = {X=0.0, Y=0.0, Z=0.0} else position = M.vector(position) end
+		if position ~= nil then
+			component.RelativeLocation.X = position.X
+			component.RelativeLocation.Y = position.Y
+			component.RelativeLocation.Z = position.Z
+		end
 	end
 end
 
@@ -1155,9 +1442,11 @@ end
 function M.set_component_relative_scale(component, scale)
 	if component ~= nil and component.RelativeScale3D ~= nil then
 		if scale == nil then scale = {X=1.0, Y=1.0, Z=1.0} else scale = M.vector(scale) end
-		component.RelativeScale3D.X = scale.X
-		component.RelativeScale3D.Y = scale.Y
-		component.RelativeScale3D.Z = scale.Z
+		if scale ~= nil then
+			component.RelativeScale3D.X = scale.X
+			component.RelativeScale3D.Y = scale.Y
+			component.RelativeScale3D.Z = scale.Z
+		end
 	end
 end
 
@@ -1191,7 +1480,9 @@ end
 --and that function can return more array elements that get spliced in
 -- Marks a function call for expansion
 function expandArray(f, ...)
-    return {__expand = true, values = {table.unpack(f(...))}}
+	if f ~= nil then
+		return {__expand = true, values = {table.unpack(f(...))}}
+	end
 end
 
 -- Processes a mixed list of values and expansion markers
@@ -1239,7 +1530,8 @@ function M.getUEVRParam_int(paramName, default)
 	local result = nil
 	local param = uevr.params.vr:get_mod_value(paramName)
 	if param ~= nil then 
-		result = math.tointeger(param:gsub("[^%-%d]", ""))
+		--result = math.tointeger(param:gsub("[^%-%d]", ""))
+		result = math.tointeger(M.PositiveIntegerMask(param))
 	else
 		M.print("Invalid paramName in getUEVRParam_int", LogLevel.Error)
 	end
@@ -1279,7 +1571,7 @@ end
 
 function M.get_world()
 	if game_engine ~= nil then
-		viewport = game_engine.GameViewport	
+		local viewport = game_engine.GameViewport	
 		if viewport ~= nil then
 			local world = viewport.World
 			return world
@@ -1294,12 +1586,12 @@ end
 
 
 function M.spawn_actor(transform, collisionMethod, owner, tag)
-	viewport = game_engine.GameViewport
+	local viewport = game_engine.GameViewport
 	if viewport == nil then
 		print("Viewport is nil")
 	end
 
-	worldContext = viewport.World
+	local worldContext = viewport.World
 	if worldContext == nil then
 		print("World is nil")
 	end
@@ -1332,7 +1624,7 @@ end
 function M.getAllActorsWithTag(tag)
 	local actors = {}
 	Statics:GetAllActorsWithTag(M.get_world(), M.fname_from_string(tag), actors)
-	print("getAllActorWithTag",#actors)
+	--print("getAllActorWithTag",#actors)
 	return actors
 end
 
@@ -1342,7 +1634,7 @@ function M.getAllActorsOfClassWithTag(className, tag)
 	if class ~= nil then
 		Statics:GetAllActorsOfClassWithTag(M.get_world(), class, M.fname_from_string(tag), actors)
 	end
-	print("getAllActorWithTag",#actors)
+	--print("getAllActorsOfClassWithTag",#actors)
 	return actors
 end
 
@@ -1350,9 +1642,9 @@ function M.getAllActorsOfClass(className)
 	local actors = {}
 	local class = M.get_class(className)
 	if class ~= nil then
-		Statics:GetAllActorsOfClass(M.get_world(), class, M.fname_from_string(tag), actors)
+		Statics:GetAllActorsOfClass(M.get_world(), class, actors)
 	end
-	print("getAllActorWithTag",#actors)
+	--print("getAllActorsOfClass",#actors)
 	return actors
 end
 
@@ -1367,7 +1659,7 @@ end
 
 function M.getValid(object, properties)
 	if M.validate_object(object) ~= nil then
-		if properties ~= nil then
+		if properties ~= nil and #properties > 0 then
 			for i = 1 , #properties do
 				object = object[properties[i]]
 				if M.validate_object(object) == nil then
@@ -1544,10 +1836,12 @@ end
 function color_from_rgba(r,g,b,a, reuseable)
 	local color = M.get_struct_object("ScriptStruct /Script/CoreUObject.LinearColor", reuseable) --StructObject.new(M.get_class("ScriptStruct /Script/CoreUObject.LinearColor"))
 	--zero_color = StructObject.new(color_c)
-	if color["R"] ~= nil then color.R = r else color.r = r end
-	if color["G"] ~= nil then color.G = g else color.g = g end
-	if color["B"] ~= nil then color.B = b else color.b = b end
-	if color["A"] ~= nil then color.A = a else color.a = a end
+	if color ~= nil then
+		if color["R"] ~= nil then color.R = r else color.r = r end
+		if color["G"] ~= nil then color.G = g else color.g = g end
+		if color["B"] ~= nil then color.B = b else color.b = b end
+		if color["A"] ~= nil then color.A = a else color.a = a end
+	end
 	return color
 end
 function M.color_from_rgba(r,g,b,a, reuseable)
@@ -1556,19 +1850,64 @@ end
 -- int values from 0 to 255
 function color_from_rgba_int(r,g,b,a, reuseable)
 	local color = M.get_struct_object("ScriptStruct /Script/CoreUObject.Color", reuseable) --StructObject.new(M.get_class("ScriptStruct /Script/CoreUObject.Color"))
-	color.R = r
-	color.G = g
-	if color["B"] == nil then
-		color.b = b
-	else
-		color.B = b
+	if color ~= nil then
+		color.R = r
+		color.G = g
+		if color["B"] == nil then
+			color.b = b
+		else
+			color.B = b
+		end
+		color.A = a
 	end
-	color.A = a
 	return color
 end
 function M.color_from_rgba_int(r,g,b,a, reuseable)
 	return color_from_rgba_int(r,g,b,a, reuseable)
 end
+
+function M.hexToColor(hex)
+    if type(hex) ~= "string" or #hex < 7 then return M.color_from_rgba_int(0, 0, 0, 255) end
+    local r = tonumber(string.sub(hex, 2, 3), 16) or 0
+    local g = tonumber(string.sub(hex, 4, 5), 16) or 0
+    local b = tonumber(string.sub(hex, 6, 7), 16) or 0
+    local a = #hex >= 9 and tonumber(string.sub(hex, 8, 9), 16) or 255
+    return M.color_from_rgba_int(r, g, b, a)
+end
+
+-- Converts an integer (AARRGGBB or RRGGBBAA) to RGBA components
+function M.intToColor(num)
+	-- If input is nil or not a number, return opaque black
+	if type(num) ~= "number" then return M.color_from_rgba_int(0, 0, 0, 255) end
+	-- Try to detect format: if num > 0xFFFFFF, assume AARRGGBB, else RRGGBB (alpha=255)
+	local hex = string.format("%08X", num)
+	local a, r, g, b
+	if #hex == 8 then
+		-- Default: treat as RRGGBBAA
+		r = tonumber(hex:sub(1,2), 16)
+		g = tonumber(hex:sub(3,4), 16)
+		b = tonumber(hex:sub(5,6), 16)
+		a = tonumber(hex:sub(7,8), 16)
+	else
+		-- Fallback: treat as RRGGBB
+		r = tonumber(hex:sub(1,2), 16)
+		g = tonumber(hex:sub(3,4), 16)
+		b = tonumber(hex:sub(5,6), 16)
+		a = 255
+	end
+	return M.color_from_rgba_int(r, g, b, a)
+end
+
+-- Converts an integer to a hex string in #RRGGBBAA format
+function M.intToHexString(num)
+	if type(num) ~= "number" then return "#000000FF" end
+	local a = (num >> 24) & 0xFF
+	local b = (num >> 16) & 0xFF
+	local g = (num >> 8) & 0xFF
+	local r = num & 0xFF
+	return string.format("#%02X%02X%02X%02X", r, g, b, a)
+end
+
 
 function M.splitStr(inputstr, sep)
    if sep == nil then
@@ -1625,7 +1964,7 @@ function M.fadeCamera(rate, hardLock, softLock, overrideHardLock, overrideSoftLo
 
 	if hardLock == nil then hardLock = false end
 	if softLock == nil then softLock = false end
-	if overrideLocks == nil then overrideLocks = false end
+	--if overrideLocks == nil then overrideLocks = false end
 	if overrideHardLock == nil then overrideHardLock = false end
 	if overrideSoftLock == nil then overrideSoftLock = false end
 	
@@ -1721,36 +2060,66 @@ function M.set_2D_mode(state, delay_msec)
 	end
 end
 
+function M.enableCameraLerp(state, pitch, yaw, roll)
+	if pitch == true then
+		uevr.params.vr.set_mod_value("VR_LerpCameraPitch", state and "true" or "false")
+	end
+	if yaw == true then
+		uevr.params.vr.set_mod_value("VR_LerpCameraYaw", state and "true" or "false")
+	end
+	if roll == true then
+		uevr.params.vr.set_mod_value("VR_LerpCameraRoll", state and "true" or "false")
+	end	
+end
+
+function M.enableUIFollowsView(state)
+	uevr.params.vr.set_mod_value("UI_FollowView", state and "true" or "false")
+end
+
+function M.setUIFollowsViewOffset(offset)
+	uevr.params.vr.set_mod_value("UI_Distance", offset.Z)
+	uevr.params.vr.set_mod_value("UI_X_Offset", offset.X)
+	uevr.params.vr.set_mod_value("UI_Y_Offset", offset.Y)
+end
+
+function M.setUIFollowsViewSize(size)
+	uevr.params.vr.set_mod_value("UI_Size", tostring(size))
+end
+
 --there should be a better way to do this with the asset registry
 function M.getAssetDataFromPath(pathStr)
 	local fAssetData = M.get_struct_object("ScriptStruct /Script/CoreUObject.AssetData")
-	local arr = M.splitStr(pathStr, " ")
-	if fAssetData.ObjectPath ~= nil then
-		fAssetData.AssetClass = M.fname_from_string(arr[1]) 
-		fAssetData.ObjectPath = M.fname_from_string(arr[2])
+	if fAssetData ~= nil then
+		local arr = M.splitStr(pathStr, " ")
+		if fAssetData.ObjectPath ~= nil then
+			fAssetData.AssetClass = M.fname_from_string(arr[1]) 
+			fAssetData.ObjectPath = M.fname_from_string(arr[2])
+		end
+		if fAssetData.AssetClassPath ~= nil then
+			fAssetData.AssetClassPath.PackageName = M.fname_from_string("/Script/Engine")
+			fAssetData.AssetClassPath.AssetName = M.fname_from_string(arr[1]) 
+		end
+		arr = M.splitStr(arr[2], "/")
+		local arr2 = M.splitStr(arr[#arr], ".")
+		fAssetData.AssetName = M.fname_from_string(arr2[2])
+		local packagePath = table.concat(arr, "/", 1, #arr - 1)
+		fAssetData.PackagePath = "/" .. packagePath
+		fAssetData.PackageName = "/" .. packagePath .. "/" .. arr2[1]
 	end
-	if fAssetData.AssetClassPath ~= nil then
-		fAssetData.AssetClassPath.PackageName = M.fname_from_string("/Script/Engine")
-		fAssetData.AssetClassPath.AssetName = M.fname_from_string(arr[1]) 
-	end
-	arr = M.splitStr(arr[2], "/")
-	local arr2 = M.splitStr(arr[#arr], ".")
-	fAssetData.AssetName = M.fname_from_string(arr2[2])
-	local packagePath = table.concat(arr, "/", 1, #arr - 1)
-	fAssetData.PackagePath = "/" .. packagePath
-	fAssetData.PackageName = "/" .. packagePath .. "/" .. arr2[1]
 	return fAssetData
 end
 
 function M.getLoadedAsset(pathStr)
 	local fAssetData = M.getAssetDataFromPath(pathStr)
 	local assetRegistryHelper = M.find_first_of("Class /Script/AssetRegistry.AssetRegistryHelpers",  true)
-	if not assetRegistryHelper:IsAssetLoaded(fAssetData) then
-		local fSoftObjectPath = assetRegistryHelper:ToSoftObjectPath(fAssetData);
-		kismet_system_library:LoadAsset_Blocking(fSoftObjectPath)
+	if assetRegistryHelper ~= nil then
+		if not assetRegistryHelper:IsAssetLoaded(fAssetData) then
+			local fSoftObjectPath = assetRegistryHelper:ToSoftObjectPath(fAssetData);
+			kismet_system_library:LoadAsset_Blocking(fSoftObjectPath)
+		end	
+		return assetRegistryHelper:GetAsset(fAssetData)
 	end
-	
-	return assetRegistryHelper:GetAsset(fAssetData) 
+	return nil
 end
 
 function M.copyMaterials(fromComponent, toComponent, showDebug)
@@ -1809,6 +2178,36 @@ function M.getPropertiesOfClass(object, className, excludeInherited)
 		end
 	end
 	return propertiesList
+end
+
+function M.getPropertyPathDescriptorsOfClass(object, objectName, className, includeChildren)
+	local meshList = {}
+	if M.getValid(object) ~= nil then
+		meshList = M.getPropertiesOfClass(object, className)
+		for index, name in ipairs(meshList) do
+			meshList[index] = objectName .. "." .. meshList[index]
+		end
+
+		if includeChildren == true then
+			for _, prop in ipairs(meshList) do
+				local parent = M.getObjectFromDescriptor(prop)
+				if parent ~= nil then
+					local children = parent.AttachChildren
+					if children ~= nil then
+						for i, child in ipairs(children) do
+							if child:is_a(M.get_class(className)) then
+								local prefix, shortName = M.splitOnLastPeriod(child:get_full_name())
+								if shortName ~= nil then
+									table.insert(meshList, prop .. "(" .. shortName .. ")") 
+								end
+							end
+						end	
+					end
+				end
+			end
+		end
+	end
+	return meshList
 end
 
 function M.destroyComponent(component, destroyOwner, destroyChildren)
@@ -1966,10 +2365,10 @@ function M.createSkeletalMeshComponent(mesh, options)
 			if component ~= nil then
 				--component:SetCollisionEnabled(false,false)
 				if component.SetSkeletalMesh ~= nil then
-					component:SetSkeletalMesh(skeletalMesh)
+					component:SetSkeletalMesh(mesh)
 					--M.print("Using SetSkeletalMesh")
 				elseif component.SetSkeletalMeshAsset ~= nil then
-					component:SetSkeletalMeshAsset(skeletalMesh)				
+					component:SetSkeletalMeshAsset(mesh)				
 					--M.print("Using SetSkeletalMeshAsset")
 				else
 					M.print("SkeletalMeshComponent SetSkeletalMesh function does not exist")
@@ -2138,7 +2537,7 @@ function M.fixMeshFOV(mesh, propertyName, value, includeChildren, includeNiagara
 				M.print("No materials found on mesh", logLevel)
 			end
 			if includeChildren == true then
-				children = mesh.AttachChildren
+				local children = mesh.AttachChildren
 				if children ~= nil then
 					for i, child in ipairs(children) do
 						if child:is_a(M.get_class("Class /Script/Engine.MeshComponent")) and child.GetMaterials ~= nil then
@@ -2175,7 +2574,7 @@ end
 function M.cloneComponent(component, options)
 	if options == nil then options = {} end
 	local clone = M.create_component_of_class(component:get_class(), options.manualAttachment, options.relativeTransform, options.deferredFinish, options.parent, options.tag)
-	if component.SetStaticMesh ~= nil then
+	if clone ~= nil and component.SetStaticMesh ~= nil then
 		clone:SetStaticMesh(component.StaticMesh)
 	elseif component:is_a(M.get_class("Class /Script/Engine.SkeletalMeshComponent")) then
 		clone = M.createPoseableMeshFromSkeletalMesh(component, nil)
@@ -2254,19 +2653,21 @@ function M.parseHierarchyString(str)
             root = node
             current = root
         else
-            if current.child then
-                current = current.child
-            elseif current.property then
-                current = current.property
-            end
+			if current ~= nil then
+				if current.child then
+					current = current.child
+				elseif current.property then
+					current = current.property
+				end
 
-            if parent and child then
-                current.property = node
-                current = node.child
-            else
-                current.property = node
-                current = node
-            end
+				if parent and child then
+					current.property = node
+					current = node.child
+				else
+					current.property = node
+					current = node
+				end
+			end
         end
     end
 
@@ -2434,7 +2835,7 @@ function M.PrintInstanceNames(class_to_search)
     local obj_instances = obj_class:get_objects_matching(false)
 
     for i, instance in ipairs(obj_instances) do
-		print(i, instance:get_fname():to_string(), mesh:get_full_name())
+		print(i, instance:get_fname():to_string(), instance:get_full_name())
 	end
 end
 
