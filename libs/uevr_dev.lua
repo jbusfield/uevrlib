@@ -16,6 +16,8 @@ function M.print(text, logLevel)
 	end
 end
 
+---@class currentComponent
+---@field [any] any
 local currentComponent = nil
 
 local meshNames = {}
@@ -397,7 +399,7 @@ function setCurrentComponentScale(relativeScale)
 	end
 end
 
-function updateMesh()
+local function updateMesh()
 	if currentComponent ~= nil then
 		uevrUtils.detachAndDestroyComponent(currentComponent, false)
 		currentComponent = nil
@@ -416,7 +418,7 @@ function updateMesh()
 	end
 end
 
-function updateMaterial()
+local function updateMaterial()
 	if currentComponent ~= nil then
 		uevrUtils.detachAndDestroyComponent(currentComponent, false)
 		currentComponent = nil
@@ -434,7 +436,7 @@ function updateMaterial()
 	end
 end
 
-function updateWidget()
+local function updateWidget()
 	if currentComponent ~= nil then
 		uevrUtils.detachAndDestroyComponent(currentComponent, false)
 		currentComponent = nil
@@ -460,7 +462,7 @@ function updateWidget()
 	end
 end
 
-function updateReticule()
+local function updateReticule()
 	if currentComponent ~= nil then
 		uevrUtils.detachAndDestroyComponent(currentComponent, false)
 		currentComponent = nil

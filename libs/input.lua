@@ -44,7 +44,9 @@ local rxState = 0
 local snapTurnDeadZone = 8000
 
 local rootOffset = uevrUtils.vector(0,0,0)
+---@cast rootOffset -nil
 local headOffset = uevrUtils.vector(0,0,0)
+---@cast headOffset -nil
 local useSnapTurn = false
 local smoothTurnSpeed = 50
 local snapAngle = 30
@@ -459,7 +461,7 @@ local function getAnimationHeadDelta(pawn, pawnYaw)
 		if mesh ~= nil then
 			local baseRotationOffsetRotatorYaw = 0
 			if pawn.BaseRotationOffset ~= nil then
-				baseRotationOffsetRotator = kismet_math_library:Quat_Rotator(pawn.BaseRotationOffset)
+				local baseRotationOffsetRotator = kismet_math_library:Quat_Rotator(pawn.BaseRotationOffset)
 				if baseRotationOffsetRotator ~= nil then
 					baseRotationOffsetRotatorYaw = baseRotationOffsetRotator.Yaw
 				end
@@ -572,10 +574,15 @@ local function updateMeshRelativePosition()
 			temp_vec3:set(0, 0, 1) --the axis to rotate around
 			--headOffset is a global defining how far the head is offset from the mesh
 			local forwardVector = kismet_math_library:RotateAngleAxis(headOffset, pawnRot.Yaw - bodyRotationOffset - decoupledYaw, temp_vec3)
-
+			local x = -forwardVector.X
+			local y = -forwardVector.Y
+			if animationDelta ~= nil and eyeOffsetDelta ~= nil then
+				x = x + animationDelta.X + eyeOffsetDelta.X
+				y = y + animationDelta.Y - eyeOffsetDelta.Y
+			end
 			--dont worry about Z here. Z is applied directly to the RootComponent later
-			mesh.RelativeLocation.X = -forwardVector.X + animationDelta.X + eyeOffsetDelta.X
-			mesh.RelativeLocation.Y = -forwardVector.Y + animationDelta.Y - eyeOffsetDelta.Y
+			mesh.RelativeLocation.X = x
+			mesh.RelativeLocation.Y = y
 		end
 	end
 end

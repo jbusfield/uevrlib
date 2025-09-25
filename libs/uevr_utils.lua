@@ -885,12 +885,20 @@ local function registerUEVRCallback(callbackName, callbackFunc)
 	table.insert(uevrCallbacks[callbackName], callbackFunc)
 end
 
+function M.registerUEVRCallback(callbackName, callbackFunc)
+	registerUEVRCallback(callbackName, callbackFunc)
+end
+
 local function executeUEVRCallbacks(callbackName, ...)
 	if uevrCallbacks[callbackName] ~= nil then
 		for i, func in ipairs(uevrCallbacks[callbackName]) do
-			func(table.unpack({...}))
+			return func(table.unpack({...}))
 		end
 	end
+end
+
+function M.executeUEVRCallbacks(callbackName, ...)
+	return executeUEVRCallbacks(callbackName, ...)
 end
 
 local function hasUEVRCallbacks(callbackName)
@@ -1027,7 +1035,7 @@ function M.initUEVR(UEVR, callbackFunc)
 	game_engine = M.find_first_of("Class /Script/Engine.GameEngine")
 	
 	static_mesh_component_c = M.get_class("Class /Script/Engine.StaticMeshComponent")
-	motion_controller_component_c = M.get_class("Class /Script/HeadMountedDisplay.MotionControllerComponent")			 
+	motion_controller_component_c = M.get_class("Class /Script/HeadMountedDisplay.MotionControllerComponent")		 
 	scene_component_c = M.get_class("Class /Script/Engine.SceneComponent")
 	actor_c = M.get_class("Class /Script/Engine.Actor")
 	
@@ -1910,15 +1918,17 @@ end
 
 
 function M.splitStr(inputstr, sep)
-   if sep == nil then
-      sep = '%s'
-   end
-   local t={}
-   for str in string.gmatch(inputstr, '([^'..sep..']+)') 
-   do
-     table.insert(t, str)
-   end
-   return t
+   	if sep == nil then
+      	sep = '%s'
+   	end
+   	local t={}
+   	if inputstr ~= nil then
+		for str in string.gmatch(inputstr, '([^'..sep..']+)') 
+		do
+			table.insert(t, str)
+		end
+   	end
+   	return t
 end
 
 
@@ -2470,12 +2480,13 @@ end
 --options are manualAttachment, relativeTransform, deferredFinish, parent, tag, removeFromViewport, twoSided, drawSize
 function M.createWidgetComponent(widget, options)
 	local component = nil
+	local widgetAlignment = nil
 	if widget ~= nil and (type(widget) == "string" or widget:is_a(M.get_class("Class /Script/UMG.Widget"))) then
 		if type(widget) == "string" then
 			widget = M.getActiveWidgetByClass(widget) 
-		end
-		
+		end	
 		if M.getValid(widget) ~= nil then
+			widgetAlignment = widget:GetAlignmentInViewport()
 			component = M.create_component_of_class("Class /Script/UMG.WidgetComponent", options.manualAttachment, options.relativeTransform, options.deferredFinish, options.parent, options.tag)
 			if component ~= nil then
 				if options.removeFromViewport == true and widget.RemoveFromViewport ~= nil then
@@ -2500,7 +2511,7 @@ function M.createWidgetComponent(widget, options)
 	else
 		M.print("WidgetComponent not created because widget param was invalid")	
 	end
-	return component
+	return component, widgetAlignment
 end
 
 function M.fixMeshFOV(mesh, propertyName, value, includeChildren, includeNiagara, showDebug)

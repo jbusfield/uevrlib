@@ -163,12 +163,12 @@ local function createHMDControllerComponent()
 	M.print("Creating HMD controller")
 	local hmdIndex = 2
 	local parentActor = uevrUtils.spawn_actor(uevrUtils.get_transform(), 1, nil)
-	M.print("Created HMD controller actor " .. parentActor:get_full_name())
 	if parentActor ~= nil then
+		M.print("Created HMD controller actor " .. parentActor:get_full_name())
 		local motionControllerComponent = uevrUtils.create_component_of_class("Class /Script/Engine.SceneComponent", true, uevrUtils.get_transform(), false, parentActor)
 		--local motionControllerComponent = parentActor:AddComponentByClass(uevrUtils.get_class("Class /Script/Engine.SceneComponent"), true, uevrUtils.get_transform(), false)
 		if motionControllerComponent ~= nil then
-			hmdState = UEVR_UObjectHook.get_or_add_motion_controller_state(motionControllerComponent)	
+			local hmdState = UEVR_UObjectHook.get_or_add_motion_controller_state(motionControllerComponent)	
 			if hmdState ~= nil then
 				hmdState:set_hand(hmdIndex) 
 				hmdState:set_permanent(true)
@@ -406,6 +406,12 @@ uevrUtils.registerPreLevelChangeCallback(function(level)
 		M.restoreExistingComponents()
 		isRestored = true
 	end
+end)
+
+uevrUtils.registerLevelChangeCallback(function(level)
+	M.createController(0)
+	M.createController(1)
+	M.createController(2)
 end)
 
 
