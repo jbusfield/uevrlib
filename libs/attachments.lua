@@ -1,3 +1,106 @@
+--[[ 
+Usage
+    Drop the lib folder containing this file into your project folder
+    Add code like this in your script:
+        local attachments = require("libs/attachments")
+        local isDeveloperMode = true  
+        attachments.init(isDeveloperMode)
+
+    Available functions:
+
+    attachments.init(isDeveloperMode, logLevel, defaultLocation, defaultRotation, defaultScale) - initializes the attachments system
+        example:
+            attachments.init(true, LogLevel.Debug, {0,0,0}, {0,0,0}, {1,1,1})
+
+    attachments.attachToMesh(attachment, mesh, socketName, gripHand, detachFromParent) - attaches an object to a mesh at a specified socket
+		The parameter gripHand is used to determine which hand's grip animation to use for the attachment. Set to nil if there is no animation needed
+        example:
+            attachments.attachToMesh(myAttachment, targetMesh, "hand_socket", Handed.Right, true)
+
+    attachments.attachToController(attachment, controllerID, detachFromParent) - attaches an object to a VR controller
+        example:
+            attachments.attachToController(myAttachment, Handed.Right, true)
+
+    attachments.detach(attachment, parent) - detaches an object from its parent
+        example:
+            attachments.detach(myAttachment)
+
+    attachments.registerOnGripUpateCallback(callback) - registers a callback function that handles automatic grip updates.
+		Your callback will be called periodically to request the item that is being gripped in the right or left hand as
+		well as the mesh or controller being used for the right and left hands. If no item is currently being gripped then return nil.
+		Return parameters are rightAttachment, rightMesh, rightSocketName, leftAttachment, leftMesh, leftSocketName, handleParentAttachment
+		The handleParentAttachment parameter tells the system whether to handle detaching the attachment from its parent when attaching to a new mesh.
+        example:
+			attachments.registerOnGripUpateCallback(function()
+				if uevrUtils.getValid(pawn) ~= nil and pawn.GetCurrentWeapon ~= nil then
+					local currentWeapon = pawn:GetCurrentWeapon()
+					if currentWeapon ~= nil and currentWeapon.RootComponent ~= nil then
+						return currentWeapon.RootComponent, hands.getHandComponent(Handed.Right), nil, nil, nil, nil, true
+					end
+				end
+			end)
+
+    attachments.registerOnGripAnimationCallback(callbackFunc) - registers a callback function that will be called when grip animation changes, 
+		for example when a new weapon is equipped.
+        example:
+            attachments.registerOnGripAnimationCallback(function(animationID, gripHand)
+                -- Handle grip animation change
+                print("Grip animation " .. animationID .. " activated for hand " .. gripHand)
+            end)
+
+    attachments.detachAttachmentFromMeshes(attachment, reattachToParent) - detaches an object from all meshes
+        example:
+            attachments.detachAttachmentFromMeshes(myAttachment, true)
+
+    attachments.detachAttachmentsFromMesh(mesh, reattachToParent) - detaches all objects from a specific mesh
+        example:
+            attachments.detachAttachmentsFromMesh(targetMesh, true)
+
+    attachments.setAttachmentOffset(parentName, childName, location, rotation) - sets the offset for an attachment relative to its parent
+        example:
+            attachments.setAttachmentOffset("hand_mesh", "weapon", {0,0,10}, {0,90,0})
+
+    attachments.getAttachmentOffset(attachment) - gets the current position, rotation and scale for an attachment
+        example:
+            local pos, rot, scale = attachments.getAttachmentOffset(myAttachment)
+
+    attachments.updateAttachmentTransform(pos, rot, scale, parentName, childName) - updates an attachment's transform
+        example:
+            attachments.updateAttachmentTransform({0,0,0}, {0,0,0}, {1,1,1}, "hand_mesh", "weapon")
+
+    attachments.setActiveAnimation(attachment, gripHand) - sets the active grip animation for an attachment
+        example:
+            attachments.setActiveAnimation(myAttachment, Handed.Right)
+
+    attachments.getCurrentGripAnimation(handed) - gets the current grip animation for a controller
+        example:
+            local anim = attachments.getCurrentGripAnimation(Handed.Right)
+
+    attachments.updateAttachmentAnimation(animationIndex, parentName, childName) - updates the animation for an attachment
+        example:
+            attachments.updateAttachmentAnimation(1, "hand_mesh", "weapon")
+
+    attachments.setLogLevel(val) - sets the logging level for attachment messages
+        example:
+            attachments.setLogLevel(LogLevel.Debug)
+
+    attachments.setAttachmentNames(attachmentNamesList) - sets the list of available attachment names
+        example:
+            attachments.setAttachmentNames({"weapon", "tool", "item"})
+
+    attachments.setAnimationIDs(animationIDList) - sets the available animation IDs and their display labels
+        example:
+            attachments.setAnimationIDs({
+                grip_pistol = {label = "Pistol Grip"},
+                grip_rifle = {label = "Rifle Grip"}
+            })
+
+    attachments.print(text, logLevel) - prints a debug/log message with the specified log level
+        example:
+            attachments.print("Attachment created", LogLevel.Info)
+
+]]--
+
 local uevrUtils = require("libs/uevr_utils")
 local configui = require("libs/configui")
 local controllers = require("libs/controllers")
@@ -27,7 +130,7 @@ local animationIDs = {""}
 
 local meshAttachmentList = {}
 local activeGripAnimations = {}
-local attachmentCallbacks = {}
+--local attachmentCallbacks = {}
 
 local currentLogLevel = LogLevel.Error
 function M.setLogLevel(val)
@@ -39,6 +142,8 @@ function M.print(text, logLevel)
 		uevrUtils.print("[attachments] " .. text, logLevel)
 	end
 end
+
+local helpText = "This module allows you to configure attachment offsets for objects attached to meshes or controllers. You can specify position, rotation, scale, and grip animation for each attachment. New entries are added each time a new mesh is attached."
 
 function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 	if m_attachmentOffsets == nil then m_attachmentOffsets = attachmentOffsets end
@@ -121,6 +226,30 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 			widgetType = "tree_pop"
 		}
 	)
+	table.insert(configDefinition[1]["layout"],
+		{ widgetType = "new_line" }
+	)
+	table.insert(configDefinition[1]["layout"],
+		{
+			widgetType = "tree_node",
+			id = "uevr_pawn_help_tree",
+			initialOpen = true,
+			label = "Help"
+		}
+	)
+	table.insert(configDefinition[1]["layout"],
+		{
+			widgetType = "text",
+			id = "uevr_pawn_help",
+			label = helpText,
+			wrapped = true
+		}
+	)
+	table.insert(configDefinition[1]["layout"],
+		{
+			widgetType = "tree_pop"
+		}
+	)
 	return configDefinition
 end
 
@@ -176,22 +305,24 @@ function M.showDeveloperConfiguration(m_defaultLocation, m_defaultRotation, m_de
 end
 
 local function registerAttachmentCallback(callbackName, callbackFunc)
-	if attachmentCallbacks[callbackName] == nil then attachmentCallbacks[callbackName] = {} end
-	for i, existingFunc in ipairs(attachmentCallbacks[callbackName]) do
-		if existingFunc == callbackFunc then
-			--print("Function already exists")
-			return
-		end
-	end
-	table.insert(attachmentCallbacks[callbackName], callbackFunc)
+	uevrUtils.registerUEVRCallback(callbackName, callbackFunc)
+	-- if attachmentCallbacks[callbackName] == nil then attachmentCallbacks[callbackName] = {} end
+	-- for i, existingFunc in ipairs(attachmentCallbacks[callbackName]) do
+	-- 	if existingFunc == callbackFunc then
+	-- 		--print("Function already exists")
+	-- 		return
+	-- 	end
+	-- end
+	-- table.insert(attachmentCallbacks[callbackName], callbackFunc)
 end
-local function executeAttachmentCallbacks(callbackName, ...)
-	if attachmentCallbacks[callbackName] ~= nil then
-		for i, func in ipairs(attachmentCallbacks[callbackName]) do
-			func(table.unpack({...}))
-		end
-	end
-end
+-- local function executeAttachmentCallbacks(callbackName, ...)
+-- 	uevrUtils.executeUEVRCallbacks(callbackName, reusable_hit_result)
+-- 	-- if attachmentCallbacks[callbackName] ~= nil then
+-- 	-- 	for i, func in ipairs(attachmentCallbacks[callbackName]) do
+-- 	-- 		func(table.unpack({...}))
+-- 	-- 	end
+-- 	-- end
+-- end
 
 function M.init(isDeveloperMode, logLevel, m_defaultLocation, m_defaultRotation, m_defaultScale)
     if logLevel ~= nil then
@@ -375,7 +506,9 @@ end
 local function getNamedAttachmentFromMeshAttachmentList(parentName, childName)
 	for meshName, meshData in pairs(meshAttachmentList) do
 		for attachmentName, attachmentData in pairs(meshData) do
-			if uevrUtils.getValid(attachmentData.attachment) ~= nil then
+			if attachmentData == nil then
+				print("getNamedAttachmentFromMeshAttachmentList had nil attachmentData", parentName, childName)
+			elseif uevrUtils.getValid(attachmentData.attachment) ~= nil then
 				if hasNamedObject(attachmentData.attachment, parentName, childName) then
 					return attachmentData.attachment, attachmentData.attachType
 				end
@@ -463,8 +596,9 @@ function M.setActiveAnimation(attachment, gripHand)
 		else
 			activeGripAnimations[gripHand] = false
 		end
-		M.print("Calling callback for grip animation " .. activeGripAnimations[gripHand] .. " " .. gripHand)
-		executeAttachmentCallbacks("grip_animation", activeGripAnimations[gripHand], gripHand)
+		--M.print("Calling callback for grip animation " .. activeGripAnimations[gripHand] .. " " .. gripHand)
+		uevrUtils.executeUEVRCallbacks("grip_animation", activeGripAnimations[gripHand], gripHand)
+		--executeAttachmentCallbacks("grip_animation", activeGripAnimations[gripHand], gripHand)
 	end
 end
 
@@ -622,10 +756,10 @@ end
 local autoUpdateCallbackCreated = false
 --local autoUpdateCurrentAttachment = nil
 --local autoUpdateCurrentMesh = nil
-function M.autoUpdateGripAttachments(callback)
+function M.registerOnGripUpateCallback(callback)
 	if not autoUpdateCallbackCreated then
 		uevrUtils.setInterval(1000, function()
-			local rightAttachment, rightMesh, leftAttachment, leftMesh, socketName, handleParentAttachment = callback()
+			local rightAttachment, rightMesh, rightSocketName, leftAttachment, leftMesh, leftSocketName, handleParentAttachment = callback()
 			--print(attachment, mesh, autoUpdateCurrentAttachment)
 			if handleParentAttachment == nil then handleParentAttachment = false end
 			if rightMesh == nil and rightAttachment == nil then
@@ -635,7 +769,7 @@ function M.autoUpdateGripAttachments(callback)
 			elseif rightMesh ~= nil and rightAttachment == nil then
 				M.detachAttachmentsFromMesh(rightMesh, handleParentAttachment)
 			elseif rightMesh ~= nil and rightAttachment ~= nil then
-				M.attachToMesh(rightAttachment, rightMesh, socketName, Handed.Right, handleParentAttachment)
+				M.attachToMesh(rightAttachment, rightMesh, rightSocketName, Handed.Right, handleParentAttachment)
 			end
 
 			if leftMesh == nil and leftAttachment == nil then
@@ -645,7 +779,7 @@ function M.autoUpdateGripAttachments(callback)
 			elseif leftMesh ~= nil and leftAttachment == nil then
 				M.detachAttachmentsFromMesh(leftMesh, handleParentAttachment)
 			elseif leftMesh ~= nil and leftAttachment ~= nil then
-				M.attachToMesh(leftAttachment, leftMesh, socketName, Handed.Left, handleParentAttachment)
+				M.attachToMesh(leftAttachment, leftMesh, leftSocketName, Handed.Left, handleParentAttachment)
 			end
 
 			-- if mesh ~= nil then
@@ -664,7 +798,7 @@ function M.autoUpdateGripAttachments(callback)
 	end
 end
 
-function M.registerGripAnimationCallback(callbackFunc)
+function M.registerOnGripAnimationCallback(callbackFunc)
 	registerAttachmentCallback("grip_animation", callbackFunc)
 end
 

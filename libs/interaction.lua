@@ -159,6 +159,8 @@ function M.print(text, logLevel)
 	end
 end
 
+local helpText = "This module allows you to configure the interaction system which provides tools to interact with the game world. You can create a Mesh interactor which will respond to meshes in the environment, or a Widget interactor which will respond to UI elements. Mesh and Widget interactors can be used at the same time. You can also show an optional laser which points where the interactor is aimed. The interactor can be attached to either hand or the head."
+
 local configWidgets = spliceableInlineArray{
 }
 
@@ -312,6 +314,22 @@ local developerWidgets = spliceableInlineArray{
                 initialValue = allowMouseUpdate
             },
  		{ widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },
+	{
+		widgetType = "tree_pop"
+	},
+	{ widgetType = "new_line" },
+	{
+		widgetType = "tree_node",
+		id = "uevr_pawn_help_tree",
+		initialOpen = true,
+		label = "Help"
+	},
+		{
+			widgetType = "text",
+			id = "uevr_pawn_help",
+			label = helpText,
+			wrapped = true
+		},
 	{
 		widgetType = "tree_pop"
 	},
@@ -953,7 +971,7 @@ uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
                     if projected ~= nil then
                         projected.Z = projected.Z + interactionZOffset
                         if trackerComponent ~= nil then trackerComponent:K2_SetWorldLocation(uevrUtils.vector(projected), false, reusable_hit_result, false) end
-                        M.updateLaserPointer(uevrUtils.vector(hitResult.TraceStart), projected)
+                        updateLaserPointer(uevrUtils.vector(hitResult.TraceStart), projected)
                         updateMouse(projected)
                     end
                     uevrUtils.executeUEVRCallbacks("on_interaction_hit", hitResult)

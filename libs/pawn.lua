@@ -16,7 +16,23 @@ local pawnMeshList = {}
 local boneList = {}
 local includeChildrenInMeshList = false
 
+local currentLogLevel = LogLevel.Error
+function M.setLogLevel(val)
+	currentLogLevel = val
+end
+function M.print(text, logLevel)
+	if logLevel == nil then logLevel = LogLevel.Debug end
+	if logLevel <= currentLogLevel then
+		uevrUtils.print("[pawn] " .. text, logLevel)
+	end
+end
+
+local helpText = "This module allows you to configure the pawn body and arms meshes. You can hide/show the meshes in order to help locate them, select different meshes if your game has multiple meshes, and hide the arm bones if they are visible using the arms mesh. If your game has a separate mesh for first person arms animation (e.g. when using weapons), you can also configure that mesh separately. If your game uses the same mesh for everything, then just select that mesh in each dropdown box"
+
 local configWidgets = spliceableInlineArray{
+}
+
+local developerWidgets = spliceableInlineArray{
 	{
 		widgetType = "tree_node",
 		id = "uevr_pawn_body",
@@ -131,51 +147,23 @@ local configWidgets = spliceableInlineArray{
 	{
 		widgetType = "tree_pop"
 	},
-}
-
-local currentLogLevel = LogLevel.Error
-function M.setLogLevel(val)
-	currentLogLevel = val
-end
-function M.print(text, logLevel)
-	if logLevel == nil then logLevel = LogLevel.Debug end
-	if logLevel <= currentLogLevel then
-		uevrUtils.print("[pawn] " .. text, logLevel)
-	end
-end
-
-function M.getConfigurationWidgets(options)
-	return configui.applyOptionsToConfigWidgets(configWidgets, options)
-end
-
-function M.showConfiguration(saveFileName, options)
-	local configDefinition = {
+	{ widgetType = "new_line" },
+	{
+		widgetType = "tree_node",
+		id = "uevr_pawn_help_tree",
+		initialOpen = true,
+		label = "Help"
+	},
 		{
-			panelLabel = "Pawn Config", 
-			saveFile = saveFileName, 
-			layout = spliceableInlineArray{
-				expandArray(M.getConfigurationWidgets, options)
-			}
-		}
-	}
-	configui.create(configDefinition)
-end
-
-function M.setBodyMeshName(val)
-	bodyMeshName = "Pawn." .. val
-end
-
-function M.getBodyMesh()
-	return uevrUtils.getObjectFromDescriptor(bodyMeshName)
-end
-
-function M.getArmsMesh()
-	return uevrUtils.getObjectFromDescriptor(armsMeshName)
-end
-
-function M.getArmsAnimationMesh()
-	return uevrUtils.getObjectFromDescriptor(armsAnimationMeshName)
-end
+			widgetType = "text",
+			id = "uevr_pawn_help",
+			label = helpText,
+			wrapped = true
+		},
+	{
+		widgetType = "tree_pop"
+	},
+}
 
 local function setPawnUpperArmLeft(value)
 	pawnUpperArmLeft = boneList[value]
@@ -205,12 +193,12 @@ end
 
 local function updateMeshUI(pawnMeshList, listName, selectedName, defaultValue)
 	configui.setSelections(listName, pawnMeshList)
-	
+
 	local selectedPawnBodyMesh = configui.getValue(selectedName)
 	if selectedPawnBodyMesh == nil or selectedPawnBodyMesh == "" then
 		selectedPawnBodyMesh = defaultValue
 	end
-	
+
 	for i = 1, #pawnMeshList do
 		if pawnMeshList[i] == selectedPawnBodyMesh then
 			configui.setValue(listName, i)
@@ -221,18 +209,86 @@ local function updateMeshUI(pawnMeshList, listName, selectedName, defaultValue)
 end
 
 local function setPawnMeshList()
+	M.print("Setting pawn mesh list", LogLevel.Debug)
 	pawnMeshList = uevrUtils.getPropertyPathDescriptorsOfClass(pawn, "Pawn", "Class /Script/Engine.SkeletalMeshComponent", includeChildrenInMeshList)
-	
+	M.print("Found " .. #pawnMeshList .. " meshes", LogLevel.Debug)
 	updateMeshUI(pawnMeshList, "pawnBodyMeshList", "selectedPawnBodyMesh", bodyMeshName)
 	updateMeshUI(pawnMeshList, "pawnArmsMeshList", "selectedPawnArmsMesh", armsMeshName)
 	updateMeshUI(pawnMeshList, "pawnArmsAnimationMeshList", "selectedPawnArmsAnimationMesh", armsAnimationMeshName)
-	
+
 end
 
-uevrUtils.registerLevelChangeCallback(function(level)
-	setBoneNames() 
-	setPawnMeshList() 
-end)
+local createDevMonitor = doOnce(function()
+	uevrUtils.registerLevelChangeCallback(function(level)
+		setPawnMeshList()
+		setBoneNames()
+	end)
+
+end, Once.EVER)
+
+function M.init(isDeveloperMode, logLevel)
+    if logLevel ~= nil then
+        M.setLogLevel(logLevel)
+    end
+    if isDeveloperMode == nil and uevrUtils.getDeveloperMode() ~= nil then
+        isDeveloperMode = uevrUtils.getDeveloperMode()
+    end
+
+    if isDeveloperMode then
+	    M.showDeveloperConfiguration("pawn_config_dev")
+        createDevMonitor()
+		setPawnMeshList()
+		setBoneNames()
+   	else
+        M.loadConfiguration("pawn_config_dev")
+    end
+end
+
+function M.getConfigurationWidgets(options)
+	return configui.applyOptionsToConfigWidgets(configWidgets, options)
+end
+
+function M.getDeveloperConfigurationWidgets(options)
+	return configui.applyOptionsToConfigWidgets(developerWidgets, options)
+end
+
+function M.showConfiguration(saveFileName, options)
+	configui.createConfigPanel("Pawn Config", saveFileName, spliceableInlineArray{expandArray(M.getConfigurationWidgets, options)})
+end
+
+function M.showDeveloperConfiguration(saveFileName, options)
+	configui.createConfigPanel("Pawn Config Dev", saveFileName, spliceableInlineArray{expandArray(M.getDeveloperConfigurationWidgets, options)})
+end
+
+-- function M.showConfiguration(saveFileName, options)
+-- 	local configDefinition = {
+-- 		{
+-- 			panelLabel = "Pawn Config", 
+-- 			saveFile = saveFileName, 
+-- 			layout = spliceableInlineArray{
+-- 				expandArray(M.getConfigurationWidgets, options)
+-- 			}
+-- 		}
+-- 	}
+-- 	configui.create(configDefinition)
+-- end
+
+function M.setBodyMeshName(val)
+	bodyMeshName = "Pawn." .. val
+end
+
+function M.getBodyMesh()
+	return uevrUtils.getObjectFromDescriptor(bodyMeshName)
+end
+
+function M.getArmsMesh()
+	return uevrUtils.getObjectFromDescriptor(armsMeshName)
+end
+
+function M.getArmsAnimationMesh()
+	return uevrUtils.getObjectFromDescriptor(armsAnimationMeshName)
+end
+
 
 configui.onUpdate("pawnBodyMeshList", function(value)
 	configui.setValue("selectedPawnBodyMesh", pawnMeshList[value])
@@ -321,22 +377,52 @@ function M.hideArmsBones(val)
 	configui.setValue("hidePawnArmsBones", val, true)
 
 	local armsMesh = M.getArmsMesh()
-	if val then
-		if pawnUpperArmRight ~= nil and pawnUpperArmRight ~= "" then
-			armsMesh:HideBoneByName(uevrUtils.fname_from_string(pawnUpperArmRight), 0)
+	if armsMesh ~= nil then
+		if val then
+			if pawnUpperArmRight ~= nil and pawnUpperArmRight ~= "" then
+				armsMesh:HideBoneByName(uevrUtils.fname_from_string(pawnUpperArmRight), 0)
+			end
+			if pawnUpperArmLeft ~= nil and pawnUpperArmLeft ~= "" then
+				armsMesh:HideBoneByName(uevrUtils.fname_from_string(pawnUpperArmLeft), 0)
+			end
+		else
+			if pawnUpperArmRight ~= nil and pawnUpperArmRight ~= "" then
+				armsMesh:UnHideBoneByName(uevrUtils.fname_from_string(pawnUpperArmRight))
+			end
+			if pawnUpperArmLeft ~= nil and pawnUpperArmLeft ~= "" then
+				armsMesh:UnHideBoneByName(uevrUtils.fname_from_string(pawnUpperArmLeft))
+			end
 		end
-		if pawnUpperArmLeft ~= nil and pawnUpperArmLeft ~= "" then
-			armsMesh:HideBoneByName(uevrUtils.fname_from_string(pawnUpperArmLeft), 0)
-		end
-	else
-		if pawnUpperArmRight ~= nil and pawnUpperArmRight ~= "" then
-			armsMesh:UnHideBoneByName(uevrUtils.fname_from_string(pawnUpperArmRight))
-		end
-		if pawnUpperArmLeft ~= nil and pawnUpperArmLeft ~= "" then
-			armsMesh:UnHideBoneByName(uevrUtils.fname_from_string(pawnUpperArmLeft))	
-		end				
 	end
 end
+
+local armBonesHiddenCallbacks = {}
+local function executeIsArmBonesHiddenCallback(...)
+	local result = false
+	for i, func in ipairs(armBonesHiddenCallbacks) do
+		result = result or func(...)
+	end
+	return result
+end
+
+function M.registerIsArmBonesHiddenCallback(func)
+	for i, existingFunc in ipairs(armBonesHiddenCallbacks) do
+		if existingFunc == func then
+			--print("Function already exists")
+			return
+		end
+	end
+	table.insert(armBonesHiddenCallbacks, func)
+end
+
+local isHiddenLast = false
+uevrUtils.setInterval(100, function()
+	local isHidden = executeIsArmBonesHiddenCallback()
+	if isHidden ~= isHiddenLast then
+		isHiddenLast = isHidden
+		M.hideArmsBones(isHidden)
+	end
+end)
 
 return M
 

@@ -27,8 +27,8 @@ function M.print(text, logLevel)
 end
 
 local createInputHandler = doOnce(function()
-	attachments.registerGripAnimationCallback(function(gripAnimation, gripHand)
-		M.print("Grip animation changed to " .. gripAnimation .. " for " .. (gripHand == Handed.Left and "Left" or "Right") .. " hand", LogLevel.Debug)
+	attachments.registerOnGripAnimationCallback(function(gripAnimation, gripHand)
+		--M.print("Grip animation changed to " .. (gripAnimation and gripAnimation or "None") .. " for " .. (gripHand == Handed.Left and "Left" or "Right") .. " hand", LogLevel.Debug)
 		M.updateAnimationState(gripHand)
 	end)
 
@@ -467,6 +467,25 @@ function M.hideHands(val)
 	end
 end
 
+local hiddenCallbacks = {}
+local function executeIsHiddenCallback(...)
+	local result = false
+	for i, func in ipairs(hiddenCallbacks) do
+		result = result or func(...)
+	end
+	return result
+end
+
+function M.registerIsHiddenCallback(func)
+	for i, existingFunc in ipairs(hiddenCallbacks) do
+		if existingFunc == func then
+			--print("Function already exists")
+			return
+		end
+	end
+	table.insert(hiddenCallbacks, func)
+end
+
 function M.destroyHands()
 	--since we didnt use an existing actor as parent in createComponent(), destroy the owner actor too
 	for name, components in pairs(handComponents) do
@@ -847,6 +866,16 @@ end)
 uevrUtils.registerPreLevelChangeCallback(function(level)
 	M.print("Pre-Level changed in hands")
 	M.reset()
+end)
+
+local isHiddenLast = false
+uevrUtils.setInterval(100, function()
+	local isHidden = executeIsHiddenCallback()
+	if isHidden ~= isHiddenLast then
+		isHiddenLast = isHidden
+		M.hideHands(isHidden)
+--		M.print("Hand visibility changed:", isHidden)
+	end
 end)
 
 return M

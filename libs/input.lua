@@ -34,6 +34,7 @@ M.PawnPositionMode =
 }
 
 local aimMethod = M.AimMethod.UEVR
+local isDisabledOverride = false
 local isDisabled = false
 
 local rootComponent = nil
@@ -69,7 +70,7 @@ local configWidgets = spliceableInlineArray{
 		widgetType = "checkbox",
 		id = "uevr_input_disabled",
 		label = "Disabled",
-		initialValue = isDisabled
+		initialValue = isDisabledOverride
 	},
 	{
 		widgetType = "tree_node",
@@ -271,17 +272,37 @@ function M.showConfiguration(saveFileName, options)
 end
 
 function M.setDisabled(val)
-	isDisabled = val
-	if isDisabled then
+	print("Input Disabled:", val)
+	isDisabledOverride = val
+	if isDisabledOverride then
 		--this ensures the camera gets reset to the current pawn orientation when input is re-enabled
 		decoupledYaw = nil
 		bodyRotationOffset = 0
 	end
-	configui.setValue("uevr_input_disabled", isDisabled, true)
+	configui.setValue("uevr_input_disabled", isDisabledOverride, true)
 end
 
 function M.isDisabled()
-	return isDisabled
+	return isDisabledOverride or isDisabled
+end
+
+local disabledCallbacks = {}
+local function executeIsDisabledCallback(...)
+	local result = false
+	for i, func in ipairs(disabledCallbacks) do
+		result = result or func(...)
+	end
+	return result
+end
+
+function M.registerIsDisabledCallback(func)
+	for i, existingFunc in ipairs(disabledCallbacks) do
+		if existingFunc == func then
+			--print("Function already exists")
+			return
+		end
+	end
+	table.insert(disabledCallbacks, func)
 end
 
 local function doFixSpatialAudio()
@@ -609,12 +630,14 @@ end
 uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
 	--set the global rootComponent variable on the earliest tick callback so it will be valid everywhere
 	getRootComponent()
+	isDisabled = isDisabledOverride or executeIsDisabledCallback()
 
 	if not isDisabled and aimMethod ~= M.AimMethod.UEVR then
 		initDecoupledYaw()
 		updateAim()
 		updateBodyYaw(delta)
 	end
+
 end)
 
 uevr.params.sdk.callbacks.on_early_calculate_stereo_view_offset(function(device, view_index, world_to_meters, position, rotation, is_double)

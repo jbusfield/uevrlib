@@ -243,6 +243,8 @@ function M.print(text, logLevel)
 	end
 end
 
+local helpText = "This module allows you to configure the reticule system. If you want the reticule to be created automatically, select the type of reticule you want. You can choose a default reticule, a mesh-based reticule, or a widget-based reticule. If you choose Custom, you will need to implement the RegisterOnCustomCreateCallback function in your code and return the type of reticule to create along with any parameters needed for creation. If you do not want the reticule to be created automatically, set the type to None and create the reticule manually in your code using the Create, CreateFromWidget or CreateFromMesh functions."
+
 local configWidgets = spliceableInlineArray{
 	{
 		widgetType = "slider_int",
@@ -297,7 +299,6 @@ local developerWidgets = spliceableInlineArray{
 					widgetType = "text",
 					id = "uevr_reticule_finder_instructions",
 					label = "Instructions: Perform the search when the game reticule is currently visible on the screen. The finder will automatically search for widgets that contain the words Cursor, Reticule, Reticle or Crosshair in their name. You can also enter text in the Find box to search for other widgets. Press Refresh to see an updated list of widgets. After selecting a widget press Toggle Visibility to see if it is the correct one. If it is, press Use Selected Reticule to set it as the attached reticule.",
-					initialValue = "",
 					wrapped = true
 				},
 				{
@@ -413,6 +414,22 @@ local developerWidgets = spliceableInlineArray{
 				},
 --			{ widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },
 		{ widgetType = "end_group", },
+	{
+		widgetType = "tree_pop"
+	},
+	{ widgetType = "new_line" },
+	{
+		widgetType = "tree_node",
+		id = "uevr_pawn_help_tree",
+		initialOpen = true,
+		label = "Help"
+	},
+		{
+			widgetType = "text",
+			id = "uevr_pawn_help",
+			label = helpText,
+			wrapped = true
+		},
 	{
 		widgetType = "tree_pop"
 	},
@@ -602,7 +619,7 @@ end)
 
 configui.onUpdate("uevr_reticule_list", function(value)
 	if value ~= nil and reticuleNames ~= nil and reticuleNames[value] ~= nil then
-		M.print("Using reticule at index " .. value .. " - " .. reticuleNames[value], LogLevel.Critical)
+		M.print("Using reticule at index " .. value .. " - " .. reticuleNames[value])
 	end
 	currentReticuleSelectionIndex = value
 	updateSelectedReticule()
@@ -610,7 +627,7 @@ end)
 
 configui.onUpdate("uevr_reticule_mesh_class_list", function(value)
 	if value ~= nil and systemMeshes ~= nil and systemMeshes[value] ~= nil then
-		M.print("Using mesh at index " .. value .. " - " .. systemMeshes[value], LogLevel.Critical)
+		M.print("Using mesh at index " .. value .. " - " .. systemMeshes[value])
 		if value == 1 then
 			configui.setValue("uevr_reticule_mesh_class", "")
 		else
@@ -622,7 +639,7 @@ end)
 
 configui.onUpdate("uevr_reticule_mesh_material_class_list", function(value)
 	if value ~= nil and systemMaterials ~= nil and systemMaterials[value] ~= nil then
-		M.print("Using material at index " .. value .. " - " .. systemMaterials[value], LogLevel.Critical)
+		M.print("Using material at index " .. value .. " - " .. systemMaterials[value])
 		if value == 1 then
 			configui.setValue("uevr_reticule_mesh_material_class", "")
 		else

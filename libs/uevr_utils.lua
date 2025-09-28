@@ -889,13 +889,30 @@ function M.registerUEVRCallback(callbackName, callbackFunc)
 	registerUEVRCallback(callbackName, callbackFunc)
 end
 
+--note that only the last result will be returned for functions that return results
+--therefore, for function returning results, only one callback should be registered system wide
 local function executeUEVRCallbacks(callbackName, ...)
 	if uevrCallbacks[callbackName] ~= nil then
+		local lastResults = nil
 		for i, func in ipairs(uevrCallbacks[callbackName]) do
-			return func(table.unpack({...}))
+			local results = {func(table.unpack({...}))}
+			if #results > 0 then
+				lastResults = results
+			end
+		end
+		if lastResults then
+			return table.unpack(lastResults)
 		end
 	end
 end
+
+-- local function executeUEVRCallbacks(callbackName, ...)
+-- 	if uevrCallbacks[callbackName] ~= nil then
+-- 		for i, func in ipairs(uevrCallbacks[callbackName]) do
+-- 			func(table.unpack({...}))
+-- 		end
+-- 	end
+-- end
 
 function M.executeUEVRCallbacks(callbackName, ...)
 	return executeUEVRCallbacks(callbackName, ...)
@@ -2043,30 +2060,57 @@ function M.stopFadeCamera()
 end
 
 function M.set_2D_mode(state, delay_msec)
+	--print("Setting 2D mode to ", state)
     if uevr ~= nil and uevr.params ~= nil then
 		local mode = uevr.params.vr:get_mod_value("VR_2DScreenMode")
 		if state and (string.sub(mode, 1, 5 ) == "false") then
 			if delay_msec == nil then
 				uevr.params.vr.set_mod_value("VR_2DScreenMode", "true")
-				print("2D mode set immediate\n")
+				M.print("2D mode set immediate")
 			else
 				delay( delay_msec, function()
 					uevr.params.vr.set_mod_value("VR_2DScreenMode", "true")
-					print("2D mode set\n")
+					M.print("2D mode set")
 				end)
 			end
 		end
 		if (not state) and (string.sub(mode, 1, 4 ) == "true") then
 			if delay_msec == nil then
 				uevr.params.vr.set_mod_value("VR_2DScreenMode", "false")
-				print("3D mode set immediate\n")
+				M.print("3D mode set immediate")
 			else
 				delay( delay_msec, function()
 					uevr.params.vr.set_mod_value("VR_2DScreenMode", "false") --do not execute in game thread
-					print("3D mode set\n")
+					M.print("3D mode set")
 				end)
 			end
 		end
+	end
+end
+
+function M.get_2D_mode()
+	if uevr ~= nil and uevr.params ~= nil then
+		local mode = uevr.params.vr:get_mod_value("VR_2DScreenMode")
+		if string.sub(mode, 1, 4 ) == "true" then
+			return true
+		else
+			return false
+		end
+	end
+	return false
+end
+
+function M.set_decoupled_pitch(state)
+	--print("Setting decoupled pitch to " ,state)
+	uevr.params.vr.set_mod_value("VR_DecoupledPitch", state and "true" or "false")
+end
+
+function M.get_decoupled_pitch()
+	local mode = uevr.params.vr:get_mod_value("VR_DecoupledPitch")
+	if string.sub(mode, 1, 4 ) == "true" then
+		return true
+	else
+		return false
 	end
 end
 
