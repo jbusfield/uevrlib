@@ -286,23 +286,13 @@ function M.isDisabled()
 	return isDisabledOverride or isDisabled
 end
 
-local disabledCallbacks = {}
 local function executeIsDisabledCallback(...)
-	local result = false
-	for i, func in ipairs(disabledCallbacks) do
-		result = result or func(...)
-	end
+	local result, priority = uevrUtils.executeUEVRCallbacksWithPriorityBooleanResult("is_input_disabled", table.unpack({...}))
 	return result
 end
 
 function M.registerIsDisabledCallback(func)
-	for i, existingFunc in ipairs(disabledCallbacks) do
-		if existingFunc == func then
-			--print("Function already exists")
-			return
-		end
-	end
-	table.insert(disabledCallbacks, func)
+	uevrUtils.registerUEVRCallback("is_input_disabled", func)
 end
 
 local function doFixSpatialAudio()

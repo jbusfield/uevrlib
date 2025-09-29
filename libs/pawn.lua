@@ -396,32 +396,38 @@ function M.hideArmsBones(val)
 	end
 end
 
-local armBonesHiddenCallbacks = {}
+--local armBonesHiddenCallbacks = {}
 local function executeIsArmBonesHiddenCallback(...)
-	local result = false
-	for i, func in ipairs(armBonesHiddenCallbacks) do
-		result = result or func(...)
-	end
-	return result
+	return uevrUtils.executeUEVRCallbacksWithPriorityBooleanResult("is_arms_bones_hidden", table.unpack({...}))
+	-- local result = false
+	-- for i, func in ipairs(armBonesHiddenCallbacks) do
+	-- 	result = result or func(...)
+	-- end
+	-- return result
 end
 
 function M.registerIsArmBonesHiddenCallback(func)
-	for i, existingFunc in ipairs(armBonesHiddenCallbacks) do
-		if existingFunc == func then
-			--print("Function already exists")
-			return
-		end
-	end
-	table.insert(armBonesHiddenCallbacks, func)
+	uevrUtils.registerUEVRCallback("is_arms_bones_hidden", func)
+	-- for i, existingFunc in ipairs(armBonesHiddenCallbacks) do
+	-- 	if existingFunc == func then
+	-- 		--print("Function already exists")
+	-- 		return
+	-- 	end
+	-- end
+	-- table.insert(armBonesHiddenCallbacks, func)
 end
 
 local isHiddenLast = false
 uevrUtils.setInterval(100, function()
-	local isHidden = executeIsArmBonesHiddenCallback()
+	local isHidden, priority = executeIsArmBonesHiddenCallback()
 	if isHidden ~= isHiddenLast then
 		isHiddenLast = isHidden
 		M.hideArmsBones(isHidden)
 	end
+end)
+
+uevrUtils.registerPreLevelChangeCallback(function(level)
+	isHiddenLast = false
 end)
 
 return M

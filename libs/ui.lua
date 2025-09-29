@@ -1,5 +1,87 @@
----@class WidgetBlueprintLibrary
----@field GetAllWidgetsOfClass function
+--[[ 
+Usage
+    Drop the lib folder containing this file into your project folder
+
+     Add code like this in your script:
+        local ui = require("libs/ui")
+        local isDeveloperMode = true  
+        ui.init(isDeveloperMode)
+
+    This module allows you to configure a head-locked UI mode that keeps the UI in front 
+    of your view which is useful for roomscale. You can also enable a motion sickness 
+    reduction mode that smooths camera movements during cutscenes and other 
+    motion-sickness-inducing scenes.
+
+    Available functions:
+
+    ui.init(isDeveloperMode, logLevel) - initializes the UI system
+        example:
+            ui.init(true, LogLevel.Debug)
+
+    ui.setIsHeadLocked(value) - enables/disables head-locked UI mode
+        example:
+            ui.setIsHeadLocked(true)
+
+    ui.setHeadLockedUIPosition(value) - sets the position of head-locked UI
+        example:
+            ui.setHeadLockedUIPosition({X=0, Y=0, Z=2.0})
+
+    ui.setHeadLockedUISize(value) - sets the size of head-locked UI
+        example:
+            ui.setHeadLockedUISize(2.0)
+
+    ui.disableHeadLockedUI(value) - temporarily disables head-locked UI without changing its state
+        example:
+            ui.disableHeadLockedUI(true)
+
+    ui.getViewportWidgetState() - gets the current state of viewport widgets
+        example:
+            local state = ui.getViewportWidgetState()
+            -- state contains: viewLocked, screen2D, decouplePitch, inputEnabled, handsEnabled
+
+    ui.setIsInMotionSicknessCausingScene(value) - sets whether current scene may cause motion sickness
+        example:
+            ui.setIsInMotionSicknessCausingScene(true)
+
+    ui.registerIsInMotionSicknessCausingSceneCallback(func) - registers a callback for motion sickness scene changes
+        Second param  is an optional priority. Higher priority callbacks override lower priority ones.
+        If the second param is not provided it defaults to 0.
+        example:
+            ui.registerIsInMotionSicknessCausingSceneCallback(function()
+                return isInMotionSicknessCausingScene, 0
+            end)
+
+    ui.loadParameters(fileName) - loads UI parameters from a file
+        example:
+            ui.loadParameters("ui_config")
+
+    ui.getConfigurationWidgets(options) - gets configuration UI widgets
+        example:
+            local widgets = ui.getConfigurationWidgets()
+
+    ui.getDeveloperConfigurationWidgets(options) - gets developer configuration UI widgets
+        example:
+            local widgets = ui.getDeveloperConfigurationWidgets()
+
+    ui.showConfiguration(saveFileName, options) - shows basic configuration UI
+        example:
+            ui.showConfiguration("ui_config")
+
+    ui.showDeveloperConfiguration(saveFileName, options) - shows developer configuration UI
+        example:
+            ui.showDeveloperConfiguration("ui_config_dev")
+
+    ui.setLogLevel(val) - sets the logging level for UI messages
+        example:
+            ui.setLogLevel(LogLevel.Debug)
+
+    ui.print(text, logLevel) - prints a debug/log message with the specified log level
+        example:
+            ui.print("UI initialized", LogLevel.Info)
+
+
+]]--
+
 
 local uevrUtils = require("libs/uevr_utils")
 local configui = require("libs/configui")
@@ -18,7 +100,15 @@ local isGamePaused = false
 
 local viewportWidgetList = {}
 local viewportWidgetIDList = {}
-local viewportWidgetState = {viewLocked = nil, activeWidget = nil}
+local viewportWidgetState = {viewLocked = nil, screen2D = nil, decouplePitch = nil, inputEnabled = nil, handsEnabled = nil}
+
+local stateConfig = {
+    {stateKey = "viewLocked", valueKey = "lockedUIWhenActive"},
+    {stateKey = "screen2D", valueKey = "screen2DWhenActive"},
+    {stateKey = "decouplePitch", valueKey = "decouplePitchWhenActive"},
+    {stateKey = "inputEnabled", valueKey = "inputWhenActive"},
+    {stateKey = "handsEnabled", valueKey = "handsWhenActive"}
+}
 
 local parametersFileName = "ui_parameters"
 local parameters = {}
@@ -35,6 +125,7 @@ function M.print(text, logLevel)
 	end
 end
 
+local helpText = "This module allows you to configure how the system behaves when UI overlays such as dialogs and menus are active. You can set whether the view is locked when a widget is active, whether 2D mode is enabled, whether pitch is decoupled, whether input is enabled, and whether hands are shown. Settings are applied based on priority, so if multiple widgets are active, the one with the highest priority for a given setting takes precedence. For example, if one active widget sets 'Screen 2D' to 'Enable' with priority 5, and another active widget sets it to 'Disable' with priority 10, the screen will not be 2D because the second widget has a higher priority."
 local configWidgets = spliceableInlineArray{
 	{
 		widgetType = "tree_node",
@@ -95,61 +186,124 @@ local developerWidgets = spliceableInlineArray{
             id = "knowViewportWidgetSettings",
             isHidden = false
         },
- 			-- {
-			-- 	widgetType = "checkbox",
-			-- 	id = "shouldLockViewWhenVisible",
-			-- 	label = "Should Lock View When Visible",
-			-- 	initialValue = false
-			-- },
- 			-- {
-			-- 	widgetType = "checkbox",
-			-- 	id = "useControllerMouse",
-			-- 	label = "Use Controller Mouse",
-			-- 	initialValue = false
-			-- },
+            { widgetType = "indent", width = 20 },
+	        { widgetType = "begin_group", id = "viewport_widget_config", isHidden = false }, { widgetType = "indent", width = 5 }, { widgetType = "text", label = "When Active" }, { widgetType = "begin_rect", },
+            { widgetType = "text", label = "State                                       Priority"},
             {
                 widgetType = "combo",
                 id = "lockedUIWhenActive",
-                label = "Locked UI When Active",
+                label = "",
                 selections = {"No effect", "Enable", "Disable"},
                 initialValue = 1,
+                width = 150,
+            },
+		    { widgetType = "same_line" },
+            {
+                widgetType = "input_text",
+                id = "lockedUIWhenActivePriority",
+                label = " Locked UI",
+                initialValue = "0",
+                width = 35,
             },
             {
                 widgetType = "combo",
                 id = "screen2DWhenActive",
-                label = "Screen 2D When Active",
+                label = "",
                 selections = {"No effect", "Enable", "Disable"},
                 initialValue = 1,
+                width = 150,
+            },
+		    { widgetType = "same_line" },
+            {
+                widgetType = "input_text",
+                id = "screen2DWhenActivePriority",
+                label = " Screen 2D",
+                initialValue = "0",
+                width = 35,
             },
             {
                 widgetType = "combo",
                 id = "decouplePitchWhenActive",
-                label = "Decoupled Pitch When Active",
+                label = "",
                 selections = {"No effect", "Enable", "Disable"},
                 initialValue = 1,
+                width = 150,
+            },
+            { widgetType = "same_line" },
+            {
+                widgetType = "input_text",
+                id = "decouplePitchWhenActivePriority",
+                label = " Decoupled Pitch",
+                initialValue = "0",
+                width = 35,
             },
             {
                 widgetType = "combo",
                 id = "inputWhenActive",
-                label = "Input When Active",
+                label = "",
                 selections = {"No effect", "Enable", "Disable"},
                 initialValue = 1,
+                width = 150,
+            },
+            { widgetType = "same_line" },
+            {
+                widgetType = "input_text",
+                id = "inputWhenActivePriority",
+                label = " Input",
+                initialValue = "0",
+                width = 35,
             },
             {
                 widgetType = "combo",
                 id = "handsWhenActive",
-                label = "Hands When Active",
+                label = "",
                 selections = {"No effect", "Show", "Hide"},
                 initialValue = 1,
+                width = 150,
             },
+            { widgetType = "same_line" },
+            {
+                widgetType = "input_text",
+                id = "handsWhenActivePriority",
+                label = " Hands",
+                initialValue = "0",
+                width = 35,
+            },
+            { widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },	
+            { widgetType = "unindent", width = 20 },
         {
             widgetType = "end_group",
         },
+		{ widgetType = "new_line" },
+		{ widgetType = "text", label = "Current Viewport Widgets"},
+        {
+            widgetType = "input_text_multiline",
+            id = "currentViewportWidgets",
+            label = " ",
+            initialValue = "",
+            size = {440, 230} -- optional, will default to full size without it
+        },
+		-- {
+		-- 	widgetType = "input_text",
+		-- 	id = "lastWidgetPlayed",
+		-- 	label = "Last Widget Played",
+		-- 	initialValue = "",
+		-- },
+	{
+		widgetType = "tree_pop"
+	},
+	{ widgetType = "new_line" },
+	{
+		widgetType = "tree_node",
+		id = "uevr_pawn_help_tree",
+		initialOpen = true,
+		label = "Help"
+	},
 		{
-			widgetType = "input_text",
-			id = "lastWidgetPlayed",
-			label = "Last Widget Played",
-			initialValue = "",
+			widgetType = "text",
+			id = "uevr_pawn_help",
+			label = helpText,
+			wrapped = true
 		},
 	{
 		widgetType = "tree_pop"
@@ -193,25 +347,14 @@ local function updateUI()
         viewportWidgetState["decouplePitch_last"] = viewportWidgetState["decouplePitch"]
     end
 
-    -- if viewportWidgetState["inputEnabled_last"] ~= viewportWidgetState["inputEnabled"] then
-    --     if viewportWidgetState["inputEnabled_last"] == nil then
-    --         viewportWidgetState["inputEnabled_cache"] = input.isDisabled()
-    --     end
-    --     if viewportWidgetState["inputEnabled"] == nil then
-    --         input.setDisabled(viewportWidgetState["inputEnabled_cache"])
-    --     else
-    --         input.setDisabled(not viewportWidgetState["inputEnabled"])
-    --     end
-    --     viewportWidgetState["inputEnabled_last"] = viewportWidgetState["inputEnabled"]
-    -- end
 end
 
 input.registerIsDisabledCallback(function()
-	return viewportWidgetState["inputEnabled"] == false
+	return viewportWidgetState["inputEnabled"] ~= nil and (not viewportWidgetState["inputEnabled"]) or nil, viewportWidgetState["inputEnabledPriority"]
 end)
 
 hands.registerIsHiddenCallback(function()
-	return viewportWidgetState["handsEnabled"] == false
+	return viewportWidgetState["handsEnabled"] ~= nil and (not viewportWidgetState["handsEnabled"]) or nil, viewportWidgetState["handsEnabledPriority"]
 end)
 
 local function showViewportWidgetEditFields()
@@ -226,20 +369,16 @@ local function showViewportWidgetEditFields()
     if id ~= "" and parameters ~= nil and parameters["widgetlist"] ~= nil and parameters["widgetlist"][id] ~= nil then
         local data = parameters["widgetlist"][id]
         if data ~= nil then
-            -- if data["shouldLockViewWhenVisible"] == nil then data["shouldLockViewWhenVisible"] = false end
-            -- configui.setValue("shouldLockViewWhenVisible", data["shouldLockViewWhenVisible"], true)
-            -- if data["useControllerMouse"] == nil then data["useControllerMouse"] = false end
-            -- configui.setValue("useControllerMouse", data["useControllerMouse"], true)
-            if data["lockedUIWhenActive"] == nil then data["lockedUIWhenActive"] = 1 end
-            configui.setValue("lockedUIWhenActive", data["lockedUIWhenActive"], true)
-            if data["screen2DWhenActive"] == nil then data["screen2DWhenActive"] = 1 end
-            configui.setValue("screen2DWhenActive", data["screen2DWhenActive"], true)
-            if data["decouplePitchWhenActive"] == nil then data["decouplePitchWhenActive"] = 1 end
-            configui.setValue("decouplePitchWhenActive", data["decouplePitchWhenActive"], true)
-            if data["inputWhenActive"] == nil then data["inputWhenActive"] = 1 end
-            configui.setValue("inputWhenActive", data["inputWhenActive"], true)
-            if data["handsWhenActive"] == nil then data["handsWhenActive"] = 1 end
-            configui.setValue("handsWhenActive", data["handsWhenActive"], true)
+            -- Initialize and set values for all state configs
+            for _, config in ipairs(stateConfig) do
+                local valueKey = config.valueKey
+                if data[valueKey] == nil then data[valueKey] = 1 end
+                configui.setValue(valueKey, data[valueKey], true)
+                
+                local priorityKey = valueKey .. "Priority"
+                if data[priorityKey] == nil or data[priorityKey] == "" then data[priorityKey] = "0" end
+                configui.setValue(priorityKey, data[priorityKey], true)
+            end
         end
     end
 end
@@ -254,13 +393,11 @@ local function updateCurrentViewportWidgetFields()
     if index ~= nil and index ~= 1 then
         local id = viewportWidgetIDList[index]
         if id ~= "" and  parameters ~= nil and parameters["widgetlist"] ~= nil and parameters["widgetlist"][id] ~= nil then
-            -- parameters["widgetlist"][id]["shouldLockViewWhenVisible"] = configui.getValue("shouldLockViewWhenVisible")
-            -- parameters["widgetlist"][id]["useControllerMouse"] = configui.getValue("useControllerMouse")
-            parameters["widgetlist"][id]["lockedUIWhenActive"] = configui.getValue("lockedUIWhenActive")
-            parameters["widgetlist"][id]["screen2DWhenActive"] = configui.getValue("screen2DWhenActive")
-            parameters["widgetlist"][id]["decouplePitchWhenActive"] = configui.getValue("decouplePitchWhenActive")
-            parameters["widgetlist"][id]["inputWhenActive"] = configui.getValue("inputWhenActive")
-            parameters["widgetlist"][id]["handsWhenActive"] = configui.getValue("handsWhenActive")
+            for _, config in ipairs(stateConfig) do
+                local valueKey = config.valueKey
+                parameters["widgetlist"][id][valueKey] = configui.getValue(valueKey)
+                parameters["widgetlist"][id][valueKey .. "Priority"] = configui.getValue(valueKey .. "Priority")
+            end
             isParametersDirty = true
         end
     end
@@ -298,13 +435,14 @@ local function registerViewportWidget(widgetClassName, widgetShortName)
 
             updateViewportWidgetList()
         end
-        configui.setValue("lastWidgetPlayed", widgetClassName)
+        --configui.setValue("lastWidgetPlayed", widgetClassName)
     end
 end
 
 local function registerViewportWidgets()
 	local foundWidgets = {}
 	local widgetClass = uevrUtils.get_class("Class /Script/UMG.UserWidget")
+    ---@diagnostic disable-next-line: undefined-field
     WidgetBlueprintLibrary:GetAllWidgetsOfClass(uevrUtils.get_world(), foundWidgets, widgetClass, true)
 	--print("Found widgets: " .. #foundWidgets)
 	for index, widget in pairs(foundWidgets) do
@@ -314,48 +452,44 @@ local function registerViewportWidgets()
 end
 
 local function updateViewportWidgets()
+    local currentWidgetsStr = ""
     if parameters ~= nil and parameters["widgetlist"] ~= nil then
-        viewportWidgetState.viewLocked = nil
-        viewportWidgetState.screen2D = nil
-        viewportWidgetState.decouplePitch = nil
-        viewportWidgetState.inputEnabled = nil
-        viewportWidgetState.activeWidget = nil
-        viewportWidgetState.handsEnabled = nil
+        for _, config in ipairs(stateConfig) do
+            viewportWidgetState[config.stateKey] = nil
+            viewportWidgetState[config.stateKey .. "Priority"] = 0
+        end
+    
+        --viewportWidgetState.activeWidget = nil
         local foundWidgets = {}
         local widgetClass = uevrUtils.get_class("Class /Script/UMG.UserWidget")
+        ---@diagnostic disable-next-line: undefined-field
         WidgetBlueprintLibrary:GetAllWidgetsOfClass(uevrUtils.get_world(), foundWidgets, widgetClass, true)
         --print("Found widgets: " .. #foundWidgets)
         for index, widget in pairs(foundWidgets) do
             if widget:IsInViewport() then
                 --get the widget data from the configurations
                 local id = widget:get_class():get_full_name()
-                
                 local data = parameters["widgetlist"][id]
-                if data ~= nil then                 
-                    if data["lockedUIWhenActive"] == 2 then
-                        viewportWidgetState.viewLocked = true
-                    elseif data["lockedUIWhenActive"] == 3 then
-                        viewportWidgetState.viewLocked = false
+                if data ~= nil then
+                    if data["label"] ~= nil then         
+                        currentWidgetsStr = currentWidgetsStr .. data["label"] .. "\n"
                     end
-                    if data["screen2DWhenActive"] == 2 then
-                        viewportWidgetState.screen2D = true
-                    elseif data["screen2DWhenActive"] == 3 then
-                        viewportWidgetState.screen2D = false
+
+                    local function updateStateIfHigherPriority(stateKey, valueKey)
+                        local priority = tonumber(data[valueKey .. "Priority"]) or 0
+                        if priority >= viewportWidgetState[stateKey .. "Priority"] then
+                            if data[valueKey] == 2 then
+                                viewportWidgetState[stateKey] = true
+                                viewportWidgetState[stateKey .. "Priority"] = priority
+                            elseif data[valueKey] == 3 then
+                                viewportWidgetState[stateKey] = false
+                                viewportWidgetState[stateKey .. "Priority"] = priority
+                            end
+                        end
                     end
-                    if data["decouplePitchWhenActive"] == 2 then
-                        viewportWidgetState.decouplePitch = true
-                    elseif data["decouplePitchWhenActive"] == 3 then
-                        viewportWidgetState.decouplePitch = false
-                    end
-                    if data["inputWhenActive"] == 2 then
-                        viewportWidgetState.inputEnabled = true
-                    elseif data["inputWhenActive"] == 3 then
-                        viewportWidgetState.inputEnabled = false
-                    end
-                    if data["handsWhenActive"] == 2 then
-                        viewportWidgetState.handsEnabled = true
-                    elseif data["handsWhenActive"] == 3 then
-                        viewportWidgetState.handsEnabled = false
+
+                    for _, config in ipairs(stateConfig) do
+                        updateStateIfHigherPriority(config.stateKey, config.valueKey)
                     end
                     -- if data["shouldLockViewWhenVisible"] == true then
                     --     viewportWidgetState.viewLocked = true
@@ -366,7 +500,8 @@ local function updateViewportWidgets()
                 end
             end  
         end
-    end 
+    end
+    configui.setValue("currentViewportWidgets", currentWidgetsStr) 
 end
 
 local function saveParameters()
@@ -428,7 +563,7 @@ function M.showDeveloperConfiguration(saveFileName, options)
 	configui.createConfigPanel("UI Config Dev", saveFileName, spliceableInlineArray{expandArray(M.getDeveloperConfigurationWidgets, options)})
 end
 
-configui.onCreateOrUpdate("knownViewportWidgetList", function(value)
+configui.onUpdate("knownViewportWidgetList", function(value)
 	showViewportWidgetEditFields()
 end)
 
@@ -440,25 +575,16 @@ end)
 -- 	updateCurrentViewportWidgetFields()
 -- end)
 
-configui.onCreateOrUpdate("lockedUIWhenActive", function(value)
-	updateCurrentViewportWidgetFields()
-end)
-
-configui.onCreateOrUpdate("screen2DWhenActive", function(value)
-	updateCurrentViewportWidgetFields()
-end)
-
-configui.onCreateOrUpdate("decouplePitchWhenActive", function(value)
-    updateCurrentViewportWidgetFields()
-end)
-
-configui.onCreateOrUpdate("inputWhenActive", function(value)
-    updateCurrentViewportWidgetFields()
-end)
-
-configui.onCreateOrUpdate("handsWhenActive", function(value)
-    updateCurrentViewportWidgetFields()
-end)
+-- Register update handlers for all state configs and their priorities
+for _, config in ipairs(stateConfig) do
+    local valueKey = config.valueKey
+    configui.onUpdate(valueKey, function(value)
+        updateCurrentViewportWidgetFields()
+    end)
+    configui.onUpdate(valueKey .. "Priority", function(value)
+        updateCurrentViewportWidgetFields()
+    end)
+end
 
 
 configui.onCreate("reduceMotionSickness", function(value)
@@ -492,9 +618,9 @@ function M.getViewportWidgetState()
     return viewportWidgetState
 end
 
-function M.getActiveViewportWidget()
-    return viewportWidgetState.activeWidget
-end
+-- function M.getActiveViewportWidget()
+--     return viewportWidgetState.activeWidget
+-- end
 
 function M.disableHeadLockedUI(value)
     if not value ~= isFollowing then
@@ -531,6 +657,14 @@ function M.setIsInMotionSicknessCausingScene(value)
     end
 end
 
+local function executeIsInMotionSicknessCausingSceneCallback(...)
+	return uevrUtils.executeUEVRCallbacksWithPriorityBooleanResult("is_in_motion_sickness_causing_scene", table.unpack({...}))
+end
+
+function M.registerIsInMotionSicknessCausingSceneCallback(func)
+	uevrUtils.registerUEVRCallback("is_in_motion_sickness_causing_scene", func)
+end
+
 uevrUtils.registerGamePausedCallback(function(isPaused)
     if isGamePaused ~= isPaused then
         isGamePaused = isPaused
@@ -538,10 +672,21 @@ uevrUtils.registerGamePausedCallback(function(isPaused)
     end
 end)
 
+local isInMotionSicknessCausingSceneLast = false
 uevrUtils.setInterval(200, function()
     updateViewportWidgets()
-    --print("Calling update UI")
+
     updateUI()
+
+    local m_isInMotionSicknessCausingScene, priority = executeIsInMotionSicknessCausingSceneCallback()
+	if m_isInMotionSicknessCausingScene ~= isInMotionSicknessCausingSceneLast then
+		isInMotionSicknessCausingSceneLast = m_isInMotionSicknessCausingScene
+		M.setIsInMotionSicknessCausingScene(m_isInMotionSicknessCausingScene)
+	end
+end)
+
+uevrUtils.registerPreLevelChangeCallback(function(level)
+	isInMotionSicknessCausingSceneLast = false
 end)
 
 M.loadParameters()

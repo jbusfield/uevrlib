@@ -2,6 +2,7 @@ local uevrUtils = require("libs/uevr_utils")
 local controllers = require("libs/controllers")
 local animation = require("libs/animation")
 local attachments = require("libs/attachments")
+local pawnModule = require("libs/pawn")
 
 local M = {}
 
@@ -14,6 +15,12 @@ local offset={X=0, Y=0, Z=0, Pitch=0, Yaw=0, Roll=0}
 local inputHandlerAnimID = {} --list of animID only used for the default input handler
 local handsConfig = nil -- the configuration tool for creating hands in game
 local holdingAttachment = {}
+
+--externally controlled animations
+local armsAnimationMeshes = {}
+armsAnimationMeshes[Handed.Left] = {animating=false, mesh=nil, componentName=nil}
+armsAnimationMeshes[Handed.Right] = {animating=false, mesh=nil, componentName=nil}
+local defaultAnimationMesh = nil
 
 local currentLogLevel = LogLevel.Error
 function M.setLogLevel(val)
@@ -92,10 +99,13 @@ end
 
 function M.reset()
 	handComponents = {}
-	definition = {}
+	handDefinitions = {}
 	handBoneList = {}
 	offset={X=0, Y=0, Z=0, Pitch=0, Yaw=0, Roll=0}
 	inputHandlerAnimID = {}
+	armsAnimationMeshes[Handed.Left] = {animating=false, mesh=nil, componentName=nil}
+	armsAnimationMeshes[Handed.Right] = {animating=false, mesh=nil, componentName=nil}
+	defaultAnimationMesh = nil
 end
 
 function M.exists()
@@ -330,6 +340,10 @@ function M.addRealism()
 
 end
 
+function M.setAnimationMesh(mesh)
+	defaultAnimationMesh = mesh
+end
+
 function M.updateAnimationFromMesh(hand, mesh, componentName)
 	if mesh ~= nil then
 		componentName = getComponentName(componentName)
@@ -348,6 +362,7 @@ function M.updateAnimationFromMesh(hand, mesh, componentName)
 						local rotation = getValidRotator(definition, "Rotation", {0,0,0})
 						local scale = getValidVector(definition, "Scale", {1,1,1})
 						local taperOffset = getValidVector(definition, "TaperOffset", {0,0,0})
+						--When an animation is applied, every bone in the entire skeleton is moved, so we need to reapply the transform from wrist to root
 						animation.transformBoneToRoot(component, jointName, location, rotation, scale, taperOffset, true)
 					end)
 					if success == false then
@@ -358,6 +373,33 @@ function M.updateAnimationFromMesh(hand, mesh, componentName)
 		end
 	end
 end
+
+function M.setHandsAreAnimatingFromMesh(isLeftAnimating, isRightAnimating, leftMesh, rightMesh, componentName)
+	if isLeftAnimating ~= nil then
+		if isLeftAnimating == true and armsAnimationMeshes[Handed.Left].animating ~= true then
+			armsAnimationMeshes[Handed.Left].mesh = leftMesh and leftMesh or (uevrUtils.getValid(defaultAnimationMesh) ~= nil and defaultAnimationMesh or pawnModule.getArmsAnimationMesh())
+			armsAnimationMeshes[Handed.Left].componentName = componentName
+		elseif isLeftAnimating == false and armsAnimationMeshes[Handed.Left].animating == true then
+			M.setInitialTransform(Handed.Left)
+			armsAnimationMeshes[Handed.Left].mesh = nil
+			armsAnimationMeshes[Handed.Left].componentName = nil
+		end
+		armsAnimationMeshes[Handed.Left].animating = isLeftAnimating
+	end
+	
+	if isRightAnimating ~= nil then
+		if isRightAnimating == true and armsAnimationMeshes[Handed.Right].animating ~= true then
+			armsAnimationMeshes[Handed.Right].mesh = rightMesh and rightMesh or (uevrUtils.getValid(defaultAnimationMesh) ~= nil and defaultAnimationMesh or pawnModule.getArmsAnimationMesh())
+			armsAnimationMeshes[Handed.Right].componentName = componentName
+		elseif isRightAnimating == false and armsAnimationMeshes[Handed.Right].animating == true then
+			M.setInitialTransform(Handed.Right)
+			armsAnimationMeshes[Handed.Right].mesh = nil
+			armsAnimationMeshes[Handed.Right].componentName = nil
+		end
+		armsAnimationMeshes[Handed.Right].animating = isRightAnimating
+	end
+end
+
 
 --set overrideTrigger to true if the default triggers have already been swapped (ie a plugin or code aleady makes the game do right trigger actions when the left trigger is pulled)
 function M.handleInput(state, attachment, hand, overrideTrigger, allowAutoHandle)
@@ -456,6 +498,7 @@ function M.handleInputTwoHanded(state, rightAttachment, leftAttachment, override
 end
 
 function M.hideHands(val)
+	if val == nil then return end
 	for name, components in pairs(handComponents) do
 		if uevrUtils.getValid(components[0]) ~= nil and components[0].SetVisibility ~= nil then
 			M.print((val and "Hiding " or "Showing ") .. components[0]:get_full_name() .. " hand components", LogLevel.Debug)
@@ -467,23 +510,18 @@ function M.hideHands(val)
 	end
 end
 
-local hiddenCallbacks = {}
 local function executeIsHiddenCallback(...)
-	local result = false
-	for i, func in ipairs(hiddenCallbacks) do
-		result = result or func(...)
-	end
-	return result
+	return uevrUtils.executeUEVRCallbacksWithPriorityBooleanResult("is_hands_hidden", table.unpack({...}))
+end
+function M.registerIsHiddenCallback(func)
+	uevrUtils.registerUEVRCallback("is_hands_hidden", func)
 end
 
-function M.registerIsHiddenCallback(func)
-	for i, existingFunc in ipairs(hiddenCallbacks) do
-		if existingFunc == func then
-			--print("Function already exists")
-			return
-		end
-	end
-	table.insert(hiddenCallbacks, func)
+local function executeIsAnimatingFromMeshCallback(...)
+	return uevrUtils.executeUEVRCallbacksWithPriorityBooleanResult("is_hands_animating_from_mesh", table.unpack({...}))
+end
+function M.registerIsAnimatingFromMeshCallback(func)
+	uevrUtils.registerUEVRCallback("is_hands_animating_from_mesh", func)
 end
 
 function M.destroyHands()
@@ -859,6 +897,38 @@ function M.debug(skeletalMeshComponent, hand, rightTargetJoint, disableVisualiza
 	end
 end
 
+local isHiddenLast = nil
+uevrUtils.setInterval(100, function()
+	local isHidden, priority = executeIsHiddenCallback()
+	if isHidden ~= isHiddenLast then
+		isHiddenLast = isHidden
+		if isHidden ~= nil then
+			M.hideHands(isHidden)
+		end
+	end
+end)
+
+local isLeftAnimatingLast = nil
+local isRightAnimatingLast = nil
+uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
+	local isLeftAnimating,  leftPriority = executeIsAnimatingFromMeshCallback(Handed.Left)
+	local isRightAnimating, rightPriority = executeIsAnimatingFromMeshCallback(Handed.Right)
+	local left = isLeftAnimating
+	if isLeftAnimatingLast ~= nil and isLeftAnimating == nil then left = false end
+	local right = isRightAnimating
+	if isRightAnimatingLast ~= nil and isRightAnimating == nil then right = false end
+	M.setHandsAreAnimatingFromMesh(left, right)
+	isLeftAnimatingLast = isLeftAnimating
+	isRightAnimatingLast = isRightAnimating
+
+	if armsAnimationMeshes[Handed.Left] ~= nil and armsAnimationMeshes[Handed.Left].mesh ~= nil then
+		M.updateAnimationFromMesh(Handed.Left, armsAnimationMeshes[Handed.Left].mesh,  armsAnimationMeshes[Handed.Left].componentName)
+	end
+	if armsAnimationMeshes[Handed.Right] ~= nil and armsAnimationMeshes[Handed.Right].mesh ~= nil then
+		M.updateAnimationFromMesh(Handed.Right, armsAnimationMeshes[Handed.Right].mesh,  armsAnimationMeshes[Handed.Right].componentName)
+	end
+end)
+
 uevr.params.sdk.callbacks.on_script_reset(function()
 	M.destroyHands()
 end)
@@ -866,17 +936,12 @@ end)
 uevrUtils.registerPreLevelChangeCallback(function(level)
 	M.print("Pre-Level changed in hands")
 	M.reset()
+	isHiddenLast = false
+	autoHandleInput = true
+	isLeftAnimatingLast = nil
+	isRightAnimatingLast = nil
 end)
 
-local isHiddenLast = false
-uevrUtils.setInterval(100, function()
-	local isHidden = executeIsHiddenCallback()
-	if isHidden ~= isHiddenLast then
-		isHiddenLast = isHidden
-		M.hideHands(isHidden)
---		M.print("Hand visibility changed:", isHidden)
-	end
-end)
 
 return M
 

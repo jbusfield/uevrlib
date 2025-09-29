@@ -906,6 +906,35 @@ local function executeUEVRCallbacks(callbackName, ...)
 	end
 end
 
+local function executeUEVRCallbacksWithBooleanResult(callbackName, ...)
+	local result = nil
+	if uevrCallbacks[callbackName] ~= nil then
+		for i, func in ipairs(uevrCallbacks[callbackName]) do
+			local funcResult = func(table.unpack({...}))
+			if funcResult ~= nil then
+				result = result or funcResult
+			end
+		end
+	end
+	return result
+end
+
+local function executeUEVRCallbacksWithPriorityBooleanResult(callbackName, ...)
+	local result = nil
+	local priority = 0
+	if uevrCallbacks[callbackName] ~= nil then
+		for i, func in ipairs(uevrCallbacks[callbackName]) do
+			local funcResult, funcPriority = func(table.unpack({...}))
+			if funcPriority == nil then funcPriority = 0 end
+			if funcResult ~= nil and funcPriority >= priority then
+				result = result or funcResult
+				priority = funcPriority
+			end
+		end
+	end
+	return result, priority
+end
+
 -- local function executeUEVRCallbacks(callbackName, ...)
 -- 	if uevrCallbacks[callbackName] ~= nil then
 -- 		for i, func in ipairs(uevrCallbacks[callbackName]) do
@@ -916,6 +945,14 @@ end
 
 function M.executeUEVRCallbacks(callbackName, ...)
 	return executeUEVRCallbacks(callbackName, ...)
+end
+
+function M.executeUEVRCallbacksWithBooleanResult(callbackName, ...)
+	return executeUEVRCallbacksWithBooleanResult(callbackName, ...)
+end
+
+function M.executeUEVRCallbacksWithPriorityBooleanResult(callbackName, ...)
+	return executeUEVRCallbacksWithPriorityBooleanResult(callbackName, ...)
 end
 
 local function hasUEVRCallbacks(callbackName)
