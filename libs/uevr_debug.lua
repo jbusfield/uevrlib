@@ -149,25 +149,25 @@ local function doDump(Object, level, recursive, ignoreRecursionList)
 			-- A UClass or UScriptStruct.
 			local Class = Object
 			while Class and Class:IsValid() do
-				Log(string.format("=== %s properties ===\n", Class:get_full_name()))
-				Class:ForEachProperty(function(Property)
-					local OutputBuffer = string.format("0x%04X    %s %s", Property:GetOffset_Internal(), Property:get_class():get_fname():to_string(), Property:get_fname():to_string())
-					if Property:is_a(PropertyTypes.ObjectProperty) then
-						OutputBuffer = string.format("%s (%s)", OutputBuffer, Property:GetPropertyClass():get_full_name())
-					elseif Property:is_a(PropertyTypes.BoolProperty) then
-						local FieldMask = Property:GetFieldMask()
-						if FieldMask ~= 255 then
-							OutputBuffer = string.format("%s (FM: 0x%X, BM: 0x%X)", OutputBuffer, FieldMask, Property:GetByteMask())
-						end
-					end
-					Log(OutputBuffer)
-				end)
+				-- Log(string.format("=== %s properties ===\n", Class:get_full_name()))
+				-- Class:ForEachProperty(function(Property)
+				-- 	local OutputBuffer = string.format("0x%04X    %s %s", Property:GetOffset_Internal(), Property:get_class():get_fname():to_string(), Property:get_fname():to_string())
+				-- 	if Property:is_a(PropertyTypes.ObjectProperty) then
+				-- 		OutputBuffer = string.format("%s (%s)", OutputBuffer, Property:GetPropertyClass():get_full_name())
+				-- 	elseif Property:is_a(PropertyTypes.BoolProperty) then
+				-- 		local FieldMask = Property:GetFieldMask()
+				-- 		if FieldMask ~= 255 then
+				-- 			OutputBuffer = string.format("%s (FM: 0x%X, BM: 0x%X)", OutputBuffer, FieldMask, Property:GetByteMask())
+				-- 		end
+				-- 	end
+				-- 	Log(OutputBuffer)
+				-- end)
 
 				Class = Class:GetSuperStruct()
 			end
 		elseif Object:is_a(UEnumStaticClass) then
 			Object:ForEachName(function(Name, Value)
-				Log(string.format("%s (%i)", Name:to_string(), Value))
+				--Log(string.format("%s (%i)", Name:to_string(), Value))
 			end)
 		elseif not Object:is_a(UPropertyStaticClass) then
 			-- A UObject that isn't a UClass, UScriptStruct, or UProperty (<4.25 only)

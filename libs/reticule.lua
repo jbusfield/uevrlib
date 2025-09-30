@@ -573,6 +573,7 @@ local function destroyReticuleComponent()
 		end
 		uevrUtils.destroyComponent(reticuleComponent, true, true)
 	end
+    ---@diagnostic disable-next-line: cast-local-type
 	reticuleComponent = nil
 end
 
@@ -745,6 +746,7 @@ function M.registerOnCustomCreateCallback(callback)
 end
 
 function M.reset()
+    ---@diagnostic disable-next-line: cast-local-type
 	reticuleComponent = nil
 	restoreWidgetPosition = nil
 	reticuleNames = {}
@@ -781,6 +783,7 @@ function M.createFromWidget(widget, options)
 	if options == nil then options = {} end
 	if options.collisionChannel ~= nil then reticuleCollisionChannel = options.collisionChannel else reticuleCollisionChannel = 0 end
 	if widget ~= nil then
+    	---@diagnostic disable-next-line: cast-local-type
 		reticuleComponent, restoreWidgetPosition = uevrUtils.createWidgetComponent(widget, options)
 		if uevrUtils.getValid(reticuleComponent) ~= nil then
 			---@cast reticuleComponent -nil
@@ -853,6 +856,7 @@ function M.createFromMesh(mesh, options)
 		M.print("Reticule component could not be created")
 	end
 
+    ---@diagnostic disable-next-line: cast-local-type
 	reticuleComponent = component
 	return reticuleComponent
 

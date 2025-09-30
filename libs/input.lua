@@ -543,7 +543,7 @@ local function updatePawnPositionRoomscale(world_to_meters)
 		local delta = {X=(temp_vec3f.X-origin.X)*world_to_meters, Y=(temp_vec3f.Y-origin.Y)*world_to_meters, Z=(temp_vec3f.Z-origin.Z)*world_to_meters}
 
 		-- temp_quatf contains how much the rotation of the hmd is relative to the real world vr coordinate system
-		local poseQuat = uevrUtils.quat(temp_quatf.Z, temp_quatf.X, -temp_quatf.Y, -temp_quatf.W)  --reordered terms to convert UEVR to unreal coord system
+		--local poseQuat = uevrUtils.quat(temp_quatf.Z, temp_quatf.X, -temp_quatf.Y, -temp_quatf.W)  --reordered terms to convert UEVR to unreal coord system
 		--local poseRotator = kismet_math_library:Quat_Rotator(poseQuat)
 		--print("POSE",poseRotator.Pitch, poseRotator.Yaw, poseRotator.Roll) --this is in the Unreal coord system
 
@@ -617,10 +617,20 @@ local function updateAim()
 	end
 end
 
+local function updateIsDisabled()
+	local disabled = isDisabledOverride or executeIsDisabledCallback() or false
+	if isDisabled ~= disabled then
+		--uevr.params.vr.recenter_view()
+		M.resetView()
+	end
+	isDisabled = disabled
+end
+
 uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
 	--set the global rootComponent variable on the earliest tick callback so it will be valid everywhere
 	getRootComponent()
-	isDisabled = isDisabledOverride or executeIsDisabledCallback()
+
+	updateIsDisabled()
 
 	if not isDisabled and aimMethod ~= M.AimMethod.UEVR then
 		initDecoupledYaw()
@@ -790,6 +800,12 @@ uevrUtils.registerPreLevelChangeCallback(function(level)
 	decoupledYaw = nil
 	bodyRotationOffset = 0
 end)
+
+function M.resetView()
+	decoupledYaw = nil
+	bodyRotationOffset = 0
+	uevr.params.vr.recenter_view()
+end
 
 uevrUtils.registerLevelChangeCallback(function(level)
 	setBoneNames()

@@ -310,17 +310,25 @@ local developerWidgets = spliceableInlineArray{
 	},
 }
 
+local canFollowLast = nil
 local function updateUI()
     --print(headLockedUI ,isFollowing, not isGamePaused)
     local canFollowView = ((headLockedUI and viewportWidgetState["viewLocked"] ~= true) or (not headLockedUI and viewportWidgetState["viewLocked"] == true)) and isFollowing and not isGamePaused
-    uevrUtils.enableUIFollowsView(canFollowView)
-    if canFollowView then
-        uevrUtils.setUIFollowsViewOffset(headLockedUIPosition)
-        uevrUtils.setUIFollowsViewSize(headLockedUISize)
-    else
-        uevrUtils.setUIFollowsViewOffset({X=0, Y=0, Z=2.0})
-        uevrUtils.setUIFollowsViewSize(2.0)
+    if canFollowLast ~= canFollowView then
+        uevrUtils.enableUIFollowsView(canFollowView)
+        if canFollowView then
+            print("here 1")
+            uevrUtils.setUIFollowsViewOffset(headLockedUIPosition)
+            uevrUtils.setUIFollowsViewSize(headLockedUISize)
+        else
+            print("here 2")
+            uevrUtils.setUIFollowsViewOffset({X=0, Y=0, Z=2.0})
+            uevrUtils.setUIFollowsViewSize(2.0)
+            --uevr.params.vr.recenter_view()
+            input.resetView()
+        end
     end
+    canFollowLast = canFollowView
 
     if viewportWidgetState["screen2D_last"] ~= viewportWidgetState["screen2D"] then
         if viewportWidgetState["screen2D_last"] == nil then
@@ -680,7 +688,7 @@ uevrUtils.setInterval(200, function()
 
     local m_isInMotionSicknessCausingScene, priority = executeIsInMotionSicknessCausingSceneCallback()
 	if m_isInMotionSicknessCausingScene ~= isInMotionSicknessCausingSceneLast then
-		isInMotionSicknessCausingSceneLast = m_isInMotionSicknessCausingScene
+		isInMotionSicknessCausingSceneLast = m_isInMotionSicknessCausingScene or false
 		M.setIsInMotionSicknessCausingScene(m_isInMotionSicknessCausingScene)
 	end
 end)

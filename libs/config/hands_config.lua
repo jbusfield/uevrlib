@@ -43,9 +43,9 @@ local totalSteps = 14
 local textWidth = 73
 local configDefinition = {
 	{
-		panelLabel = "Hand Config", 
-		saveFile = "hands_creator_config", 
-		layout = 
+		panelLabel = "Hand Config",
+		saveFile = "hands_creator_config",
+		layout =
 		{
 			{ widgetType = "text", id = "not_initialized_warning", label = "Hands Creation Tool is not initialized"},
 			{
@@ -654,7 +654,7 @@ local configDefinition = {
 						size = {120,24},
 					},
 					{ widgetType = "text_colored", id = "new_attachment_error", isHidden = true, wrapped = true, color = "#FF0000FF", label = "Please type the attachment name to be added."},
-					
+
 					-- {
 						-- widgetType = "combo",
 						-- id = "weapon_mesh",
@@ -990,7 +990,7 @@ local configDefinition = {
 			-- {
 				-- widgetType = "tree_pop"
 			-- },
-			
+
 		}
 	},
 }
@@ -999,20 +999,20 @@ configui.create(configDefinition)
 local function updateSteps(direction)
 	local previousStep = currentStep
 	currentStep = currentStep + direction
-	if currentStep < 1 then 
-		currentStep = 1 
+	if currentStep < 1 then
+		currentStep = 1
 	end
-	if currentStep > totalSteps then 
-		currentStep = totalSteps 
+	if currentStep > totalSteps then
+		currentStep = totalSteps
 	end
-	
+
 	configui.hideWidget("next_button", currentStep == totalSteps)
 	configui.hideWidget("prev_button", currentStep == 1)
-	
+
 	for i = 1, totalSteps do
 		configui.hideWidget("Step_" .. i, currentStep ~= i)
 	end
-	
+
 	configui.hideWidget("exit_button", true)
 	M.updateCurrentStep(previousStep, currentStep)
 
@@ -1032,8 +1032,8 @@ local function updateAttachmentListUI()
 			table.insert(attachmentIDs, id)
 		end
 	end
-	table.insert(attachmentLabels, 1, "Default") 
-	table.insert(attachmentIDs, 1, "") 
+	table.insert(attachmentLabels, 1, "Default")
+	table.insert(attachmentIDs, 1, "")
 
 	configui.setSelections("attachments_list", attachmentLabels)
 	updateAttachmentListVisibility()
@@ -1052,16 +1052,16 @@ local function getFingerIndexesForCurrentAnimationType()
 end
 
 local function getFingerNamesForCurrentAnimationType()
-	local selections = {"Thumb","Index","Middle","Ring","Pinky"} 
-	local names = {}	
+	local selections = {"Thumb","Index","Middle","Ring","Pinky"}
+	local names = {}
 	local arr = getFingerIndexesForCurrentAnimationType()
 	if arr ~= nil then
 		for i = 1, #arr do
-			table.insert(names, selections[arr[i]]) 	
+			table.insert(names, selections[arr[i]])
 		end
 	end
 	return names
-	
+
 	-- local names = {
 		-- {"Thumb","Middle","Ring","Pinky"},
 		-- {"Index"},
@@ -1101,9 +1101,11 @@ local function updateBoneRotationUI()
 		local fingerIndex = getFingerIndexForCurrentAnimationType() + fingerIndexOffset --configui.getValue("animation_finger") + fingerIndexOffset
 		local jointIndex = configui.getValue("animation_joint")
 		local rotator = animation.getBoneRotator(component, knuckleBoneList, fingerIndex, jointIndex)
-		configui.setValue("animation_finger_bone_pitch", rotator.Pitch, true)
-		configui.setValue("animation_finger_bone_yaw", rotator.Yaw, true)
-		configui.setValue("animation_finger_bone_roll", rotator.Roll, true)
+		if rotator ~= nil then
+			configui.setValue("animation_finger_bone_pitch", rotator.Pitch, true)
+			configui.setValue("animation_finger_bone_yaw", rotator.Yaw, true)
+			configui.setValue("animation_finger_bone_roll", rotator.Roll, true)
+		end
 	end
 end
 
@@ -1136,7 +1138,7 @@ local function updateAnimationsDefinition(handIndex, typeIndex, stateIndex)
 	if handIndex == nil then handIndex = configui.getValue("animation_hand") end
 	if typeIndex == nil then typeIndex = configui.getValue("animation_type") end
 	if stateIndex == nil then stateIndex = configui.getValue("animation_state") end
-	local typeText = {"grip", "trigger", "thumb", "grip_weapon", "trigger_weapon"}  
+	local typeText = {"grip", "trigger", "thumb", "grip_weapon", "trigger_weapon"}
 	local stateText = {"on", "off"}
 	local attachmentExt = getAttachmentExtension(typeIndex)
 	if handIndex == 1 or handIndex == 3 then
@@ -1148,7 +1150,7 @@ local function updateAnimationsDefinition(handIndex, typeIndex, stateIndex)
 			animationPositions[typeStr][stateText[stateIndex]] = animation.getBoneTransforms(component, getRelevantBonesForAnimationType(Handed.Left, typeIndex) , true, false, false)
 			--animationPositions[typeStr][stateText[stateIndex]] = animation.getBoneTransforms(component, uevrUtils.getArrayRange(knuckleBoneList, 1, 5) , true, false, false)
 		end
-	end	
+	end
 	if handIndex == 2 or handIndex == 3 then
 		local handStr = "right"
 		local typeStr = handStr .. "_" .. typeText[typeIndex] .. attachmentExt
@@ -1159,11 +1161,11 @@ local function updateAnimationsDefinition(handIndex, typeIndex, stateIndex)
 			--animationPositions[typeStr][stateText[stateIndex]] = animation.getBoneTransforms(component, uevrUtils.getArrayRange(knuckleBoneList, 6, 10) , true, false, false)
 --json.dump_file("debug.json", animationPositions[typeStr][stateText[stateIndex]], 4)
 		end
-	end	
-	
+	end
+
 	configuration["animations"][selectedAnimationName]["positions"] = animationPositions
 	--configui.setValue("animation_data", animations)
-	
+
 	isConfigurationDirty = true
 
 end
@@ -1173,7 +1175,7 @@ local function createHands()
 		hands.createFromConfig(configuration, selectedProfileName, selectedAnimationName)
 	else
 		hands.createFromConfig(configuration, selectedProfileName)
-		
+
 		-- --class UStaticMeshSocket* FindSocket(FName InSocketName)
 		-- local sphere = uevrUtils.createStaticMeshComponent("StaticMesh /Engine/EngineMeshes/Sphere.Sphere")
 		-- local scale = 0.02
@@ -1193,7 +1195,7 @@ local function getMeshComponent()
 	if configuration ~= nil and configuration["profiles"] ~= nil and configuration["profiles"][selectedProfileName] ~= nil and configuration["profiles"][selectedProfileName][selectedMeshName] ~= nil then
 		local meshPropertyName = configuration["profiles"][selectedProfileName][selectedMeshName]["Mesh"] --configui.getValue("mesh_property_name")
 		if meshPropertyName ~= "" then
-			return uevrUtils.getObjectFromDescriptor(meshPropertyName) 
+			return uevrUtils.getObjectFromDescriptor(meshPropertyName)
 		end
 		-- local property, childName = uevrUtils.splitOnLastPeriod(meshPropertyName)
 			-- if childName ~= nil then
@@ -1214,9 +1216,11 @@ local function updateHands()
 			createHands()
 		else
 			local rot = configui.getValue("mesh_rotation")
-			hands.setOffset({X=0, Y=0, Z=0, Pitch=rot.X, Yaw=rot.Y, Roll=rot.Z})
-			hands.debug(getMeshComponent(), nil, nil, true)	
-			
+			if rot ~= nil then
+				hands.setOffset({X=0, Y=0, Z=0, Pitch=rot.X, Yaw=rot.Y, Roll=rot.Z})
+			end
+			hands.debug(getMeshComponent(), nil, nil, true)
+
 			local fovParam = configui.getValue("fov_param_name")
 			if fovParam ~= nil and fovParam ~= "" then
 				uevrUtils.fixMeshFOV(hands.getHandComponent(Handed.Right), fovParam, 0.0, true, true, false)
@@ -1229,33 +1233,35 @@ end
 local function captureAnimationFromMesh()
 	local meshComponent = getMeshComponent()
 	if meshComponent ~= nil then
-		local tempPoseableMesh = uevrUtils.createPoseableMeshFromSkeletalMesh(meshComponent)	
-		for hand = Handed.Left, Handed.Right do
-			if configui.getValue("animation_hand") == (hand + 1) or configui.getValue("animation_hand") == 3 then
-				local component = hands.getHandComponent(hand)
-				if component ~= nil then
-					local minBoneIndex = (hand == Handed.Left and 1 or 6)
-					local maxBoneIndex = (hand == Handed.Left and 5 or 10)
-					local handStr = (hand == Handed.Left and "left_hand" or "right_hand")
-					local boneList = uevrUtils.getArrayRange(knuckleBoneList, minBoneIndex, maxBoneIndex)
-					for j = 1, #boneList do
-						for i = 1 , 3 do
-							local fName = tempPoseableMesh:GetBoneName(boneList[j] + i - 1)
-							local rotation, location, scale = animation.getBoneSpaceLocalTransform(tempPoseableMesh, fName, 0)
-							animation.setBoneSpaceLocalRotator(component, fName, rotation)
-							--captured animation may difer from assigned hand pose because animators will sometimes
-							--change bone locations. This does not happen in real life so it is not currently supported
-							--animation.setBoneSpaceLocalLocation(component, fName, location)
+		local tempPoseableMesh = uevrUtils.createPoseableMeshFromSkeletalMesh(meshComponent)
+		if tempPoseableMesh ~= nil then
+			for hand = Handed.Left, Handed.Right do
+				if configui.getValue("animation_hand") == (hand + 1) or configui.getValue("animation_hand") == 3 then
+					local component = hands.getHandComponent(hand)
+					if component ~= nil then
+						local minBoneIndex = (hand == Handed.Left and 1 or 6)
+						local maxBoneIndex = (hand == Handed.Left and 5 or 10)
+						local handStr = (hand == Handed.Left and "left_hand" or "right_hand")
+						local boneList = uevrUtils.getArrayRange(knuckleBoneList, minBoneIndex, maxBoneIndex)
+						for j = 1, #boneList do
+							for i = 1 , 3 do
+								local fName = tempPoseableMesh:GetBoneName(boneList[j] + i - 1)
+								local rotation, location, scale = animation.getBoneSpaceLocalTransform(tempPoseableMesh, fName, 0)
+								animation.setBoneSpaceLocalRotator(component, fName, rotation)
+								--captured animation may difer from assigned hand pose because animators will sometimes
+								--change bone locations. This does not happen in real life so it is not currently supported
+								--animation.setBoneSpaceLocalLocation(component, fName, location)
+							end
 						end
 					end
+				-- json.dump_file("debug.json", boneRotators, 4)
 				end
-			-- json.dump_file("debug.json", boneRotators, 4)
 			end
+			uevrUtils.destroyComponent(tempPoseableMesh, true, true)
 		end
-		uevrUtils.destroyComponent(tempPoseableMesh, true, true)
 --		FTransform meshComponent:GetDeltaTransformFromRefPose(FName BoneName, FName BaseName);
 	end
-	
+
 	updateBoneRotationUI()
 	updateAnimationsDefinition()
 end
@@ -1266,7 +1272,9 @@ local function getHandRotatorsArray(component, knuckleBoneList)
 		for index = 1 , 3 do
 			local fName = component:GetBoneName(knuckleBoneList[j] + index - 1)
 			local rotation, location, scale = animation.getBoneSpaceLocalTransform(component, fName, 0)
-			table.insert(boneRotators, {rotation.Pitch, rotation.Yaw, rotation.Roll}) 
+			if rotation ~= nil then
+				table.insert(boneRotators, {rotation.Pitch, rotation.Yaw, rotation.Roll})
+			end
 		end
 	end
 		-- json.dump_file("debug.json", boneRotators, 4)
@@ -1292,13 +1300,13 @@ local function copyHandAnimation()
 		local component = hands.getHandComponent(Handed.Left)
 		if component ~= nil then
 			copyRotators["hand"] = Handed.Left
-			copyRotators["rotators"] = getHandRotatorsArray(component, uevrUtils.getArrayRange(knuckleBoneList, 1, 5))		
+			copyRotators["rotators"] = getHandRotatorsArray(component, uevrUtils.getArrayRange(knuckleBoneList, 1, 5))
 		end
 	else
-		component = hands.getHandComponent(Handed.Right)
+		local component = hands.getHandComponent(Handed.Right)
 		if component ~= nil then
 			copyRotators["hand"] = Handed.Right
-			copyRotators["rotators"] = getHandRotatorsArray(component, uevrUtils.getArrayRange(knuckleBoneList, 6, 10))		
+			copyRotators["rotators"] = getHandRotatorsArray(component, uevrUtils.getArrayRange(knuckleBoneList, 6, 10))
 		end
 	end
 end
@@ -1330,7 +1338,7 @@ local function pasteHandAnimation()
 			animation.doAnimate(convertHandRotatorsArrayToTable(component, uevrUtils.getArrayRange(knuckleBoneList, 6, 10), copyRotators["rotators"]), component, mirrorPitch, mirrorYaw, mirrorRoll)
 		end
 	end
-	
+
 	updateBoneRotationUI()
 	updateAnimationsDefinition()
 end
@@ -1341,14 +1349,14 @@ local function copyFingerAnimation()
 		if component ~= nil then
 			local fingerIndex = getFingerIndexForCurrentAnimationType() --configui.getValue("animation_finger")
 			copyFingerRotators["hand"] = Handed.Left
-			copyFingerRotators["rotators"] = getHandRotatorsArray(component, uevrUtils.getArrayRange(knuckleBoneList, fingerIndex, fingerIndex))		
+			copyFingerRotators["rotators"] = getHandRotatorsArray(component, uevrUtils.getArrayRange(knuckleBoneList, fingerIndex, fingerIndex))
 		end
 	else
-		component = hands.getHandComponent(Handed.Right)
+		local component = hands.getHandComponent(Handed.Right)
 		if component ~= nil then
 			local fingerIndex = getFingerIndexForCurrentAnimationType() + 5 --configui.getValue("animation_finger") + 5
 			copyFingerRotators["hand"] = Handed.Right
-			copyFingerRotators["rotators"] = getHandRotatorsArray(component, uevrUtils.getArrayRange(knuckleBoneList, fingerIndex, fingerIndex))		
+			copyFingerRotators["rotators"] = getHandRotatorsArray(component, uevrUtils.getArrayRange(knuckleBoneList, fingerIndex, fingerIndex))
 		end
 	end
 end
@@ -1382,7 +1390,7 @@ local function pasteFingerAnimation()
 			animation.doAnimate(convertHandRotatorsArrayToTable(component, uevrUtils.getArrayRange(knuckleBoneList, fingerIndex, fingerIndex), copyFingerRotators["rotators"]), component, mirrorPitch, mirrorYaw, mirrorRoll)
 		end
 	end
-	
+
 	updateBoneRotationUI()
 	updateAnimationsDefinition()
 end
@@ -1434,8 +1442,12 @@ local function updateCutoffChildBoneTransformsUI()
 	if #cutoffChildBoneNames >= index and cutoffChildBoneNames[index] ~= "None" then
 		local cutoffChildBone = cutoffChildBoneNames[index]
 		local rotation, location, scale = animation.getBoneSpaceLocalTransform(hands.getHandComponent(configui.getValue("cutoff_children_hand_picker") - 1), uevrUtils.fname_from_string(cutoffChildBone))
-		configui.setValue("cutoff_children_rotation", {rotation.Pitch,rotation.Yaw,rotation.Roll})
-		configui.setValue("cutoff_children_location", {location.X,location.Y,location.Z})
+		if rotation ~= nil then
+			configui.setValue("cutoff_children_rotation", {rotation.Pitch,rotation.Yaw,rotation.Roll})
+		end
+		if location ~= nil then
+			configui.setValue("cutoff_children_location", {location.X,location.Y,location.Z})
+		end
 	end
 end
 
@@ -1481,7 +1493,7 @@ local function updateCutoffChildBonePicker()
 
 	configui.hideWidget("cutoff_children_rotation", #cutoffChildBoneNames < 2 )
 	configui.hideWidget("cutoff_children_location", #cutoffChildBoneNames < 2 )
-	
+
 	updateCutoffChildBoneTransformsUI()
 end
 
@@ -1501,7 +1513,7 @@ local function updateAnimationDescription()
 end
 
 local function createDefaultAnimations()
-	local typeText = {"grip", "trigger", "thumb", "grip_weapon", "trigger_weapon"}  
+	local typeText = {"grip", "trigger", "thumb", "grip_weapon", "trigger_weapon"}
 	for handIndex = 1, 2 do
 		local component = hands.getHandComponent(handIndex - 1)
 		for typeIndex = 1, #typeText do
@@ -1519,7 +1531,7 @@ end
 --called when animation type or state is changed
 local function updateHandAnimation()
 	--load existing animation from animations
-	local typeText = {"grip", "trigger", "thumb", "grip_weapon", "trigger_weapon"}  
+	local typeText = {"grip", "trigger", "thumb", "grip_weapon", "trigger_weapon"}
 	local stateText = {"on", "off"}
 	if configui.getValue("animation_hand") == 1 or configui.getValue("animation_hand") == 3 then
 		local handStr = "left"
@@ -1539,7 +1551,7 @@ local function updateHandAnimation()
 			animation.doAnimate(currentAnimation, component)
 		end
 	end
-	
+
 	updateBoneRotationUI()
 	updateAnimationDescription()
 end
@@ -1560,7 +1572,7 @@ local function revertFingerAnimation()
 			animation.doAnimateForFinger(defaultAnimationRotators["right_hand"], component, knuckleBoneList, fingerIndex)
 		end
 	end
-	
+
 	updateBoneRotationUI()
 	updateAnimationsDefinition()
 end
@@ -1579,13 +1591,13 @@ local function revertHandAnimation()
 			animation.doAnimate(defaultAnimationRotators["right_hand"], component)
 		end
 	end
-	
+
 	updateBoneRotationUI()
 	updateAnimationsDefinition()
 end
 
 
-local function setFingerAngles(angleID, angle)	
+local function setFingerAngles(angleID, angle)
 	if configui.getValue("animation_hand") == 1 or configui.getValue("animation_hand") == 3 then
 		local component = hands.getHandComponent(Handed.Left)
 		if component ~= nil then
@@ -1611,24 +1623,24 @@ local function setFingerAngles(angleID, angle)
 			animation.setFingerAngles(component, knuckleBoneList, fingerIndex, configui.getValue("animation_joint"), angleID, angle, false, false)
 		end
 	end
-	
+
 	updateAnimationsDefinition()
 end
 
 local function getKnuckleBones()
-	knuckleBoneList = {} 
+	knuckleBoneList = {}
 	for index, knuckleName in ipairs(knuckles["names"]) do
 		local boneIndex = configui.getValue(knuckles["names"][index]) - 1
-		table.insert(knuckleBoneList, boneIndex) 
+		table.insert(knuckleBoneList, boneIndex)
 	end
 	return knuckleBoneList
 end
 
-local function scanForKnuckleBonesUsingPattern(pattern) 
+local function scanForKnuckleBonesUsingPattern(pattern)
 	--"(ff)_(ii)_(h)" -- thumb_01_r 
 	--"(Hh)Hand(Ff)(i)_JNT" -- RightHandThumb1_JNT
 	--"(Hh)Hand(Ff)(i)" -- RightHandThumb1
-	
+
 	local fingers = {"Thumb","Index","Middle","Ring","Pinky"}
 	for index, knuckleName in ipairs(knuckles["names"]) do
 		local finger = fingers[((index-1) % 5) + 1]
@@ -1649,7 +1661,7 @@ local function scanForKnuckleBonesUsingPattern(pattern)
 		scanPattern = string.gsub(scanPattern, "%(iii%)", string.format("%03d", jointIndex))
 		scanPattern = string.gsub(scanPattern, "%(iiii%)", string.format("%04d", jointIndex))
 		--print("Pattern after",scanPattern)
-			
+
 		for i, boneName in ipairs(bones["names"]) do
 			if boneName == scanPattern then
 				if configui.getValue(knuckles["names"][index]) == 1 then
@@ -1675,7 +1687,7 @@ local function setHandLocation(hand, value)
 	hands.setLocation(hand, 1, value.X)
 	hands.setLocation(hand, 2, value.Y)
 	hands.setLocation(hand, 3, value.Z)
-	
+
 	configuration["profiles"][selectedProfileName][selectedMeshName][hand == Handed.Right and "Right" or "Left"]["Location"] = {value.X, value.Y, value.Z}
 	isConfigurationDirty = true
 end
@@ -1684,7 +1696,7 @@ local function setHandRotation(hand, value)
 	hands.setRotation(hand, 1, value.X)
 	hands.setRotation(hand, 2, value.Y)
 	hands.setRotation(hand, 3, value.Z)
-	
+
 	configuration["profiles"][selectedProfileName][selectedMeshName][hand == Handed.Right and "Right" or "Left"]["Rotation"] = {value.X, value.Y, value.Z}
 	isConfigurationDirty = true
 end
@@ -1693,7 +1705,7 @@ local function setHandScale(hand, value)
 	hands.setScale(hand, 1, value.X)
 	hands.setScale(hand, 2, value.Y)
 	hands.setScale(hand, 3, value.Z)
-	
+
 	configuration["profiles"][selectedProfileName][selectedMeshName][hand == Handed.Right and "Right" or "Left"]["Scale"] = {value.X, value.Y, value.Z}
 	isConfigurationDirty = true
 end
@@ -1716,21 +1728,21 @@ local function loadCharacterMeshList()
 							if child:is_a(uevrUtils.get_class("Class /Script/Engine.SkeletalMeshComponent")) then
 								local prefix, shortName = uevrUtils.splitOnLastPeriod(child:get_full_name())
 								if shortName ~= nil then
-									table.insert(meshList, prop .. "(" .. shortName .. ")") 
+									table.insert(meshList, prop .. "(" .. shortName .. ")")
 								end
 							end
-						end	
+						end
 					end
 				end
 			end
 		end
 	end
-	
-	table.insert(meshList, 1,  "None") 
+
+	table.insert(meshList, 1,  "None")
 	configui.setSelections("character_mesh", meshList)
 	local meshPropertyName = configuration["profiles"][selectedProfileName][selectedMeshName]["Mesh"]
 	configui.setValue("character_mesh", 1)
-	
+
 	if meshPropertyName ~= "" then
 		for index, name in ipairs(meshList) do
 			if name == meshPropertyName then
@@ -1753,8 +1765,8 @@ end
 configui.onUpdate("test_button", function(value)
 	isTesting = not isTesting
 	updateHands()
-	configui.hideWidget("prev_button", isTesting) 
-	configui.hideWidget("next_button", isTesting) 
+	configui.hideWidget("prev_button", isTesting)
+	configui.hideWidget("next_button", isTesting)
 	configui.hideWidget("Step_13", isTesting)
 	configui.hideWidget("step_testing", not isTesting)
 	configui.setLabel("test_button", isTesting and "Stop Testing" or "Test")
@@ -1810,7 +1822,7 @@ end)
 configui.onUpdate("show_code_button_2", function(value)
 	configui.hideWidget("code_text_2", false)
 	local text = "local uevrUtils = require('libs/uevr_utils')\nlocal hands = require('libs/hands')\nlocal controllers = require('libs/controllers')\n\nfunction on_level_change(level)\n\tcontrollers.createController(0)\n\tcontrollers.createController(1)\n\thands.reset()\n\n\tlocal paramsFile = 'hands_parameters' -- found in the [game profile]/data directory\n\tlocal configName = '".. selectedProfileName .. "' -- the name you gave your config\n\tlocal animationName = '".. selectedAnimationName .. "' -- the name you gave your animation\n\thands.createFromConfig(paramsFile, configName, animationName)\nend\n\nfunction on_xinput_get_state(retval, user_index, state)\n\tif hands.exists() then\n\t\tlocal isHoldingWeapon = false\n\t\tlocal hand = Handed.Right\n\t\thands.handleInput(state, isHoldingWeapon, hand)\n\tend\nend"
-	configui.setValue("code_text_2", text)	
+	configui.setValue("code_text_2", text)
 end)
 
 configui.onUpdate("include_children_in_mesh_search", function(value)
@@ -1858,7 +1870,7 @@ configui.onUpdate("animation_finger_bone_roll", function(value)
 end)
 
 configui.onUpdate("knuckle_bone_search_pattern", function(value)
-	scanForKnuckleBonesUsingPattern(value) 
+	scanForKnuckleBonesUsingPattern(value)
 end)
 
 configui.onUpdate("prev_button", function(value)
@@ -1879,6 +1891,7 @@ end)
 
 configui.onUpdate("add_attachment_button", function(value)
 	local newAttachmentName = configui.getValue("new_attachment_name")
+	if newAttachmentName == nil then newAttachmentName = "" end
 	if newAttachmentName == "" then
 		configui.hideWidget("new_attachment_error", false)
 		delay(3000, function()
@@ -1890,7 +1903,7 @@ configui.onUpdate("add_attachment_button", function(value)
 			local id = string.gsub(newAttachmentName, "%s+", "_")
 			id = string.lower(id)
 			configuration["attachments"][id] = {label = newAttachmentName}
-			
+
 			if configuration["animations"] ~= nil and configuration["animations"][selectedAnimationName] ~= nil and configuration["animations"][selectedAnimationName]["poses"] ~= nil then
 				configuration["animations"][selectedAnimationName]["poses"]["grip_right_weapon_" .. id] = { {"right_grip_weapon_" .. id,"on"}, {"right_trigger_weapon_" .. id,"off"} }
 				configuration["animations"][selectedAnimationName]["poses"]["grip_left_weapon_" .. id] = { {"left_grip_weapon_" .. id,"on"}, {"left_trigger_weapon_" .. id,"off"} }
@@ -2111,11 +2124,11 @@ lastFingerIndex = getFingerIndexForCurrentAnimationType()
 			-- end	
 		-- end
 	-- end
-	
+
 	-- table.insert(weaponMeshList, 1,  "None") 
 	-- configui.setSelections("weapon_mesh", weaponMeshList)
 	-- configui.setValue("weapon_mesh", 1)
-	
+
 	-- -- local meshPropertyName = configuration["profiles"][selectedProfileName][selectedMeshName]["Mesh"]
 	-- -- if meshPropertyName ~= "" then
 		-- -- for index, name in ipairs(meshList) do
@@ -2127,17 +2140,17 @@ lastFingerIndex = getFingerIndexForCurrentAnimationType()
 	-- -- end
 -- end
 
-local function loadProfileNames()	
+local function loadProfileNames()
 	profileNames = {}
-	if configuration["profiles"] == nil then 
-		configuration["profiles"] = {} 
+	if configuration["profiles"] == nil then
+		configuration["profiles"] = {}
 		isConfigurationDirty = true
 	end
 	for key, profile in pairs(configuration["profiles"]) do
-		table.insert(profileNames, key) 
+		table.insert(profileNames, key)
 	end
-	table.insert(profileNames, 1,  "Create new configuration") 
-	configui.setSelections("hands_profile_list", profileNames)	
+	table.insert(profileNames, 1,  "Create new configuration")
+	configui.setSelections("hands_profile_list", profileNames)
 end
 
 local function loadAnimationNames()
@@ -2147,10 +2160,10 @@ local function loadAnimationNames()
 		isConfigurationDirty = true
 	end
 	for key, animation in pairs(configuration["animations"]) do
-		table.insert(animationNames, key) 
+		table.insert(animationNames, key)
 	end
-	table.insert(animationNames, 1,  "Create new animation") 
-	configui.setSelections("animations_list", animationNames)	
+	table.insert(animationNames, 1,  "Create new animation")
+	configui.setSelections("animations_list", animationNames)
 end
 
 local function getProfileMeshNames()
@@ -2158,31 +2171,31 @@ local function getProfileMeshNames()
 	local profileMeshes = configuration["profiles"][selectedProfileName]
 	if profileMeshes == nil then profileMeshes = {} end
 	for key, mesh in pairs(profileMeshes) do
-		table.insert(profileMeshNames, key) 
+		table.insert(profileMeshNames, key)
 	end
-	table.insert(profileMeshNames, 1,  "Create new mesh") 
+	table.insert(profileMeshNames, 1,  "Create new mesh")
 	return profileMeshNames
 end
 
 local function loadProfile(index)
 	selectedProfileName = profileNames[index]
-	if configuration["profiles"][selectedProfileName] == nil then 
-		configuration["profiles"][selectedProfileName] = {} 
+	if configuration["profiles"][selectedProfileName] == nil then
+		configuration["profiles"][selectedProfileName] = {}
 		isConfigurationDirty = true
 	end
 	--profile = configuration["profiles"][selectedProfileName]
 	configui.setLabel("hands_profile_title", "Edit Configuration")
 	configui.setValue("hands_profile_name", selectedProfileName)
 	configui.hideWidget("hands_profile_name_instructions", selectedProfileName ~= nil and selectedProfileName ~= "")
-	
+
 	profileMeshNames = getProfileMeshNames()
-	configui.setSelections("hands_profile_mesh_list", profileMeshNames)	
+	configui.setSelections("hands_profile_mesh_list", profileMeshNames)
 end
 
 local function loadMesh(index)
 	selectedMeshName = profileMeshNames[index]
-	if configuration["profiles"][selectedProfileName][selectedMeshName] == nil then 
-		configuration["profiles"][selectedProfileName][selectedMeshName] = {} 
+	if configuration["profiles"][selectedProfileName][selectedMeshName] == nil then
+		configuration["profiles"][selectedProfileName][selectedMeshName] = {}
 		isConfigurationDirty = true
 	end
 	--mesh = configuration["profiles"][selectedProfileName][selectedMeshName]
@@ -2204,7 +2217,7 @@ local function getDefaultRotatorsForAnimations()
 			defaultAnimationRotators[handStr] = animation.getBoneTransforms(component, boneList , true, false, false)
 			if selectedProfileName ~= nil and selectedMeshName ~= nil and configuration ~= nil and configuration["profiles"] ~= nil and configuration["profiles"][selectedProfileName] ~= nil and configuration["profiles"][selectedProfileName][selectedMeshName] ~= nil then
 				local initialTransform = configuration["profiles"][selectedProfileName][selectedMeshName]["InitialTransform"]
-				if initialTransform ~= nil and initialTransform[handStr] ~= nil then			
+				if initialTransform ~= nil and initialTransform[handStr] ~= nil then
 					for j = 1, #boneList do
 						for i = 1 , 3 do
 							local fName = component:GetBoneName(boneList[j] + i - 1)
@@ -2215,7 +2228,7 @@ local function getDefaultRotatorsForAnimations()
 								end
 							end
 						end
-					end			
+					end
 				end
 			end
 		end
@@ -2245,15 +2258,15 @@ print("Current Step",currentStep)
 		selectedProfileName = profileNames[configui.getValue("hands_profile_list")]
 		local hasValidProfile = false
 		local profile = configuration["profiles"][selectedProfileName]
-		if profile ~= nil then 
+		if profile ~= nil then
 			for name, mesh in pairs(profile) do
-				if mesh["Left"] ~= nil and mesh["Left"]["AnimationID"] ~= nil then					
+				if mesh["Left"] ~= nil and mesh["Left"]["AnimationID"] ~= nil then
 					loadProfile(configui.getValue("hands_profile_list"))
-					
+
 					hasValidProfile = true
 					break
 				end
-			end	
+			end
 		end
 		if hasValidProfile then
 			configui.setLabel("edit_configuration_title", "Selected Configuration: " .. selectedProfileName)
@@ -2282,13 +2295,13 @@ print("Current Step",currentStep)
 			end
 			selectedProfileName = profileName
 		end
-		
+
 		configui.setLabel("hands_profile_mesh_title", "New Mesh")
 		configui.setValue("hands_profile_mesh_name", "Arms")
 		if configui.getValue("hands_profile_mesh_list") ~= 1 then
 			loadMesh(configui.getValue("hands_profile_mesh_list"))
 		end
-		
+
 		configui.disableWidget("next_button", false)
 	end
 	if currentStep == 5 then
@@ -2304,28 +2317,30 @@ print("Current Step",currentStep)
 			selectedMeshName = profileMeshName
 		end
 
-		loadCharacterMeshList()	
+		loadCharacterMeshList()
 		--configui.disableWidget("next_button", configui.getValue("mesh_property_name") == "")
 		configui.disableWidget("next_button", configuration["profiles"][selectedProfileName][selectedMeshName]["Mesh"] == nil or configuration["profiles"][selectedProfileName][selectedMeshName]["Mesh"] == "")
 	end
 	if currentStep == 6 then
 		if configuration["profiles"][selectedProfileName][selectedMeshName]["Offset"] ~= nil then
 			local offset = configuration["profiles"][selectedProfileName][selectedMeshName]["Offset"]
-			configui.setValue("mesh_rotation", {offset.Pitch,offset.Yaw,offset.Roll})	
+			configui.setValue("mesh_rotation", {offset.Pitch,offset.Yaw,offset.Roll})
 		end
 	end
 	if currentStep == 7 then
 		--save changes from previous step
 		if previousStep == 6 then
 			local offset = configui.getValue("mesh_rotation")
-			configuration["profiles"][selectedProfileName][selectedMeshName]["Offset"] = {X=0, Y=0, Z=0, Pitch=offset.X, Yaw=offset.Y, Roll=offset.Z}
-			isConfigurationDirty = true
+			if offset ~= nil then
+				configuration["profiles"][selectedProfileName][selectedMeshName]["Offset"] = {X=0, Y=0, Z=0, Pitch=offset.X, Yaw=offset.Y, Roll=offset.Z}
+				isConfigurationDirty = true
+			end
 		end
-		
+
 		if configuration["profiles"][selectedProfileName][selectedMeshName]["FOV"] ~= nil then
 			configui.setValue("fov_param_name", configuration["profiles"][selectedProfileName][selectedMeshName]["FOV"])
 		end
-		
+
 		updateHands()
 	end
 	if currentStep == 8 then
@@ -2343,11 +2358,11 @@ print("Current Step",currentStep)
 			configuration["profiles"][selectedProfileName][selectedMeshName]["Right"] = {}
 			isConfigurationDirty = true
 		end
-		
+
 		configuration["profiles"][selectedProfileName][selectedMeshName]["Right"]["UseDefaultPose"] = configui.getValue("use_default_pose")
 		configuration["profiles"][selectedProfileName][selectedMeshName]["Left"]["UseDefaultPose"] = configui.getValue("use_default_pose")
-		
-		
+
+
 		local leftParams = configuration["profiles"][selectedProfileName][selectedMeshName]["Left"]
 		local rightParams = configuration["profiles"][selectedProfileName][selectedMeshName]["Right"]
 		if leftParams ~= nil  then
@@ -2360,7 +2375,7 @@ print("Current Step",currentStep)
 			if leftParams["Scale"] ~= nil then
 				configui.setValue("left_hand_scale", leftParams["Scale"]) -- {X=leftParams["Scale"][1], Y=leftParams["Scale"][2], Z=leftParams["Scale"][3]})
 			end
-		end	
+		end
 		if rightParams ~= nil  then
 			if rightParams["Rotation"] ~= nil then
 				configui.setValue("right_hand_rotation", rightParams["Rotation"]) --{X=rightParams["Rotation"][1], Y=rightParams["Rotation"][2], Z=rightParams["Rotation"][3]})
@@ -2371,36 +2386,40 @@ print("Current Step",currentStep)
 			if rightParams["Scale"] ~= nil then
 				configui.setValue("right_hand_scale", rightParams["Scale"])  --  {X=rightParams["Scale"][1], Y=rightParams["Scale"][2], Z=rightParams["Scale"][3]})
 			end
-		end	
-		
+		end
+
 		bones = {}
 		--bones["mesh"] = meshList[selectedMeshIndex]
 		bones["names"] = animation.getBoneNames(getMeshComponent())
 		configui.setSelections("left_cutoff_bone", bones["names"])
 		configui.setSelections("right_cutoff_bone", bones["names"])
-		
-		local currentName = leftParams["Name"]
-		local index = configui.getValue("left_cutoff_bone")
-		if currentName ~= bones["names"][index] then
-			configui.setValue("left_cutoff_bone", 1)
-			--configui.setValue("left_cutoff_bone_name" , "")
-			leftParams["Name"] = ""
+
+		if leftParams ~= nil then
+			local currentName = leftParams["Name"]
+			local index = configui.getValue("left_cutoff_bone")
+			if currentName ~= bones["names"][index] then
+				configui.setValue("left_cutoff_bone", 1)
+				--configui.setValue("left_cutoff_bone_name" , "")
+				leftParams["Name"] = ""
+			end
 		end
-		
-		currentName = rightParams["Name"]
-		index = configui.getValue("right_cutoff_bone")
-		if currentName ~= bones["names"][index] then
-			configui.setValue("right_cutoff_bone", 1)
-			--configui.setValue("right_cutoff_bone_name" , "")
-			rightParams["Name"] = ""
+
+		if rightParams ~= nil then
+			local currentName = rightParams["Name"]
+			local index = configui.getValue("right_cutoff_bone")
+			if currentName ~= bones["names"][index] then
+				configui.setValue("right_cutoff_bone", 1)
+				--configui.setValue("right_cutoff_bone_name" , "")
+				rightParams["Name"] = ""
+			end
 		end
-		
+
 		updateBoneTransformVisibility()
 		updateHands()
-				
+
 		loadInitialTransform()
 		updateCutoffChildBonePicker()
-		
+
 		configui.hideWidget("next_button", false)
 
 	end
@@ -2408,44 +2427,56 @@ print("Current Step",currentStep)
 		--save changes from previous step
 		if previousStep == 8 then
 			local value = configui.getValue("left_hand_location")
-			configuration["profiles"][selectedProfileName][selectedMeshName]["Left"]["Location"] = {value.X, value.Y, value.Z}
+			if value ~= nil then
+				configuration["profiles"][selectedProfileName][selectedMeshName]["Left"]["Location"] = {value.X, value.Y, value.Z}
+			end
 			value = configui.getValue("left_hand_rotation")
-			configuration["profiles"][selectedProfileName][selectedMeshName]["Left"]["Rotation"] = {value.X, value.Y, value.Z}
+			if value ~= nil then
+				configuration["profiles"][selectedProfileName][selectedMeshName]["Left"]["Rotation"] = {value.X, value.Y, value.Z}
+			end
 			value = configui.getValue("left_hand_scale")
-			configuration["profiles"][selectedProfileName][selectedMeshName]["Left"]["Scale"] = {value.X, value.Y, value.Z}
-			
+			if value ~= nil then
+				configuration["profiles"][selectedProfileName][selectedMeshName]["Left"]["Scale"] = {value.X, value.Y, value.Z}
+			end
+
 			value = configui.getValue("right_hand_location")
-			configuration["profiles"][selectedProfileName][selectedMeshName]["Right"]["Location"] = {value.X, value.Y, value.Z}
+			if value ~= nil then
+				configuration["profiles"][selectedProfileName][selectedMeshName]["Right"]["Location"] = {value.X, value.Y, value.Z}
+			end
 			value = configui.getValue("right_hand_rotation")
-			configuration["profiles"][selectedProfileName][selectedMeshName]["Right"]["Rotation"] = {value.X, value.Y, value.Z}
+			if value ~= nil then
+				configuration["profiles"][selectedProfileName][selectedMeshName]["Right"]["Rotation"] = {value.X, value.Y, value.Z}
+			end
 			value = configui.getValue("right_hand_scale")
-			configuration["profiles"][selectedProfileName][selectedMeshName]["Right"]["Scale"] = {value.X, value.Y, value.Z}
-			
+			if value ~= nil then
+				configuration["profiles"][selectedProfileName][selectedMeshName]["Right"]["Scale"] = {value.X, value.Y, value.Z}
+			end
+
 			configuration["profiles"][selectedProfileName][selectedMeshName]["Right"]["AnimationID"] = "right_" .. string.lower(selectedMeshName)
 			configuration["profiles"][selectedProfileName][selectedMeshName]["Left"]["AnimationID"] = "left_" .. string.lower(selectedMeshName)
-			
+
 			saveInitialTransform()
-			
+
 			isConfigurationDirty = true
 		end
-		
-		configui.hideWidget("code_text", true)		
+
+		configui.hideWidget("code_text", true)
 		configui.hideWidget("next_button", true)
 		configui.hideWidget("generate_code_instructions", true)
 
 	end
-	if currentStep == 10 then		
+	if currentStep == 10 then
 		loadAnimationNames()
 		configui.hideWidget("exit_button", false)
 		configui.hideWidget("prev_button", true)
-		
+
 		profileMeshNames = getProfileMeshNames()
-		configui.setSelections("animation_hands_profile_mesh_list", uevrUtils.getArrayRange(profileMeshNames, 2, #profileMeshNames) )			
+		configui.setSelections("animation_hands_profile_mesh_list", uevrUtils.getArrayRange(profileMeshNames, 2, #profileMeshNames) )
 	end
 	if currentStep == 11 then
 		if configui.getValue("animations_list") ~= 1 then
 			selectedAnimationName = animationNames[configui.getValue("animations_list")]
-			configui.setValue("animation_name", selectedAnimationName)			
+			configui.setValue("animation_name", selectedAnimationName)
 		end
 		configui.setLabel("new_animation_title", configui.getValue("animations_list") == 1 and "New Animation" or "Edit Animation")
 		configui.hideWidget("new_animation_instructions", configui.getValue("animations_list") ~= 1 )
@@ -2473,16 +2504,16 @@ print("Current Step",currentStep)
 			isConfigurationDirty = true
 		end
 		animationPositions = configuration["animations"][selectedAnimationName]["positions"]
-		
+
 		bones = {}
 		bones["names"] = animation.getBoneNames(getMeshComponent())
-		
+
 		for _, knuckleName in ipairs(knuckles["names"]) do
-			configui.setSelections(knuckleName, bones["names"])		
+			configui.setSelections(knuckleName, bones["names"])
 		end
-		scanForKnuckleBonesUsingPattern("(ff)_(ii)_(h)") 
-		scanForKnuckleBonesUsingPattern("(Hh)Hand(Ff)(i)_JNT") 
-		scanForKnuckleBonesUsingPattern("(Hh)Hand(Ff)(i)") 		
+		scanForKnuckleBonesUsingPattern("(ff)_(ii)_(h)")
+		scanForKnuckleBonesUsingPattern("(Hh)Hand(Ff)(i)_JNT")
+		scanForKnuckleBonesUsingPattern("(Hh)Hand(Ff)(i)")
 	end
 	if currentStep == 13 then
 		updateAttachmentListUI()
@@ -2490,24 +2521,24 @@ print("Current Step",currentStep)
 		-- for index, knuckleIndex in ipairs(knuckleBoneList) do
 			-- --print(index, knuckleIndex)
 		-- end
-		
+
 		getDefaultRotatorsForAnimations()
 
 		configui.setSelections("animation_finger", getFingerNamesForCurrentAnimationType())
 
 		updateHandAnimation()
-		
+
 		--create default hand states if they dont exist
 		createDefaultAnimations()
-		
+
 		--loadWeaponMeshList()
 	end
 	if currentStep == 14 then
 		configui.hideWidget("generate_code_instructions_2", true)
 	end
-	
-	configui.hideWidget("done_button", not (currentStep == 9 or currentStep == 14)) 
-	configui.hideWidget("test_button", currentStep ~= 13) 
+
+	configui.hideWidget("done_button", not (currentStep == 9 or currentStep == 14))
+	configui.hideWidget("test_button", currentStep ~= 13)
 
 end
 
@@ -2542,7 +2573,7 @@ uevrUtils.registerLevelChangeCallback(function(level)
 		hands.reset()
 		handsWereCreated = false
 	end
-	
+
 	initHandsCreator()
 end)
 

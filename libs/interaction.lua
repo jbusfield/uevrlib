@@ -390,6 +390,7 @@ end
 local function destroyWidgetInteractionComponent()
     if widgetInteractionComponent ~= nil then
         uevrUtils.destroyComponent(widgetInteractionComponent, true, true)
+        ---@diagnostic disable-next-line: cast-local-type
         widgetInteractionComponent = nil
     end
     if trackerComponent ~= nil then
@@ -1051,6 +1052,7 @@ end)
 -- end)
 uevrUtils.registerPreLevelChangeCallback(function(level)
 	wasHovering = false
+    ---@diagnostic disable-next-line: cast-local-type
     widgetInteractionComponent = nil
     laserComponent = nil
     trackerComponent = nil

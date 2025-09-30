@@ -1,3 +1,91 @@
+--[[ 
+Usage
+    Drop the lib folder containing this file into your project folder
+    Add code like this in your script:
+        local pawnModule = require("libs/pawn")
+        local isDeveloperMode = true
+        pawnModule.init(isDeveloperMode)
+
+    Typical usage would be to run this code with developerMode set to true, then use the configuration tab
+    to set parameters the way you want them, then set developerMode to false for production use. Be sure
+    to ship your code with the data folder as well as the script folder because the data folder will contain
+    your parameter settings.
+        
+    Available functions:
+
+    pawnModule.init(isDeveloperMode, logLevel) - initializes the pawn management system with specified mode and log level
+        example:
+            pawnModule.init(true, LogLevel.Debug)
+
+    pawnModule.registerIsArmBonesHiddenCallback(func) - registers a callback for when arm bones visibility changes
+        example:
+			pawnModule.registerIsArmBonesHiddenCallback(function()
+				return isPlayerPlaying(), 0
+			end)
+
+    pawnModule.setBodyMeshName(val) - sets the name of the body mesh
+        example:
+            pawnModule.setBodyMeshName("Character.Body")
+
+    pawnModule.getBodyMesh() - gets the body mesh object
+        example:
+            local mesh = pawnModule.getBodyMesh()
+
+    pawnModule.getArmsMesh() - gets the arms mesh object
+        example:
+            local mesh = pawnModule.getArmsMesh()
+
+    pawnModule.getArmsAnimationMesh() - gets the arms animation mesh object (used for weapon animations)
+        example:
+            local mesh = pawnModule.getArmsAnimationMesh()
+
+    pawnModule.hideBodyMesh(val) - shows/hides the body mesh
+        example:
+            pawnModule.hideBodyMesh(true)  -- hides the body mesh
+            pawnModule.hideBodyMesh(false) -- shows the body mesh
+
+    pawnModule.hideAnimationArms(val) - shows/hides the animation arms
+        example:
+            pawnModule.hideAnimationArms(true)  -- hides animation arms
+            pawnModule.hideAnimationArms(false) -- shows animation arms
+
+    pawnModule.hideArms(val) - shows/hides the arms
+        example:
+            pawnModule.hideArms(true)  -- hides the arms
+            pawnModule.hideArms(false) -- shows the arms
+
+    pawnModule.hideArmsBones(val) - shows/hides the arm bones
+        example:
+            pawnModule.hideArmsBones(true)  -- hides arm bones
+            pawnModule.hideArmsBones(false) -- shows arm bones
+
+	pawnModule.setLogLevel(val) - sets the logging level for the pawn module
+        example:
+            pawnModule.setLogLevel(LogLevel.Debug)
+
+    pawnModule.print(text, logLevel) - prints a message with optional log level
+        example:
+            pawnModule.print("Message", LogLevel.Debug)
+
+    pawnModule.getConfigurationWidgets(options) - gets configuration UI widgets for user settings
+        example:
+            local widgets = pawnModule.getConfigurationWidgets({})
+
+    pawnModule.getDeveloperConfigurationWidgets(options) - gets configuration UI widgets for developer settings
+        example:
+            local widgets = pawnModule.getDeveloperConfigurationWidgets({})
+
+    pawnModule.showConfiguration(saveFileName, options) - shows user configuration UI
+        example:
+            pawnModule.showConfiguration("pawn_config.json", {})
+
+    pawnModule.showDeveloperConfiguration(saveFileName, options) - shows developer configuration UI
+        example:
+            pawnModule.showDeveloperConfiguration("pawn_dev_config.json", {})
+
+
+]]
+
 local uevrUtils = require("libs/uevr_utils")
 local configui = require("libs/configui")
 --local hands = require("libs/hands")
@@ -417,17 +505,19 @@ function M.registerIsArmBonesHiddenCallback(func)
 	-- table.insert(armBonesHiddenCallbacks, func)
 end
 
-local isHiddenLast = false
+local isHiddenLast = nil
 uevrUtils.setInterval(100, function()
 	local isHidden, priority = executeIsArmBonesHiddenCallback()
 	if isHidden ~= isHiddenLast then
 		isHiddenLast = isHidden
-		M.hideArmsBones(isHidden)
+		if isHidden ~= nil then
+			M.hideArmsBones(isHidden)
+		end
 	end
 end)
 
 uevrUtils.registerPreLevelChangeCallback(function(level)
-	isHiddenLast = false
+	isHiddenLast = nil
 end)
 
 return M
