@@ -117,7 +117,7 @@ M.InteractionType = {
     MeshAndWidget = 4
 }
 
-local interactionType = M.InteractionType.Mesh
+local interactionType = M.InteractionType.None
 local interactionAttachment = Handed.Right
 local showInteractionLaser = true
 local allowMouseUpdate = false

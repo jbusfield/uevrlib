@@ -68,6 +68,7 @@ local uevrUtils = require("libs/uevr_utils")
 local configui = require("libs/configui")
 local hands = require("libs/hands")
 local ui = require("libs/ui")
+local pawn = require("libs/pawn")
 
 local M = {}
 
@@ -82,11 +83,14 @@ local isParametersDirty = false
 local montageList = {}
 local montageIDList = {}
 
-local montageState = {leftArm = nil, rightArm = nil, motionSicknessCompensation = nil}
+local montageState = {leftArm = nil, rightArm = nil, pawnBody = nil, pawnArms = nil, pawnArmBones = nil, motionSicknessCompensation = nil}
 
 local stateConfig = {
     {stateKey = "leftArm", valueKey = "leftArmWhenActive"},
     {stateKey = "rightArm", valueKey = "rightArmWhenActive"},
+    {stateKey = "pawnBody", valueKey = "pawnBodyWhenActive"},
+    {stateKey = "pawnArms", valueKey = "pawnArmsWhenActive"},
+    {stateKey = "pawnArmBones", valueKey = "pawnArmBonesWhenActive"},
     {stateKey = "motionSicknessCompensation", valueKey = "motionSicknessCompensationWhenActive"},
 }
 
@@ -140,7 +144,7 @@ local developerWidgets = spliceableInlineArray{
 				{
 					widgetType = "input_text",
 					id = "leftArmWhenActivePriority",
-					label = " Left Arm",
+					label = " Left Arm Animation",
 					initialValue = "0",
 					width = 35,
 				},
@@ -156,7 +160,55 @@ local developerWidgets = spliceableInlineArray{
 				{
 					widgetType = "input_text",
 					id = "rightArmWhenActivePriority",
-					label = " Right Arm",
+					label = " Right Arm Animation",
+					initialValue = "0",
+					width = 35,
+				},
+				{
+					widgetType = "combo",
+					id = "pawnBodyWhenActive",
+					label = "",
+					selections = {"No effect", "Hidden", "Visible"},
+					initialValue = 1,
+					width = 150,
+				},
+				{ widgetType = "same_line" },
+				{
+					widgetType = "input_text",
+					id = "pawnBodyWhenActivePriority",
+					label = " Pawn Body",
+					initialValue = "0",
+					width = 35,
+				},
+				{
+					widgetType = "combo",
+					id = "pawnArmsWhenActive",
+					label = "",
+					selections = {"No effect", "Hidden", "Visible"},
+					initialValue = 1,
+					width = 150,
+				},
+				{ widgetType = "same_line" },
+				{
+					widgetType = "input_text",
+					id = "pawnArmsWhenActivePriority",
+					label = " Pawn Arms",
+					initialValue = "0",
+					width = 35,
+				},
+				{
+					widgetType = "combo",
+					id = "pawnArmBonesWhenActive",
+					label = "",
+					selections = {"No effect", "Hidden", "Visible"},
+					initialValue = 1,
+					width = 150,
+				},
+				{ widgetType = "same_line" },
+				{
+					widgetType = "input_text",
+					id = "pawnArmBonesWhenActivePriority",
+					label = " Pawn Arm Bones",
 					initialValue = "0",
 					width = 35,
 				},
@@ -313,31 +365,30 @@ local function updateCurrentMontageFields()
     end
 end
 
+local function updateStateIfHigherPriority(data, stateKey, valueKey)
+	local priority = tonumber(data[valueKey .. "Priority"]) or 0
+	if priority >= montageState[stateKey .. "Priority"] then
+		if data[valueKey] == 2 then
+			montageState[stateKey] = true
+			montageState[stateKey .. "Priority"] = priority
+		elseif data[valueKey] == 3 then
+			montageState[stateKey] = false
+			montageState[stateKey .. "Priority"] = priority
+		end
+	end
+end
+
 uevrUtils.registerMontageChangeCallback(function(montage, montageName)
+	for _, config in ipairs(stateConfig) do
+		montageState[config.stateKey] = nil
+		montageState[config.stateKey .. "Priority"] = 0
+	end
+
 	if parameters ~= nil and montageName ~= nil and montageName ~= "" and parameters["montagelist"] ~= nil and parameters["montagelist"][montageName] ~= nil  then
-       for _, config in ipairs(stateConfig) do
-            montageState[config.stateKey] = nil
-            montageState[config.stateKey .. "Priority"] = 0
-        end
-
 		local data = parameters["montagelist"][montageName]
-		local function updateStateIfHigherPriority(stateKey, valueKey)
-			local priority = tonumber(data[valueKey .. "Priority"]) or 0
-			if priority >= montageState[stateKey .. "Priority"] then
-				if data[valueKey] == 2 then
-					montageState[stateKey] = true
-					montageState[stateKey .. "Priority"] = priority
-				elseif data[valueKey] == 3 then
-					montageState[stateKey] = false
-					montageState[stateKey .. "Priority"] = priority
-				end
-			end
-		end
-
 		for _, config in ipairs(stateConfig) do
-			updateStateIfHigherPriority(config.stateKey, config.valueKey)
+			updateStateIfHigherPriority(data, config.stateKey, config.valueKey)
 		end
-
 	end
 end)
 
@@ -433,6 +484,18 @@ end)
 
 ui.registerIsInMotionSicknessCausingSceneCallback(function()
 	return montageState["motionSicknessCompensation"], montageState["motionSicknessCompensationPriority"]
+end)
+
+pawn.registerIsArmBonesHiddenCallback(function()
+	return montageState["pawnArmBones"], montageState["pawnArmBonesPriority"]
+end)
+
+pawn.registerIsPawnBodyHiddenCallback(function()
+	return montageState["pawnBody"], montageState["pawnBodyPriority"]
+end)
+
+pawn.registerIsPawnArmsHiddenCallback(function()
+	return montageState["pawnArms"], montageState["pawnArmsPriority"]
 end)
 
 -- Register update handlers for all state configs and their priorities

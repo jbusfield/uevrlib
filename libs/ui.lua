@@ -95,12 +95,11 @@ local headLockedUISize = 2.0
 local headLockedUIPosition = {X=0, Y=0, Z=2.0}
 local isFollowing = true
 local reduceMotionSickness = false
-local isInMotionSicknessCausingScene
-local isGamePaused = false
+local isInMotionSicknessCausingScene = false
 
 local viewportWidgetList = {}
 local viewportWidgetIDList = {}
-local viewportWidgetState = {viewLocked = nil, screen2D = nil, decouplePitch = nil, inputEnabled = nil, handsEnabled = nil}
+local uiState = {viewLocked = nil, screen2D = nil, decouplePitch = nil, inputEnabled = nil, handsEnabled = nil}
 
 local stateConfig = {
     {stateKey = "viewLocked", valueKey = "lockedUIWhenActive"},
@@ -110,9 +109,21 @@ local stateConfig = {
     {stateKey = "handsEnabled", valueKey = "handsWhenActive"}
 }
 
+local stateConfigGame = {
+    {stateKey = "viewLocked", valueKey = "lockedUIWhenInGameState"},
+    {stateKey = "screen2D", valueKey = "screen2DWhenInGameState"},
+    {stateKey = "decouplePitch", valueKey = "decouplePitchWhenInGameState"},
+    {stateKey = "inputEnabled", valueKey = "inputWhenInGameState"},
+    {stateKey = "handsEnabled", valueKey = "handsWhenInGameState"}
+}
+
+local gameStates = {"cutscene", "paused"}
+
 local parametersFileName = "ui_parameters"
 local parameters = {}
 local isParametersDirty = false
+
+local currentViewportWidgetsStr = ""
 
 local currentLogLevel = LogLevel.Error
 function M.setLogLevel(val)
@@ -125,6 +136,9 @@ function M.print(text, logLevel)
 	end
 end
 
+--start with lerping disabled in case it was left on accidentally
+uevrUtils.enableCameraLerp(false, true, true, true)
+
 local helpText = "This module allows you to configure how the system behaves when UI overlays such as dialogs and menus are active. You can set whether the view is locked when a widget is active, whether 2D mode is enabled, whether pitch is decoupled, whether input is enabled, and whether hands are shown. Settings are applied based on priority, so if multiple widgets are active, the one with the highest priority for a given setting takes precedence. For example, if one active widget sets 'Screen 2D' to 'Enable' with priority 5, and another active widget sets it to 'Disable' with priority 10, the screen will not be 2D because the second widget has a higher priority."
 local configWidgets = spliceableInlineArray{
 	{
@@ -133,7 +147,7 @@ local configWidgets = spliceableInlineArray{
 		initialOpen = true,
 		label = "UI Configuration"
 	},
-       {
+        {
             widgetType = "checkbox",
             id = "headLockedUI",
             label = "Enable Head Locked UI",
@@ -145,7 +159,7 @@ local configWidgets = spliceableInlineArray{
 			label = "UI Position",
 			speed = .01,
 			range = {-10, 10},
-			initialValue = headLockedUIPosition
+			initialValue = {headLockedUIPosition.X, headLockedUIPosition.Y, headLockedUIPosition.Z}
 		},
 		{
 			widgetType = "drag_float",
@@ -169,6 +183,109 @@ local configWidgets = spliceableInlineArray{
 local developerWidgets = spliceableInlineArray{
 	{
 		widgetType = "tree_node",
+		id = "uevr_ui_cutscene",
+		initialOpen = true,
+		label = "Game State Configuration"
+	},
+        {
+            widgetType = "combo",
+            id = "gameStateList",
+            label = "Game State",
+            selections = {"In Cutscene", "Game Paused"},
+            initialValue = 1,
+            --width = 150,
+        },
+            { widgetType = "indent", width = 20 },
+	        { widgetType = "begin_group", id = "paused_config", isHidden = false }, { widgetType = "indent", width = 5 }, { widgetType = "text", id = "game_state_description", label = "When in Cutscene" }, { widgetType = "begin_rect", },
+            { widgetType = "text", label = "State                                       Priority"},
+            {
+                widgetType = "combo",
+                id = "lockedUIWhenInGameState",
+                label = "",
+                selections = {"No effect", "Enable", "Disable"},
+                initialValue = 1,
+                width = 150,
+            },
+		    { widgetType = "same_line" },
+            {
+                widgetType = "input_text",
+                id = "lockedUIWhenInGameStatePriority",
+                label = " Locked UI",
+                initialValue = "0",
+                width = 35,
+            },
+            {
+                widgetType = "combo",
+                id = "screen2DWhenInGameState",
+                label = "",
+                selections = {"No effect", "Enable", "Disable"},
+                initialValue = 1,
+                width = 150,
+            },
+		    { widgetType = "same_line" },
+            {
+                widgetType = "input_text",
+                id = "screen2DWhenInGameStatePriority",
+                label = " Screen 2D",
+                initialValue = "0",
+                width = 35,
+            },
+            {
+                widgetType = "combo",
+                id = "decouplePitchWhenInGameState",
+                label = "",
+                selections = {"No effect", "Enable", "Disable"},
+                initialValue = 1,
+                width = 150,
+            },
+            { widgetType = "same_line" },
+            {
+                widgetType = "input_text",
+                id = "decouplePitchWhenInGameStatePriority",
+                label = " Decoupled Pitch",
+                initialValue = "0",
+                width = 35,
+            },
+            {
+                widgetType = "combo",
+                id = "inputWhenInGameState",
+                label = "",
+                selections = {"No effect", "Enable", "Disable"},
+                initialValue = 1,
+                width = 150,
+            },
+            { widgetType = "same_line" },
+            {
+                widgetType = "input_text",
+                id = "inputWhenInGameStatePriority",
+                label = " Input",
+                initialValue = "0",
+                width = 35,
+            },
+            {
+                widgetType = "combo",
+                id = "handsWhenInGameState",
+                label = "",
+                selections = {"No effect", "Show", "Hide"},
+                initialValue = 1,
+                width = 150,
+            },
+            { widgetType = "same_line" },
+            {
+                widgetType = "input_text",
+                id = "handsWhenInGameStatePriority",
+                label = " Hands",
+                initialValue = "0",
+                width = 35,
+            },
+            { widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },
+	        { widgetType = "unindent", width = 20 },
+	        { widgetType = "new_line" },
+	{
+		widgetType = "tree_pop"
+	},
+	{
+		widgetType = "tree_node",
 		id = "uevr_ui_widgets",
 		initialOpen = true,
 		label = "UI Widget Configuration"
@@ -176,14 +293,14 @@ local developerWidgets = spliceableInlineArray{
 		{
 			widgetType = "combo",
 			id = "knownViewportWidgetList",
-			label = "Widgets",
+			label = "Config Widget",
 			selections = {"None"},
 			initialValue = 1,
 --			width = 400
 		},
         {
             widgetType = "begin_group",
-            id = "knowViewportWidgetSettings",
+            id = "knownViewportWidgetSettings",
             isHidden = false
         },
             { widgetType = "indent", width = 20 },
@@ -269,30 +386,32 @@ local developerWidgets = spliceableInlineArray{
                 initialValue = "0",
                 width = 35,
             },
-            { widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },	
+            { widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },
             { widgetType = "unindent", width = 20 },
+		    { widgetType = "new_line" },
         {
             widgetType = "end_group",
         },
-		{ widgetType = "new_line" },
-		{ widgetType = "text", label = "Current Viewport Widgets"},
+        { widgetType = "indent", width = 10 },
+		{ widgetType = "text", label = "Current Active Widgets"},
         {
             widgetType = "input_text_multiline",
             id = "currentViewportWidgets",
             label = " ",
             initialValue = "",
-            size = {440, 230} -- optional, will default to full size without it
+            size = {440, 180} -- optional, will default to full size without it
         },
+        { widgetType = "unindent", width = 10 },
 		-- {
 		-- 	widgetType = "input_text",
 		-- 	id = "lastWidgetPlayed",
 		-- 	label = "Last Widget Played",
 		-- 	initialValue = "",
 		-- },
+	    { widgetType = "new_line" },
 	{
 		widgetType = "tree_pop"
 	},
-	{ widgetType = "new_line" },
 	{
 		widgetType = "tree_node",
 		id = "uevr_pawn_help_tree",
@@ -311,67 +430,63 @@ local developerWidgets = spliceableInlineArray{
 }
 
 local canFollowLast = nil
-local function updateUI()
-    --print(headLockedUI ,isFollowing, not isGamePaused)
-    local canFollowView = ((headLockedUI and viewportWidgetState["viewLocked"] ~= true) or (not headLockedUI and viewportWidgetState["viewLocked"] == true)) and isFollowing and not isGamePaused
-    if canFollowLast ~= canFollowView then
+local function updateUI(force)
+    local canFollowView = ((headLockedUI and uiState["viewLocked"] ~= true) or (not headLockedUI and uiState["viewLocked"] == true)) and isFollowing
+    if force or canFollowLast ~= canFollowView then
         uevrUtils.enableUIFollowsView(canFollowView)
         if canFollowView then
-            print("here 1")
             uevrUtils.setUIFollowsViewOffset(headLockedUIPosition)
             uevrUtils.setUIFollowsViewSize(headLockedUISize)
         else
-            print("here 2")
             uevrUtils.setUIFollowsViewOffset({X=0, Y=0, Z=2.0})
             uevrUtils.setUIFollowsViewSize(2.0)
-            --uevr.params.vr.recenter_view()
+            --if we're in a state where the view is locked, recenter the view so that we're facing the locked UI
             input.resetView()
         end
     end
     canFollowLast = canFollowView
 
-    if viewportWidgetState["screen2D_last"] ~= viewportWidgetState["screen2D"] then
-        if viewportWidgetState["screen2D_last"] == nil then
-            viewportWidgetState["screen2D_cache"] = uevrUtils.get_2D_mode()
+    if uiState["screen2D_last"] ~= uiState["screen2D"] then
+        if uiState["screen2D_last"] == nil then
+            uiState["screen2D_cache"] = uevrUtils.get_2D_mode()
         end
-        if viewportWidgetState["screen2D"] == nil then
-            uevrUtils.set_2D_mode(viewportWidgetState["screen2D_cache"])
+        if uiState["screen2D"] == nil then
+            uevrUtils.set_2D_mode(uiState["screen2D_cache"])
         else
-            uevrUtils.set_2D_mode(viewportWidgetState["screen2D"])
+            uevrUtils.set_2D_mode(uiState["screen2D"])
         end
-        viewportWidgetState["screen2D_last"] = viewportWidgetState["screen2D"]
+        uiState["screen2D_last"] = uiState["screen2D"]
         --M.print("Setting 2D mode to " .. tostring(viewportWidgetState["screen2D"]))
     end
 
-    if viewportWidgetState["decouplePitch_last"] ~= viewportWidgetState["decouplePitch"] then
-        if viewportWidgetState["decouplePitch_last"] == nil then
-            viewportWidgetState["decouplePitch_cache"] = uevrUtils.get_decoupled_pitch()
+    if uiState["decouplePitch_last"] ~= uiState["decouplePitch"] then
+        if uiState["decouplePitch_last"] == nil then
+            uiState["decouplePitch_cache"] = uevrUtils.get_decoupled_pitch()
         end
-        if viewportWidgetState["decouplePitch"] == nil then
-            uevrUtils.set_decoupled_pitch(viewportWidgetState["decouplePitch_cache"])
+        if uiState["decouplePitch"] == nil then
+            uevrUtils.set_decoupled_pitch(uiState["decouplePitch_cache"])
         else
-            uevrUtils.set_decoupled_pitch(viewportWidgetState["decouplePitch"])
+            uevrUtils.set_decoupled_pitch(uiState["decouplePitch"])
         end
-        viewportWidgetState["decouplePitch_last"] = viewportWidgetState["decouplePitch"]
+        uiState["decouplePitch_last"] = uiState["decouplePitch"]
     end
-
 end
 
 input.registerIsDisabledCallback(function()
-	return viewportWidgetState["inputEnabled"] ~= nil and (not viewportWidgetState["inputEnabled"]) or nil, viewportWidgetState["inputEnabledPriority"]
+	return uiState["inputEnabled"] ~= nil and (not uiState["inputEnabled"]) or nil, uiState["inputEnabledPriority"]
 end)
 
 hands.registerIsHiddenCallback(function()
-	return viewportWidgetState["handsEnabled"] ~= nil and (not viewportWidgetState["handsEnabled"]) or nil, viewportWidgetState["handsEnabledPriority"]
+	return uiState["handsEnabled"] ~= nil and (not uiState["handsEnabled"]) or nil, uiState["handsEnabledPriority"]
 end)
 
 local function showViewportWidgetEditFields()
     local index = configui.getValue("knownViewportWidgetList")
     if index == nil or index == 1 then
-        configui.setHidden("knowViewportWidgetSettings", true)
+        configui.setHidden("knownViewportWidgetSettings", true)
         return
     end
-    configui.setHidden("knowViewportWidgetSettings", false)
+    configui.setHidden("knownViewportWidgetSettings", false)
 
     local id = viewportWidgetIDList[index]
     if id ~= "" and parameters ~= nil and parameters["widgetlist"] ~= nil and parameters["widgetlist"][id] ~= nil then
@@ -382,7 +497,7 @@ local function showViewportWidgetEditFields()
                 local valueKey = config.valueKey
                 if data[valueKey] == nil then data[valueKey] = 1 end
                 configui.setValue(valueKey, data[valueKey], true)
-                
+
                 local priorityKey = valueKey .. "Priority"
                 if data[priorityKey] == nil or data[priorityKey] == "" then data[priorityKey] = "0" end
                 configui.setValue(priorityKey, data[priorityKey], true)
@@ -390,12 +505,28 @@ local function showViewportWidgetEditFields()
         end
     end
 end
---WBP_Fullscreenhint_Single_C
---TerminalSuslik
---WBP_TerminalWidget
---WBP_MainMenu_C
---WBP_Dialog_C
---WBP_CraftWindowMain_C
+
+local function showGameStateEditFields()
+    local index = configui.getValue("gameStateList")
+    local state = gameStates[index] or "cutscene"
+    configui.setLabel("game_state_description", "When " .. (state == "cutscene" and "in Cutscene" or "Game is Paused"))
+    if parameters ~= nil and parameters[state] ~= nil then
+        local data = parameters[state]
+        if data ~= nil then
+            -- Initialize and set values for all state configs
+            for _, config in ipairs(stateConfigGame) do
+                local valueKey = config.valueKey
+                if data[valueKey] == nil then data[valueKey] = 1 end
+                configui.setValue(valueKey, data[valueKey], true)
+
+                local priorityKey = valueKey .. "Priority"
+                if data[priorityKey] == nil or data[priorityKey] == "" then data[priorityKey] = "0" end
+                configui.setValue(priorityKey, data[priorityKey], true)
+            end
+        end
+    end
+end
+
 local function updateCurrentViewportWidgetFields()
     local index = configui.getValue("knownViewportWidgetList")
     if index ~= nil and index ~= 1 then
@@ -459,15 +590,26 @@ local function registerViewportWidgets()
  	end
 end
 
-local function updateViewportWidgets()
-    local currentWidgetsStr = ""
+local function updateStateIfHigherPriority(data, stateKey, valueKey)
+    local priority = tonumber(data[valueKey .. "Priority"]) or 0
+    if priority >= uiState[stateKey .. "Priority"] then
+        if data[valueKey] == 2 then
+            uiState[stateKey] = true
+            uiState[stateKey .. "Priority"] = priority
+        elseif data[valueKey] == 3 then
+            uiState[stateKey] = false
+            uiState[stateKey .. "Priority"] = priority
+        end
+    end
+end
+
+local function updateUIState()
     if parameters ~= nil and parameters["widgetlist"] ~= nil then
         for _, config in ipairs(stateConfig) do
-            viewportWidgetState[config.stateKey] = nil
-            viewportWidgetState[config.stateKey .. "Priority"] = 0
+            uiState[config.stateKey] = nil
+            uiState[config.stateKey .. "Priority"] = 0
         end
-    
-        --viewportWidgetState.activeWidget = nil
+
         local foundWidgets = {}
         local widgetClass = uevrUtils.get_class("Class /Script/UMG.UserWidget")
         ---@diagnostic disable-next-line: undefined-field
@@ -479,38 +621,32 @@ local function updateViewportWidgets()
                 local id = widget:get_class():get_full_name()
                 local data = parameters["widgetlist"][id]
                 if data ~= nil then
-                    if data["label"] ~= nil then         
-                        currentWidgetsStr = currentWidgetsStr .. data["label"] .. "\n"
-                    end
-
-                    local function updateStateIfHigherPriority(stateKey, valueKey)
-                        local priority = tonumber(data[valueKey .. "Priority"]) or 0
-                        if priority >= viewportWidgetState[stateKey .. "Priority"] then
-                            if data[valueKey] == 2 then
-                                viewportWidgetState[stateKey] = true
-                                viewportWidgetState[stateKey .. "Priority"] = priority
-                            elseif data[valueKey] == 3 then
-                                viewportWidgetState[stateKey] = false
-                                viewportWidgetState[stateKey .. "Priority"] = priority
-                            end
-                        end
+                    if data["label"] ~= nil then
+                        currentViewportWidgetsStr = currentViewportWidgetsStr .. data["label"] .. "\n"
                     end
 
                     for _, config in ipairs(stateConfig) do
-                        updateStateIfHigherPriority(config.stateKey, config.valueKey)
+                        updateStateIfHigherPriority(data, config.stateKey, config.valueKey)
                     end
-                    -- if data["shouldLockViewWhenVisible"] == true then
-                    --     viewportWidgetState.viewLocked = true
-                    -- end
-                    -- if data["useControllerMouse"] == true then
-                    --     viewportWidgetState.activeWidget = widget
-                    -- end
                 end
-            end  
+            end
         end
     end
-    configui.setValue("currentViewportWidgets", currentWidgetsStr) 
+
+    for index, gameStateName in ipairs(gameStates) do
+        local isActive = gameStateName == "cutscene" and uevrUtils.isInCutscene() or (gameStateName == "paused" and uevrUtils.isGamePaused())
+        if parameters ~= nil and parameters[gameStateName] ~= nil and isActive then
+            --print("Updating game state", gameStateName)
+            local data = parameters[gameStateName]
+            if data ~= nil then
+                for _, config in ipairs(stateConfigGame) do
+                    updateStateIfHigherPriority(data, config.stateKey, config.valueKey)
+                end
+            end
+        end
+    end
 end
+
 
 local function saveParameters()
 	M.print("Saving ui parameters " .. parametersFileName)
@@ -520,12 +656,68 @@ end
 local createDevMonitor = doOnce(function()
     uevrUtils.setInterval(500, function()
         registerViewportWidgets()
+        configui.setValue("currentViewportWidgets", currentViewportWidgetsStr)
+
         if isParametersDirty == true then
             saveParameters()
             isParametersDirty = false
         end
     end)
 end, Once.EVER)
+
+local enableCutsceneDetection = doOnce(function()
+    uevrUtils.registerCutsceneChangeCallback(function(inCutscene)
+        updateUIState()
+        updateUI()
+    end)
+end, Once.EVER)
+
+local enablePauseDetection = doOnce(function()
+    uevrUtils.registerGamePausedCallback(function(isPaused)
+        updateUIState()
+        updateUI()
+    end)
+end, Once.EVER)
+
+local function createGameStateMonitor()
+    for index, gameStateName in ipairs(gameStates) do
+        if parameters ~= nil and parameters[gameStateName] ~= nil then
+            local data = parameters[gameStateName]
+            if data ~= nil then
+                for _, config in ipairs(stateConfigGame) do
+                    if data[config.valueKey] == 2 or data[config.valueKey] == 3 then
+                        if gameStateName == "cutscene" then
+                            enableCutsceneDetection()
+                            M.print("Enabled cutscene detection")
+                        end
+                        if gameStateName == "paused" then
+                            enablePauseDetection()
+                            M.print("Enabled pause detection")
+                        end
+                        break
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function updateGameStateFields()
+    local index = configui.getValue("gameStateList")
+    local state = gameStates[index] or "cutscene"
+    if parameters[state] == nil then
+        parameters[state] = {}
+        isParametersDirty = true
+    end
+    for _, config in ipairs(stateConfigGame) do
+        local valueKey = config.valueKey
+        parameters[state][valueKey] = configui.getValue(valueKey)
+        parameters[state][valueKey .. "Priority"] = configui.getValue(valueKey .. "Priority")
+    end
+    isParametersDirty = true
+
+    createGameStateMonitor()
+end
 
 function M.init(isDeveloperMode, logLevel)
     if logLevel ~= nil then
@@ -552,7 +744,7 @@ function M.loadParameters(fileName)
 		M.print("Creating ui parameters")
 	end
 
-    updateViewportWidgetList()
+    createGameStateMonitor()
  end
 
 function M.getConfigurationWidgets(options)
@@ -594,10 +786,24 @@ for _, config in ipairs(stateConfig) do
     end)
 end
 
+for _, config in ipairs(stateConfigGame) do
+    local valueKey = config.valueKey
+    configui.onUpdate(valueKey, function(value)
+        updateGameStateFields()
+    end)
+    configui.onUpdate(valueKey .. "Priority", function(value)
+        updateGameStateFields()
+    end)
+end
 
 configui.onCreate("reduceMotionSickness", function(value)
 	reduceMotionSickness = value
 end)
+
+configui.onCreateOrUpdate("gameStateList", function(value)
+	showGameStateEditFields()
+end)
+
 
 configui.onUpdate("reduceMotionSickness", function(value)
 	if reduceMotionSickness then
@@ -623,7 +829,7 @@ configui.onCreateOrUpdate("headLockedUISize", function(value)
 end)
 
 function M.getViewportWidgetState()
-    return viewportWidgetState
+    return uiState
 end
 
 -- function M.getActiveViewportWidget()
@@ -633,7 +839,7 @@ end
 function M.disableHeadLockedUI(value)
     if not value ~= isFollowing then
         isFollowing = not value
-        updateUI()
+        updateUI(true)
     end
 end
 
@@ -643,19 +849,20 @@ function M.setIsHeadLocked(value)
     if uevrUtils.isGamePaused() then
         M.disableHeadLockedUI(true)
     end
-    updateUI()
+    updateUI(true)
 end
 
 function M.setHeadLockedUIPosition(value)
-    --M.print("Setting UI Position to " .. value.X .. ", " .. value.Y .. ", " .. value.Z)
+    M.print("Setting UI Position to " .. value.X .. ", " .. value.Y .. ", " .. value.Z)
     configui.setValue("headLockedUIPosition", value, true)
     headLockedUIPosition = value
-    updateUI()
+    updateUI(true)
 end
 function M.setHeadLockedUISize(value)
+    M.print("Setting UI Size to " .. tostring(value))
     configui.setValue("headLockedUISize", value, true)
     headLockedUISize = value
-    updateUI()
+    updateUI(true)
 end
 
 function M.setIsInMotionSicknessCausingScene(value)
@@ -673,17 +880,9 @@ function M.registerIsInMotionSicknessCausingSceneCallback(func)
 	uevrUtils.registerUEVRCallback("is_in_motion_sickness_causing_scene", func)
 end
 
-uevrUtils.registerGamePausedCallback(function(isPaused)
-    if isGamePaused ~= isPaused then
-        isGamePaused = isPaused
-        updateUI()
-    end
-end)
-
 local isInMotionSicknessCausingSceneLast = false
 uevrUtils.setInterval(200, function()
-    updateViewportWidgets()
-
+    updateUIState()
     updateUI()
 
     local m_isInMotionSicknessCausingScene, priority = executeIsInMotionSicknessCausingSceneCallback()

@@ -10,10 +10,6 @@ local objectsConnected = false
 function on_level_change(level)
 	uevrUtils.print("Level changed\n")
 
-	controllersModule.onLevelChange()
-	controllersModule.createController(0)
-	controllersModule.createController(1)
-	controllersModule.createController(2) 
 	objectsConnected = false
 		
 end
@@ -22,7 +18,7 @@ uevrUtils.setInterval(1000, function()
 	attachObjectsToControllers()
 end)
 
---replace this with a way to get a widget in your particular game
+--This works for Outer Worlds. Replace this with a way to get a widget in your particular game
 function getWidget()
 	local hud = uevrUtils.find_first_of("Class /Script/Indiana.HUDWidget", false)
 	if hud ~= nil then

@@ -29,6 +29,10 @@ local selectedMeshName = ""
 local animationNames = {}
 local selectedAnimationName = ""
 local lastFingerIndex = 1
+
+local ancestorBonesLeft = {}
+local ancestorBonesRight = {}
+
 -- local weaponMeshList = {}
 -- local weaponMesh = nil
 local attachmentLabels = {}
@@ -328,88 +332,115 @@ local configDefinition = {
 					id = "advanced_tree_node",
 					label = "Advanced"
 				},
-					{ widgetType = "text", wrapped = true, label = "Adjust all child bones"},
-					{
-						widgetType = "checkbox",
-						id = "use_default_pose",
-						label = "Use Default Pose",
-						initialValue = true
-					},
-					{
-						widgetType = "combo",
-						id = "cutoff_children_hand_picker",
-						label = "Hand",
-						selections = {"Left", "Right"},
-						initialValue = 1,
-						width = 130
-					},
-					{ widgetType = "same_line" },
-					{ widgetType = "text", label = "    "},
-					{ widgetType = "same_line" },
-					{
-						widgetType = "combo",
-						id = "cutoff_children_bone_picker",
-						label = "Child Bone",
-						selections = {"None"},
-						initialValue = 1,
-						width = 130
-					},
-					{
-						widgetType = "drag_float3",
-						id = "cutoff_children_rotation",
-						label = "Rotation",
-						speed = 1,
-						range = {-180, 180},
-						initialValue = {0.0, 0.0, 0.0},
-						isHidden = true,
-						width = 270
-					},
-					{ widgetType = "same_line" },
-					{
-						widgetType = "button",
-						id = "cutoff_children_zero_current_button",
-						label = "Zero",
-						size = {40,24},
-					},
-					{ widgetType = "same_line" },
-					{
-						widgetType = "button",
-						id = "cutoff_children_copy_current_button",
-						label = "Copy",
-						size = {40,24},
-					},
-					{ widgetType = "same_line" },
-					{
-						widgetType = "button",
-						id = "cutoff_children_paste_current_button",
-						label = "Paste",
-						size = {40,24},
-					},
-					{
-						widgetType = "drag_float3",
-						id = "cutoff_children_location",
-						label = "Location",
-						speed = 0.05,
-						range = {-50, 50},
-						initialValue = {0.0, 0.0, 0.0},
-						isHidden = true,
-						width = 270
-					},
-					{ widgetType = "indent", width = 30 },
-					{
-						widgetType = "button",
-						id = "cutoff_children_capture_hand_button",
-						label = "Capture Hand Transforms",
-						size = {180,24},
-					},
-					{ widgetType = "same_line" },
-					{
-						widgetType = "button",
-						id = "cutoff_children_revert_all_button",
-						label = "Revert All Child Transforms",
-						size = {180,24},
-					},
-					{ widgetType = "unindent", width = 120 },
+--					{ widgetType = "text", wrapped = true, label = "Adjust all child bones"},
+					{ widgetType = "begin_group", id = "advanced_child_bone_group", isHidden = false }, { widgetType = "text", label = "Adjust Individual Child Bone Transforms" }, { widgetType = "begin_rect", },
+						{
+							widgetType = "checkbox",
+							id = "use_default_pose",
+							label = "Use Default Pose",
+							initialValue = true
+						},
+						{
+							widgetType = "combo",
+							id = "cutoff_children_hand_picker",
+							label = "Hand",
+							selections = {"Left", "Right"},
+							initialValue = 1,
+							width = 130
+						},
+						{ widgetType = "same_line" },
+						{ widgetType = "text", label = "    "},
+						{ widgetType = "same_line" },
+						{
+							widgetType = "combo",
+							id = "cutoff_children_bone_picker",
+							label = "Child Bone",
+							selections = {"None"},
+							initialValue = 1,
+							width = 130
+						},
+						{
+							widgetType = "drag_float3",
+							id = "cutoff_children_rotation",
+							label = "Rotation",
+							speed = 1,
+							range = {-180, 180},
+							initialValue = {0.0, 0.0, 0.0},
+							isHidden = true,
+							width = 270
+						},
+						{ widgetType = "same_line" },
+						{
+							widgetType = "button",
+							id = "cutoff_children_zero_current_button",
+							label = "Zero",
+							size = {40,24},
+						},
+						{ widgetType = "same_line" },
+						{
+							widgetType = "button",
+							id = "cutoff_children_copy_current_button",
+							label = "Copy",
+							size = {40,24},
+						},
+						{ widgetType = "same_line" },
+						{
+							widgetType = "button",
+							id = "cutoff_children_paste_current_button",
+							label = "Paste",
+							size = {40,24},
+						},
+						{
+							widgetType = "drag_float3",
+							id = "cutoff_children_location",
+							label = "Location",
+							speed = 0.05,
+							range = {-50, 50},
+							initialValue = {0.0, 0.0, 0.0},
+							isHidden = true,
+							width = 270
+						},
+						{ widgetType = "indent", width = 30 },
+						{
+							widgetType = "button",
+							id = "cutoff_children_capture_hand_button",
+							label = "Capture Hand Transforms",
+							size = {180,24},
+						},
+						{ widgetType = "same_line" },
+						{
+							widgetType = "button",
+							id = "cutoff_children_revert_all_button",
+							label = "Revert All Child Transforms",
+							size = {180,24},
+						},
+						--{ widgetType = "unindent", width = 120 },
+					{ widgetType = "end_rect", additionalSize = 12, rounding = 5 },  { widgetType = "end_group", },
+					{ widgetType = "new_line" },
+					{ widgetType = "begin_group", id = "advanced_animation_settings_group", isHidden = false }, { widgetType = "text", label = "Animations" }, { widgetType = "begin_rect", },
+						{
+							widgetType = "checkbox",
+							id = "optimize_animations",
+							label = "Optimize Animations",
+							initialValue = true
+						},
+						{
+							widgetType = "combo",
+							id = "optimize_animations_root_bone_left",
+							label = "Optimization Root Bone Left",
+							selections = {"None"},
+							initialValue = 1,
+							width = 130
+						},
+						{
+							widgetType = "combo",
+							id = "optimize_animations_root_bone_right",
+							label = "Optimization Root Bone Right",
+							selections = {"None"},
+							initialValue = 1,
+							width = 130
+						},
+					{ widgetType = "end_rect", additionalSize = 12, rounding = 5 },  { widgetType = "end_group", },
 				{
 					widgetType = "tree_pop"
 				},
@@ -1528,28 +1559,55 @@ local function createDefaultAnimations()
 	end
 end
 
+local function updateHandAnimationType(handed, animType)
+	local typeText = {"grip", "trigger", "thumb", "grip_weapon", "trigger_weapon"}
+	local stateText = {"on", "off"}
+	local handStr = handed == Handed.Left and "left" or "right"
+	local typeStr = handStr .. "_" .. typeText[animType] .. getAttachmentExtension(animType)
+	local component = hands.getHandComponent(handed)
+	if component ~= nil and animationPositions[typeStr] ~= nil then
+		local currentAnimation = animationPositions[typeStr][stateText[configui.getValue("animation_state")]]
+		animation.doAnimate(currentAnimation, component)
+	end
+end
 --called when animation type or state is changed
 local function updateHandAnimation()
 	--load existing animation from animations
-	local typeText = {"grip", "trigger", "thumb", "grip_weapon", "trigger_weapon"}
-	local stateText = {"on", "off"}
+	--local typeText = {"grip", "trigger", "thumb", "grip_weapon", "trigger_weapon"}
+	--local stateText = {"on", "off"}
 	if configui.getValue("animation_hand") == 1 or configui.getValue("animation_hand") == 3 then
-		local handStr = "left"
-		local typeStr = handStr .. "_" .. typeText[configui.getValue("animation_type")] .. getAttachmentExtension(configui.getValue("animation_type"))
-		local component = hands.getHandComponent(Handed.Left)
-		if component ~= nil and animationPositions[typeStr] ~= nil then
-			local currentAnimation = animationPositions[typeStr][stateText[configui.getValue("animation_state")]]
-			animation.doAnimate(currentAnimation, component)
+		if configui.getValue("animation_type") == 1 or configui.getValue("animation_type") == 2 or configui.getValue("animation_type") == 3 then
+			updateHandAnimationType(Handed.Left, 1)
+			updateHandAnimationType(Handed.Left, 2)
+			updateHandAnimationType(Handed.Left, 3)
+		elseif configui.getValue("animation_type") == 4 or configui.getValue("animation_type") == 5 then
+			updateHandAnimationType(Handed.Left, 4)
+			updateHandAnimationType(Handed.Left, 5)
 		end
+		-- local handStr = "left"
+		-- local typeStr = handStr .. "_" .. typeText[configui.getValue("animation_type")] .. getAttachmentExtension(configui.getValue("animation_type"))
+		-- local component = hands.getHandComponent(Handed.Left)
+		-- if component ~= nil and animationPositions[typeStr] ~= nil then
+		-- 	local currentAnimation = animationPositions[typeStr][stateText[configui.getValue("animation_state")]]
+		-- 	animation.doAnimate(currentAnimation, component)
+		-- end
 	end
 	if configui.getValue("animation_hand") == 2 or configui.getValue("animation_hand") == 3 then
-		local handStr = "right"
-		local typeStr = handStr .. "_" .. typeText[configui.getValue("animation_type")] .. getAttachmentExtension(configui.getValue("animation_type"))
-		local component = hands.getHandComponent(Handed.Right)
-		if component ~= nil  and animationPositions[typeStr] ~= nil then
-			local currentAnimation = animationPositions[typeStr][stateText[configui.getValue("animation_state")]]
-			animation.doAnimate(currentAnimation, component)
+		if configui.getValue("animation_type") == 1 or configui.getValue("animation_type") == 2 or configui.getValue("animation_type") == 3 then
+			updateHandAnimationType(Handed.Right, 1)
+			updateHandAnimationType(Handed.Right, 2)
+			updateHandAnimationType(Handed.Right, 3)
+		elseif configui.getValue("animation_type") == 4 or configui.getValue("animation_type") == 5 then
+			updateHandAnimationType(Handed.Right, 4)
+			updateHandAnimationType(Handed.Right, 5)
 		end
+		-- local handStr = "right"
+		-- local typeStr = handStr .. "_" .. typeText[configui.getValue("animation_type")] .. getAttachmentExtension(configui.getValue("animation_type"))
+		-- local component = hands.getHandComponent(Handed.Right)
+		-- if component ~= nil  and animationPositions[typeStr] ~= nil then
+		-- 	local currentAnimation = animationPositions[typeStr][stateText[configui.getValue("animation_state")]]
+		-- 	animation.doAnimate(currentAnimation, component)
+		-- end
 	end
 
 	updateBoneRotationUI()
@@ -1762,6 +1820,70 @@ local function captureCurrentHandTransforms()
 	end
 end
 
+local function setOptimizeAnimations(value)
+	if configuration["profiles"][selectedProfileName][selectedMeshName] ~= nil then
+		configuration["profiles"][selectedProfileName][selectedMeshName]["OptimizeAnimations"] = value
+	end
+	isConfigurationDirty = true
+end
+
+local function setOptimizationRootBone(hand, value)
+	if hand == Handed.Left then
+		if configuration["profiles"][selectedProfileName][selectedMeshName] ~= nil and configuration["profiles"][selectedProfileName][selectedMeshName]["Left"] ~= nil then
+			configuration["profiles"][selectedProfileName][selectedMeshName]["Left"]["OptimizeAnimationsRootBone"] = ancestorBonesLeft[value]
+		end
+	else
+		if configuration["profiles"][selectedProfileName][selectedMeshName] ~= nil and configuration["profiles"][selectedProfileName][selectedMeshName]["Right"] ~= nil then
+			configuration["profiles"][selectedProfileName][selectedMeshName]["Right"]["OptimizeAnimationsRootBone"] = ancestorBonesRight[value]
+		end
+	end
+	isConfigurationDirty = true
+end
+
+local function updateOptimizationBoneList()
+	local leftParams = configuration["profiles"][selectedProfileName][selectedMeshName]["Left"]
+	local rightParams = configuration["profiles"][selectedProfileName][selectedMeshName]["Right"]
+	local currentLeftBone = leftParams and leftParams["OptimizeAnimationsRootBone"] or ""
+	local currentRightBone = rightParams and rightParams["OptimizeAnimationsRootBone"] or ""
+
+	ancestorBonesLeft = animation.getAncestorBones(getMeshComponent(), leftParams and leftParams["Name"] or nil)
+	for i = 1, math.floor(#ancestorBonesLeft / 2) do
+		ancestorBonesLeft[i], ancestorBonesLeft[#ancestorBonesLeft - i + 1] = ancestorBonesLeft[#ancestorBonesLeft - i + 1], ancestorBonesLeft[i]
+	end
+
+	ancestorBonesRight = animation.getAncestorBones(getMeshComponent(), rightParams and rightParams["Name"] or nil)
+	for i = 1, math.floor(#ancestorBonesRight / 2) do
+		ancestorBonesRight[i], ancestorBonesRight[#ancestorBonesRight - i + 1] = ancestorBonesRight[#ancestorBonesRight - i + 1], ancestorBonesRight[i]
+	end
+
+	configui.setSelections("optimize_animations_root_bone_left", ancestorBonesLeft)
+	configui.setSelections("optimize_animations_root_bone_right", ancestorBonesRight)
+	local leftIndex = 1
+	local rightIndex = 1
+	for index, name in ipairs(ancestorBonesLeft) do
+		if name == currentLeftBone then
+			leftIndex = index
+			break
+		end
+	end
+	for index, name in ipairs(ancestorBonesRight) do
+		if name == currentRightBone then
+			rightIndex = index
+			break
+		end
+	end
+	configui.setValue("optimize_animations_root_bone_left", leftIndex)
+	configui.setValue("optimize_animations_root_bone_right", rightIndex)
+end
+
+local function updateOptimizationUI()
+	updateOptimizationBoneList()
+	if configuration["profiles"][selectedProfileName][selectedMeshName] ~= nil then
+		configui.setValue("optimize_animations", configuration["profiles"][selectedProfileName][selectedMeshName]["OptimizeAnimations"] ~= false)
+	end
+end
+
+
 configui.onUpdate("test_button", function(value)
 	isTesting = not isTesting
 	updateHands()
@@ -1844,7 +1966,7 @@ end)
 
 configui.onUpdate("animation_hand", function(value)
 	updateHandAnimation()
-	updateBoneRotationUI()
+	--updateBoneRotationUI() -- this is called by updateHandAnimation
 end)
 
 configui.onUpdate("animation_finger", function(value)
@@ -1934,6 +2056,7 @@ configui.onUpdate("left_cutoff_bone", function(value)
 	--if configui.getValue("left_cutoff_bone_name") ~= "" then
 		updateHands()
 	--end
+	updateOptimizationBoneList()
 	updateBoneTransformVisibility()
 end)
 
@@ -1944,7 +2067,20 @@ configui.onUpdate("right_cutoff_bone", function(value)
 	--if configui.getValue("right_cutoff_bone_name") ~= "" then
 		updateHands()
 	--end
+	updateOptimizationBoneList()
 	updateBoneTransformVisibility()
+end)
+
+configui.onUpdate("optimize_animations_root_bone_left", function(value)
+	setOptimizationRootBone(Handed.Left, value)
+end)
+
+configui.onUpdate("optimize_animations_root_bone_right", function(value)
+	setOptimizationRootBone(Handed.Right, value)
+end)
+
+configui.onUpdate("optimize_animations", function(value)
+	setOptimizeAnimations(value)
 end)
 
 configui.onUpdate("left_hand_rotation", function(value)
@@ -2068,7 +2204,8 @@ configui.onUpdate("capture_hand_button", function(value)
 end)
 
 configui.onUpdate("attachments_list", function(value)
-	updateAnimationDescription()
+	updateHandAnimation()
+	--updateAnimationDescription() --already called by updateHandAnimation
 end)
 
 
@@ -2251,6 +2388,7 @@ print("Current Step",currentStep)
 		if not hands.exists() then
 			hands.createFromConfig(configuration, selectedProfileName, selectedAnimationName)
 		end
+		hands.resetAutoCreate()
 	end
 	if currentStep == 2 then
 		hands.destroyHands()
@@ -2414,6 +2552,7 @@ print("Current Step",currentStep)
 			end
 		end
 
+		updateOptimizationUI()
 		updateBoneTransformVisibility()
 		updateHands()
 
@@ -2543,19 +2682,19 @@ print("Current Step",currentStep)
 end
 
 local function loadConfiguration()
-print("Loading configuration")
+--print("Loading configuration")
 	configuration = json.load_file(handConfigurationFileName .. ".json")
 
 	if configuration == nil then
 		configuration = {}
 	else
-		print("Hands configuration not found")
+		print("Hands configuration found")
 	end
 	return configuration
 end
 
 local function saveConfiguration()
-print("Saving configuration", handConfigurationFileName)
+--print("Saving configuration", handConfigurationFileName)
 	json.dump_file(handConfigurationFileName .. ".json", configuration, 4)
 end
 

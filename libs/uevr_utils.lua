@@ -619,7 +619,7 @@ zero_color = nil
 game_engine = nil
 
 static_mesh_component_c = nil
-motion_controller_component_c = nil			 
+motion_controller_component_c = nil
 scene_component_c = nil
 actor_c = nil
 
@@ -639,7 +639,7 @@ kismet_system_library = nil
 kismet_math_library = nil
 ---@class kismet_string_library
 ---@field [any] any
-kismet_string_library = nil 
+kismet_string_library = nil
 ---@class kismet_rendering_library
 ---@field [any] any
 kismet_rendering_library = nil
@@ -660,7 +660,7 @@ LogLevel = {
 LogLevelString = {[0]="off",[1]="crit",[2]="error",[3]="warn",[4]="info",[5]="debug",[6]="trace",[99]="ignore"}
 
 Handed = {
-	Left = 0, 
+	Left = 0,
 	Right = 1
 }
 -------------------------------
@@ -700,7 +700,7 @@ local function updateKeyPress()
 			if elem.isPressed == false then
 				elem.func()
 				elem.isPressed = true
-			end	
+			end
 		else
 			elem.isPressed = false
 		end
@@ -768,7 +768,7 @@ local function updateLerp(delta)
 	local cleanup = {}
 	for id, lerp in pairs(lerpList) do
 		lerp:tick(delta)
-		if lerp:isFinished() then table.insert(cleanup, id) end		
+		if lerp:isFinished() then table.insert(cleanup, id) end
 	end
 	for i = 1, #cleanup do
 		lerpList[cleanup[i]] = nil
@@ -871,7 +871,7 @@ local function updateLazyPoll(delta)
 			on_lazy_poll()
 			lazyElapsedTime = 0
 		end
-	end 
+	end
 end
 
 local function registerUEVRCallback(callbackName, callbackFunc)
@@ -977,16 +977,16 @@ local function updateCurrentLevel()
 		local level = getCurrentLevel()
 		if level ~= nil and lastLevel ~= level then
 			resetPerLevelDoOnce()
-			
+
 			local levelName = M.getShortName(level:get_outer())
 			executeUEVRCallbacks("on_pre_level_change", level, levelName)
-			
+
 			if on_level_change ~= nil then
 				on_level_change(level, levelName)
 			end
-			
+
 			executeUEVRCallbacks("on_level_change", level, levelName)
-		end	
+		end
 		lastLevel = level
 	end
 end
@@ -1003,7 +1003,7 @@ local function updateGamePaused()
 				on_game_paused(m_isPaused)
 			end
 			executeUEVRCallbacks("on_game_paused", m_isPaused)
-		end	
+		end
 		isPaused = m_isPaused
 	end
 end
@@ -1012,24 +1012,29 @@ local function updateCutscene()
 	if on_cutscene_change ~= nil or hasUEVRCallbacks("on_cutscene_change") then --don't bother doing anything if nothing is listening
 		if M.getValid(pawn) ~= nil then
 			local playerController = pawn.Controller
-			if playerController ~= nil then	
+			if playerController ~= nil then
 				local cameraManager = playerController.PlayerCameraManager
 				if cameraManager ~= nil then
 					local target = cameraManager.ViewTarget.Target
-					--print(target:get_class():get_full_name())
+--print(target:get_class():get_full_name())
 					local m_isInCutscene = false
-					if target:is_a(M.get_class("Class /Script/CinematicCamera.CineCameraActor")) then
-						m_isInCutscene = true
-						--print("In Cinematic")
+					if target ~= nil then
+						if target:is_a(M.get_class("Class /Script/CinematicCamera.CineCameraActor")) then
+							m_isInCutscene = true
+							--print("In Cinematic")
+						elseif target.ActiveCamera ~= nil and target.ActiveCamera.Camera ~= nil and target.ActiveCamera.Camera:is_a(M.get_class("Class /Script/CinematicCamera.CineCameraComponent")) then
+							m_isInCutscene = true
+							--print("In Cinematic")
+						end
 					end
-					
+
 					if isInCutscene ~= m_isInCutscene then
 						if on_cutscene_change ~= nil then
 							on_cutscene_change(m_isInCutscene)
 						end
 						executeUEVRCallbacks("on_cutscene_change", m_isInCutscene)
-					end		
-					isInCutscene = m_isInCutscene					
+					end
+					isInCutscene = m_isInCutscene
 				end
 			end
 		end
@@ -1047,8 +1052,8 @@ local function updateMontage()
 					on_montage_change(montage, montageName)
 				end
 				executeUEVRCallbacks("on_montage_change", montage, montageName)
-			end		
-			currentMontage = montage	
+			end
+			currentMontage = montage
 		end
 	end
 end
@@ -1056,14 +1061,14 @@ end
 
 local isInitialized = false
 function M.initUEVR(UEVR, callbackFunc)
-	if isInitialized == true then 
+	if isInitialized == true then
 		if callbackFunc ~= nil then
 			callbackFunc()
 		end
-		return 
+		return
 	end
 	isInitialized = true
-	
+
 	if UEVR == nil then
 		UEVR = require("LuaVR")
 		usingLuaVR = true
@@ -1072,36 +1077,36 @@ function M.initUEVR(UEVR, callbackFunc)
 	uevr = UEVR
 	local params = uevr.params
 	M.print("UEVR loaded " .. tostring(params.version.major) .. "." .. tostring(params.version.minor) .. "." .. tostring(params.version.patch))
-	
+
 	pawn = uevr.api:get_local_pawn(0)
 
 	temp_vec3 = Vector3d.new(0, 0, 0)
 	temp_vec3f = Vector3f.new(0, 0, 0)
 	temp_quatf = Quaternionf.new(0, 0, 0, 0)
-	
+
 	kismet_system_library = M.find_default_instance("Class /Script/Engine.KismetSystemLibrary")
 	kismet_math_library = M.find_default_instance("Class /Script/Engine.KismetMathLibrary")
 	kismet_string_library = M.find_default_instance("Class /Script/Engine.KismetStringLibrary")
 	kismet_rendering_library = M.find_default_instance("Class /Script/Engine.KismetRenderingLibrary")
 	Statics = M.find_default_instance("Class /Script/Engine.GameplayStatics")
 	WidgetBlueprintLibrary = M.find_default_instance("Class /Script/UMG.WidgetBlueprintLibrary")
-	
+
 	game_engine = M.find_first_of("Class /Script/Engine.GameEngine")
-	
+
 	static_mesh_component_c = M.get_class("Class /Script/Engine.StaticMeshComponent")
-	motion_controller_component_c = M.get_class("Class /Script/HeadMountedDisplay.MotionControllerComponent")		 
+	motion_controller_component_c = M.get_class("Class /Script/HeadMountedDisplay.MotionControllerComponent")
 	scene_component_c = M.get_class("Class /Script/Engine.SceneComponent")
 	actor_c = M.get_class("Class /Script/Engine.Actor")
-	
+
 	zero_color = M.get_reuseable_struct_object("ScriptStruct /Script/CoreUObject.LinearColor")
 	reusable_hit_result = M.get_reuseable_struct_object("ScriptStruct /Script/Engine.HitResult")
 	temp_transform = M.get_reuseable_struct_object("ScriptStruct /Script/CoreUObject.Transform")
-	
+
 	uevr.sdk.callbacks.on_xinput_get_state(function(retval, user_index, state)
 		if on_xinput_get_state ~= nil then
 			on_xinput_get_state(retval, user_index, state)
 		end
-		
+
 		executeUEVRCallbacks("onInputGetState", retval, user_index, state)
 	end)
 
@@ -1109,16 +1114,16 @@ function M.initUEVR(UEVR, callbackFunc)
 		if on_pre_calculate_stereo_view_offset ~= nil then
 			on_pre_calculate_stereo_view_offset(device, view_index, world_to_meters, position, rotation, is_double)
 		end
-		
+
 		executeUEVRCallbacks("preCalculateStereoView", device, view_index, world_to_meters, position, rotation, is_double)
 	end)
 
 	uevr.sdk.callbacks.on_post_calculate_stereo_view_offset(function(device, view_index, world_to_meters, position, rotation, is_double)
-		local success, response = pcall(function()		
+		local success, response = pcall(function()
 			if on_post_calculate_stereo_view_offset ~= nil then
 				on_post_calculate_stereo_view_offset(device, view_index, world_to_meters, position, rotation, is_double)
 			end
-			
+
 			executeUEVRCallbacks("postCalculateStereoView", device, view_index, world_to_meters, position, rotation, is_double)
 		end)
 		if success == false then
@@ -1127,7 +1132,7 @@ function M.initUEVR(UEVR, callbackFunc)
 	end)
 
 	uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
-		local success, response = pcall(function()		
+		local success, response = pcall(function()
 			pawn = uevr.api:get_local_pawn(0)
 			updateCurrentLevel()
 			updateDelay(delta)
@@ -1141,7 +1146,7 @@ function M.initUEVR(UEVR, callbackFunc)
 			if on_pre_engine_tick ~= nil then
 				on_pre_engine_tick(engine, delta)
 			end
-			
+
 			executeUEVRCallbacks("preEngineTick", engine, delta)
 		end)
 		if success == false then
@@ -1153,10 +1158,10 @@ function M.initUEVR(UEVR, callbackFunc)
 		if on_post_engine_tick ~= nil then
 			on_post_engine_tick(engine, delta)
 		end
-			
+
 		executeUEVRCallbacks("postEngineTick", engine, delta)
 	end)
-	
+
 	if callbackFunc ~= nil then
 		callbackFunc()
 	end
@@ -1294,14 +1299,14 @@ function M.vector(...)
 	local reuseable = false
 
 	if #arg == 1 or #arg == 2 then
-		if type(arg[1]) == "table" or type(arg[1]) == "userdata" then 
+		if type(arg[1]) == "table" or type(arg[1]) == "userdata" then
 			x = (arg[1].X ~= nil) and arg[1].X or ((arg[1].x ~= nil) and arg[1].x or ((#arg[1] > 0) and arg[1][1] or 0.0))
 			y = (arg[1].Y ~= nil) and arg[1].Y or ((arg[1].y ~= nil) and arg[1].y or ((#arg[1] > 1) and arg[1][2] or 0.0))
 			z = (arg[1].Z ~= nil) and arg[1].Z or ((arg[1].z ~= nil) and arg[1].z or ((#arg[1] > 2) and arg[1][3] or 0.0))
 		else
 			M.print("Invalid argument 1 passed to vector function", LogLevel.Warning)
 		end
-		
+
 		if #arg == 2 then
 			if type(arg[2]) == "boolean" then
 				reuseable = arg[2]
@@ -1313,7 +1318,7 @@ function M.vector(...)
 		if type(arg[1]) == "number" then x = arg[1] else M.print("Invalid x value passed to vector function", LogLevel.Warning) end
 		if type(arg[2]) == "number" then y = arg[2] else M.print("Invalid y value passed to vector function", LogLevel.Warning) end
 		if type(arg[3]) == "number" then z = arg[3] else M.print("Invalid z value passed to vector function", LogLevel.Warning) end
-		
+
 		if #arg == 4 then
 			if type(arg[4]) == "boolean" then
 				reuseable = arg[4]
@@ -1322,7 +1327,7 @@ function M.vector(...)
 			end
 		end
 	end
-			
+
 	local vector = M.get_struct_object("ScriptStruct /Script/CoreUObject.Vector", reuseable)
 	if vector ~= nil then
 		if vector["X"] ~= nil then vector.X = x else vector.x = x end
@@ -1330,7 +1335,7 @@ function M.vector(...)
 		if vector["Z"] ~= nil then vector.Z = z else vector.z = z end
 	end
 	return vector
-	
+
 	--this should work but doesnt, at least in robocop
 	--return kismet_math_library:MakeVector(x, y, z)
 
@@ -1354,7 +1359,7 @@ function M.rotator(...)
 		else
 			M.print("Invalid argument 1 passed to rotator function", LogLevel.Warning)
 		end
-		
+
 		if #arg == 2 then
 			if type(arg[2]) == "boolean" then
 				reuseable = arg[2]
@@ -1366,7 +1371,7 @@ function M.rotator(...)
 		if type(arg[1]) == "number" then pitch = arg[1] else M.print("Invalid pitch value passed to rotator function", LogLevel.Warning) end
 		if type(arg[2]) == "number" then yaw = arg[2] else M.print("Invalid yaw value passed to rotator function", LogLevel.Warning) end
 		if type(arg[3]) == "number" then roll = arg[3] else M.print("Invalid roll value passed to rotator function", LogLevel.Warning) end
-		
+
 		if #arg == 4 then
 			if type(arg[4]) == "boolean" then
 				reuseable = arg[4]
@@ -1384,6 +1389,48 @@ function M.rotator(...)
 	-- end
 	-- return rotator
 	return kismet_math_library:MakeRotator(roll, pitch, yaw)
+end
+
+function M.vector2D(...)
+    local arg = {...}
+	local x=0.0
+	local y=0.0
+	local reuseable = false
+
+	if #arg == 1 or (#arg == 2 and type(arg[2]) == "boolean") then
+		if type(arg[1]) == "table" or type(arg[1]) == "userdata" then
+			x = (arg[1].X ~= nil) and arg[1].X or ((arg[1].x ~= nil) and arg[1].x or ((#arg[1] > 0) and arg[1][1] or 0.0))
+			y = (arg[1].Y ~= nil) and arg[1].Y or ((arg[1].y ~= nil) and arg[1].y or ((#arg[1] > 1) and arg[1][2] or 0.0))
+		else
+			M.print("Invalid argument 1 passed to vector function", LogLevel.Warning)
+		end
+
+		if #arg == 2 then
+			if type(arg[2]) == "boolean" then
+				reuseable = arg[2]
+			else
+				M.print("Invalid argument 2 passed to vector function", LogLevel.Warning)
+			end
+		end
+	elseif #arg == 2 or (#arg == 3 and type(arg[3]) == "boolean") then
+		if type(arg[1]) == "number" then x = arg[1] else M.print("Invalid x value passed to vector function", LogLevel.Warning) end
+		if type(arg[2]) == "number" then y = arg[2] else M.print("Invalid y value passed to vector function", LogLevel.Warning) end
+
+		if #arg == 3 then
+			if type(arg[3]) == "boolean" then
+				reuseable = arg[3]
+			else
+				M.print("Invalid argument 3 passed to vector function", LogLevel.Warning)
+			end
+		end
+	end
+
+	local vector = M.get_struct_object("ScriptStruct /Script/CoreUObject.Vector2D", reuseable)
+	if vector ~= nil then
+		if vector["X"] ~= nil then vector.X = x else vector.x = x end
+		if vector["Y"] ~= nil then vector.Y = y else vector.y = y end
+	end
+	return vector
 end
 
 -- Converts degrees to radians
@@ -1463,7 +1510,7 @@ function M.sumRotators(...)
 end
 
 function M.get_transform(position, rotation, scale, reuseable)
-	if position == nil then position = {X=0.0, Y=0.0, Z=0.0} end 
+	if position == nil then position = {X=0.0, Y=0.0, Z=0.0} end
 	if scale == nil then scale = {X=1.0, Y=1.0, Z=1.0} end
 	local transform = M.get_struct_object("ScriptStruct /Script/CoreUObject.Transform", reuseable)
 	if transform ~= nil then
@@ -1591,7 +1638,7 @@ end
 function M.getUEVRParam_int(paramName, default)
 	local result = nil
 	local param = uevr.params.vr:get_mod_value(paramName)
-	if param ~= nil then 
+	if param ~= nil then
 		--result = math.tointeger(param:gsub("[^%-%d]", ""))
 		result = math.tointeger(M.PositiveIntegerMask(param))
 	else
@@ -1631,9 +1678,13 @@ function M.isGamePaused()
 	return isPaused
 end
 
+function M.isInCutscene()
+	return isInCutscene
+end
+
 function M.get_world()
 	if game_engine ~= nil then
-		local viewport = game_engine.GameViewport	
+		local viewport = game_engine.GameViewport
 		if viewport ~= nil then
 			local world = viewport.World
 			return world
@@ -1670,7 +1721,7 @@ function M.spawn_actor(transform, collisionMethod, owner, tag)
     end
 
     Statics:FinishSpawningActor(actor, transform)
-	
+
 	-- print("Tags ",actor.Tags)
 	-- if actor.Tags == nil then actor.Tags = {} end
 	-- print("Tags before",#actor.Tags)
@@ -1679,7 +1730,7 @@ function M.spawn_actor(transform, collisionMethod, owner, tag)
 		-- print("Tag added", actor.Tags[#actor.Tags])
 	-- end
 	-- print("Tags after",#actor.Tags)
-	
+
     return actor
 end
 
@@ -1727,7 +1778,7 @@ function M.getValid(object, properties)
 				if M.validate_object(object) == nil then
 					return nil
 				end
-			end	
+			end
 			return object
 		else
 			return object
@@ -1744,7 +1795,7 @@ function M.destroy_actor(actor)
 				actor:K2_DestroyActor()
 				print("Actor destroyed\n")
 			end
-		end)	
+		end)
 	end
 end
 
@@ -1788,7 +1839,7 @@ function M.create_component_of_class(class, manualAttachment, relativeTransform,
 		component:SetVisibility(true)
 		component:SetHiddenInGame(false)
 		if component.SetCollisionEnabled ~= nil then
-			component:SetCollisionEnabled(0, false)	
+			component:SetCollisionEnabled(0, false)
 		end
 	else
 		M.print("Failed to create_component_of_class because component was nil")
@@ -1977,7 +2028,7 @@ function M.splitStr(inputstr, sep)
    	end
    	local t={}
    	if inputstr ~= nil then
-		for str in string.gmatch(inputstr, '([^'..sep..']+)') 
+		for str in string.gmatch(inputstr, '([^'..sep..']+)')
 		do
 			table.insert(t, str)
 		end
@@ -2031,20 +2082,20 @@ function M.fadeCamera(rate, hardLock, softLock, overrideHardLock, overrideSoftLo
 	--if overrideLocks == nil then overrideLocks = false end
 	if overrideHardLock == nil then overrideHardLock = false end
 	if overrideSoftLock == nil then overrideSoftLock = false end
-	
+
 	if overrideHardLock then
 		fadeHardLock = false
 	end
 	if overrideSoftLock then
 		fadeSoftLock = false
 	end
-	
+
 	if fadeSoftLock or fadeHardLock then
 		return
 	end
-	
+
 	fadeHardLock = hardLock
-	fadeSoftLock = softLock	
+	fadeSoftLock = softLock
 	--print("fadeCamera executed",rate,"\n")
 
 	local camMan = M.find_first_of("Class /Script/Engine.PlayerCameraManager")
@@ -2053,12 +2104,12 @@ function M.fadeCamera(rate, hardLock, softLock, overrideHardLock, overrideSoftLo
 	if uevr ~= nil and camMan ~= nil and UEVR_UObjectHook.exists(camMan) then
 		--(FromAlpha, ToAlpha, Duration, Color, bShouldFadeAudio, bHoldWhenFinished)
 		camMan:StartCameraFade(0.999, 1.0, rate, color_from_rgba(0.0, 0.0, 0.0, 1.0), false, fadeHardLock)
-		
+
 		--pc:ClientSetCameraFade(bool bEnableFading, _Script_CoreUObject::Color FadeColor, _Script_CoreUObject::Vector2D FadeAlpha, float FadeTime, bool bFadeAudio, bool bHoldWhenFinished)
 		if fadeSoftLock then
 			delay(math.floor(rate * 1000), function()
 				fadeSoftLock = false
-			end)	
+			end)
 		end
 	end
 	-- end
@@ -2085,7 +2136,7 @@ end
 function M.stopFadeCamera()
 	local camMan = M.find_first_of("Class /Script/Engine.PlayerCameraManager")
 	--print("Camera Manager was",camMan:get_full_name(),"\n")
-	
+
 	if uevr ~= nil and camMan ~= nil and UEVR_UObjectHook.exists(camMan) then
 		--(FromAlpha, ToAlpha, Duration, Color, bShouldFadeAudio, bHoldWhenFinished)
 		camMan:StopCameraFade()
@@ -2142,6 +2193,10 @@ function M.set_decoupled_pitch(state)
 	uevr.params.vr.set_mod_value("VR_DecoupledPitch", state and "true" or "false")
 end
 
+function M.set_decoupled_pitch_adjust_ui(state)
+	uevr.params.vr.set_mod_value("VR_DecoupledPitchUIAdjust", state and "true" or "false")
+end
+
 function M.get_decoupled_pitch()
 	local mode = uevr.params.vr:get_mod_value("VR_DecoupledPitch")
 	if string.sub(mode, 1, 4 ) == "true" then
@@ -2160,7 +2215,7 @@ function M.enableCameraLerp(state, pitch, yaw, roll)
 	end
 	if roll == true then
 		uevr.params.vr.set_mod_value("VR_LerpCameraRoll", state and "true" or "false")
-	end	
+	end
 end
 
 function M.enableUIFollowsView(state)
@@ -2183,12 +2238,12 @@ function M.getAssetDataFromPath(pathStr)
 	if fAssetData ~= nil then
 		local arr = M.splitStr(pathStr, " ")
 		if fAssetData.ObjectPath ~= nil then
-			fAssetData.AssetClass = M.fname_from_string(arr[1]) 
+			fAssetData.AssetClass = M.fname_from_string(arr[1])
 			fAssetData.ObjectPath = M.fname_from_string(arr[2])
 		end
 		if fAssetData.AssetClassPath ~= nil then
 			fAssetData.AssetClassPath.PackageName = M.fname_from_string("/Script/Engine")
-			fAssetData.AssetClassPath.AssetName = M.fname_from_string(arr[1]) 
+			fAssetData.AssetClassPath.AssetName = M.fname_from_string(arr[1])
 		end
 		arr = M.splitStr(arr[2], "/")
 		local arr2 = M.splitStr(arr[#arr], ".")
@@ -2207,7 +2262,7 @@ function M.getLoadedAsset(pathStr)
 		if not assetRegistryHelper:IsAssetLoaded(fAssetData) then
 			local fSoftObjectPath = assetRegistryHelper:ToSoftObjectPath(fAssetData);
 			kismet_system_library:LoadAsset_Blocking(fSoftObjectPath)
-		end	
+		end
 		return assetRegistryHelper:GetAsset(fAssetData)
 	end
 	return nil
@@ -2246,7 +2301,7 @@ function M.getPropertiesOfClass(object, className, excludeInherited)
 	local propertiesList = {}
 	if M.getValid(object) ~= nil then
 		local propertyClass = nil
-		if className ~= nil then 
+		if className ~= nil then
 			propertyClass = M.get_class(className)
 		end
 		local class = object:get_class()
@@ -2256,11 +2311,11 @@ function M.getPropertiesOfClass(object, className, excludeInherited)
 				if property:get_class():get_name() == "ObjectProperty" then
 					local value = object[property:get_fname():to_string()]
 					if value ~= nil and (propertyClass == nil or value:is_a(propertyClass)) then
-						table.insert(propertiesList, property:get_fname():to_string()) 
+						table.insert(propertiesList, property:get_fname():to_string())
 					end
 				end
 				property = property:get_next()
-			end	
+			end
 			if excludeInherited == true then
 				class = nil
 			else
@@ -2289,10 +2344,10 @@ function M.getPropertyPathDescriptorsOfClass(object, objectName, className, incl
 							if child:is_a(M.get_class(className)) then
 								local prefix, shortName = M.splitOnLastPeriod(child:get_full_name())
 								if shortName ~= nil then
-									table.insert(meshList, prop .. "(" .. shortName .. ")") 
+									table.insert(meshList, prop .. "(" .. shortName .. ")")
 								end
 							end
-						end	
+						end
 					end
 				end
 			end
@@ -2306,7 +2361,7 @@ function M.destroyComponent(component, destroyOwner, destroyChildren)
 		local success, response = pcall(function()
 			local name = component:get_full_name()
 			M.print("[destroyComponent] destroyComponent called for " .. name)
-			
+
 			if destroyChildren == true then
 				local children = component.AttachChildren
 				if children ~= nil then
@@ -2339,7 +2394,7 @@ function M.destroyComponent(component, destroyOwner, destroyChildren)
 			else
 				M.print("[destroyComponent] Component owner not found")
 			end
-		end)	
+		end)
 		if success == false then
 			M.print("[destroyComponent] pcall fail " .. response, LogLevel.Error)
 		end
@@ -2369,7 +2424,7 @@ function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, options)
 			--poseableComponent:SetCollisionEnabled(0, false)
 			if poseableComponent ~= nil then
 				if showDebug == true then M.print("Created " .. poseableComponent:get_full_name()) end
-				poseableComponent.SkeletalMesh = skeletalMeshComponent.SkeletalMesh		
+				poseableComponent.SkeletalMesh = skeletalMeshComponent.SkeletalMesh
 				--force initial update
 				if poseableComponent.SetMasterPoseComponent ~= nil then
 					poseableComponent:SetMasterPoseComponent(skeletalMeshComponent, true)
@@ -2379,20 +2434,20 @@ function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, options)
 					poseableComponent:SetLeaderPoseComponent(nil, false)
 				end
 				if showDebug == true then M.print("Master pose updated") end
-				
+
 				pcall(function()
 					-- CopyPoseFromSkeletalComponent will take the current bone transforms
 					-- of the source skeletalmeshcomponent and apply them to the poseablemeshcomponent
 					-- For example if your source is gripping a gun then the copy will also be gripping
 					-- If you do not want this and just want the default skeleton then set options.useDefaultPose to true
 					if options.useDefaultPose ~= true then
-						poseableComponent:CopyPoseFromSkeletalComponent(skeletalMeshComponent)	
+						poseableComponent:CopyPoseFromSkeletalComponent(skeletalMeshComponent)
 						if showDebug == true then M.print("Pose copied") end
 					end
-				end)	
-			
+				end)
+
 				M.copyMaterials(skeletalMeshComponent, poseableComponent, showDebug)
-			else 
+			else
 				M.print("PoseableMeshComponent could not be created")
 			end
 		else
@@ -2409,7 +2464,7 @@ function M.createStaticMeshComponent(mesh, options)
 	local component = nil
 	if mesh ~= nil and (type(mesh) == "string" or mesh:is_a(M.get_class("Class /Script/Engine.StaticMesh"))) then
 		if type(mesh) == "string" then
-			mesh = M.find_instance_of("Class /Script/Engine.StaticMesh", mesh) 
+			mesh = M.find_instance_of("Class /Script/Engine.StaticMesh", mesh)
 		end
 
 		if mesh ~= nil then --check mesh again because it changed if it was originally a string
@@ -2446,12 +2501,12 @@ function M.createSkeletalMeshComponent(mesh, options)
 	local component = nil
 	if mesh ~= nil and (type(mesh) == "string" or mesh:is_a(M.get_class("Class /Script/Engine.SkeletalMesh"))) then
 		if type(mesh) == "string" then
-			mesh = M.find_instance_of("Class /Script/Engine.SkeletalMesh", mesh) 
+			mesh = M.find_instance_of("Class /Script/Engine.SkeletalMesh", mesh)
 		end
-		
+
 		if mesh ~= nil then --check mesh again because it changed if it was originally a string
 			if options == nil then options = {} end
-		
+
 			component = M.create_component_of_class("Class /Script/Engine.SkeletalMeshComponent", options.manualAttachment, options.relativeTransform, options.deferredFinish, options.parent, options.tag)
 			if component ~= nil then
 				--component:SetCollisionEnabled(false,false)
@@ -2459,7 +2514,7 @@ function M.createSkeletalMeshComponent(mesh, options)
 					component:SetSkeletalMesh(mesh)
 					--M.print("Using SetSkeletalMesh")
 				elseif component.SetSkeletalMeshAsset ~= nil then
-					component:SetSkeletalMeshAsset(mesh)				
+					component:SetSkeletalMeshAsset(mesh)
 					--M.print("Using SetSkeletalMeshAsset")
 				else
 					M.print("SkeletalMeshComponent SetSkeletalMesh function does not exist")
@@ -2492,7 +2547,7 @@ function M.getBoneNames(skeletalMeshComponent)
 	if skeletalMeshComponent ~= nil then
 		local count = skeletalMeshComponent:GetNumBones()
 		for index = 0 , count - 1 do
-			table.insert(boneNames, skeletalMeshComponent:GetBoneName(index):to_string()) 
+			table.insert(boneNames, skeletalMeshComponent:GetBoneName(index):to_string())
 		end
 	else
 		M.print("Can't get bone names because skeletalMeshComponent was nil", LogLevel.Warning)
@@ -2564,8 +2619,8 @@ function M.createWidgetComponent(widget, options)
 	local widgetAlignment = nil
 	if widget ~= nil and (type(widget) == "string" or widget:is_a(M.get_class("Class /Script/UMG.Widget"))) then
 		if type(widget) == "string" then
-			widget = M.getActiveWidgetByClass(widget) 
-		end	
+			widget = M.getActiveWidgetByClass(widget)
+		end
 		if M.getValid(widget) ~= nil then
 			widgetAlignment = widget:GetAlignmentInViewport()
 			component = M.create_component_of_class("Class /Script/UMG.WidgetComponent", options.manualAttachment, options.relativeTransform, options.deferredFinish, options.parent, options.tag)
@@ -2574,7 +2629,7 @@ function M.createWidgetComponent(widget, options)
 					widget:RemoveFromViewport()
 				end
 				component:SetWidget(widget)
-				if options.twoSided ~= nil and component.SetTwoSided ~= nil then 
+				if options.twoSided ~= nil and component.SetTwoSided ~= nil then
 					component:SetTwoSided(options.twoSided)
 				end
 				if options.drawSize ~= nil and component.SetDrawSize ~= nil then
@@ -2585,12 +2640,12 @@ function M.createWidgetComponent(widget, options)
 				-- component:SetCustomDepthStencilWriteMask(1)
 			else
 				M.print("WidgetComponent creation failed")
-			end			
+			end
 		else
 			M.print("WidgetComponent not created because widget could not be created")
 		end
 	else
-		M.print("WidgetComponent not created because widget param was invalid")	
+		M.print("WidgetComponent not created because widget param was invalid")
 	end
 	return component, widgetAlignment
 end
@@ -2598,13 +2653,13 @@ end
 function M.fixMeshFOV(mesh, propertyName, value, includeChildren, includeNiagara, showDebug)
 	local logLevel = showDebug == true and LogLevel.Debug or LogLevel.Ignore
 	if M.validate_object(mesh) == nil then
-		M.print("Unable to fix mesh FOV, invalid Mesh", LogLevel.Warning)	
+		M.print("Unable to fix mesh FOV, invalid Mesh", LogLevel.Warning)
 	elseif propertyName == nil or propertyName == "" then
 		M.print("Unable to fix mesh FOV, invalid property name", LogLevel.Warning)
 	else
-		local propertyFName = M.fname_from_string(propertyName)	
+		local propertyFName = M.fname_from_string(propertyName)
 		if value == nil then value = 0.0 end
-		
+
 		local oldValue = nil
 		local newValue = nil
 		if mesh ~= nil and mesh.GetMaterials ~= nil then
@@ -2650,7 +2705,7 @@ function M.fixMeshFOV(mesh, propertyName, value, includeChildren, includeNiagara
 								end
 							end
 						end
-						
+
 						if includeNiagara == true and child:is_a(M.get_class("Class /Script/Niagara.NiagaraComponent")) then
 							child:SetNiagaraVariableFloat(propertyName, value)
 							if showDebug == true then M.print("Child Niagara Material: " .. child:get_full_name(),logLevel) end
@@ -2775,9 +2830,9 @@ function M.getObjectFromHierarchy(node, object, showDebug)
 					object = pawn
 				end
 			end
-			if object == nil then 
+			if object == nil then
 				if showDebug == true then M.print("[getObjectFromHierarchy] Object not found " .. node.name) end
-				return object 
+				return object
 			end
 			if showDebug == true then M.print("[getObjectFromHierarchy] " .. object:get_full_name()) end
 		end
@@ -2820,7 +2875,7 @@ end
 ------------------------------------------------------------------------------------
 function get_cvar_int(cvar)
     local console_manager = uevr.api:get_console_manager()
-    
+
     local var = console_manager:find_variable(cvar)
     if(var ~= nil) then
         return var:get_int()
@@ -2831,7 +2886,7 @@ function M.get_cvar_int(cvar)
 end
 function set_cvar_int(cvar, value)
     local console_manager = uevr.api:get_console_manager()
-    
+
     local var = console_manager:find_variable(cvar)
     if(var ~= nil) then
         var:set_int(value)
@@ -2843,7 +2898,7 @@ end
 
 function set_cvar_float(cvar, value)
     local console_manager = uevr.api:get_console_manager()
-    
+
     local var = console_manager:find_variable(cvar)
     if(var ~= nil) then
         var:set_float(value)
@@ -2877,13 +2932,13 @@ function hook_function(class_name, function_name, native, prefn, postfn, dbgout)
     if(class_obj ~= nil) then
         if dbgout then M.print("[hook_function] Found class obj for " .. class_name) end
         local class_fn = class_obj:find_function(function_name)
-        if(class_fn ~= nil) then 
+        if(class_fn ~= nil) then
             if dbgout then M.print("[hook_function] Found function " .. function_name .. " for " .. class_name) end
             if (native == true) then
                 class_fn:set_function_flags(class_fn:get_function_flags() | 0x400)
                 if dbgout then M.print("[hook_function] Set native flag") end
             end
-            
+
             class_fn:hook_ptr(prefn, postfn)
             result = true
             if dbgout then M.print("[hook_function] Set function hook for " .. (prefn == nil and "nil" or "pre-function") .. " and " .. (postfn == nil and "nil" or "post-function")) end
@@ -2919,8 +2974,8 @@ end
 -------------------------------------------------------------------------------
 function M.PrintInstanceNames(class_to_search)
 	local obj_class = uevr.api:find_uobject(class_to_search)
-    if obj_class == nil then 
-		print(class_to_search, "was not found") 
+    if obj_class == nil then
+		print(class_to_search, "was not found")
 		return
 	end
 
@@ -2936,8 +2991,8 @@ end
 -------------------------------------------------------------------------------
 local function GetFirstInstance(class_to_search)
 	local obj_class = uevr.api:find_uobject(class_to_search)
-    if obj_class == nil then 
-		print(class_to_search, "was not found") 
+    if obj_class == nil then
+		print(class_to_search, "was not found")
 		return nil
 	end
 
@@ -2950,8 +3005,8 @@ end
 -------------------------------------------------------------------------------
 function M.GetInstanceMatching(class_to_search, match_string)
 	local obj_class = uevr.api:find_uobject(class_to_search)
-    if obj_class == nil then 
-		print(class_to_search, "was not found") 
+    if obj_class == nil then
+		print(class_to_search, "was not found")
 		return nil
 	end
 
@@ -2973,7 +3028,7 @@ end
 -- If hooking as native, must return false.
 -- local function HookedFunctionPre(fn, obj, locals, result)
     -- print("Shift beginning : ")
-    
+
     -- return true
 -- end
 

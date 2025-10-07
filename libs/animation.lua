@@ -94,7 +94,69 @@ end
 -- 	end
 -- end
 
-function M.transformBoneToRoot(poseableComponent, targetBoneName, location, rotation, scale, taperOffset, parentPathOnly)
+-- Parent bone is upperarm_l
+-- lowerarm_l
+-- upperarm_l
+-- clavicle_l
+-- spine_03
+-- spine_02
+-- spine_01
+-- Pelvis
+-- Root
+function M.transformBoneToRoot2(poseableComponent, targetBoneName, location, rotation, scale, taperOffset, parentPathOnly)
+	if uevrUtils.validate_object(poseableComponent) ~= nil then
+		local boneSpace = 0
+		local rootBoneName = M.getRootBoneOfBone(poseableComponent, targetBoneName) --should always be the 0 index bone but just to be safe we trace it back
+		--M.print("Found root bone " .. rootBoneName:to_string())		
+		--local rootTransform = poseableComponent:GetBoneTransformByName(uevrUtils.fname_from_string("clavicle_l"), boneSpace)
+		local rootTransform = poseableComponent:GetBoneTransformByName(rootBoneName, boneSpace)
+				
+		local parentFName = poseableComponent:GetParentBone(uevrUtils.fname_from_string(targetBoneName)) --the bone above the target bone
+		print("Parent bone is " .. parentFName:to_string())
+		local boneName = nil
+		local localTransform = nil
+
+		parentFName = poseableComponent:GetParentBone(uevrUtils.fname_from_string(targetBoneName)) --the bone above the target bone
+		boneName = parentFName
+		localTransform = kismet_math_library:MakeTransform(uevrUtils.vector(0, 0, 0), uevrUtils.rotator(0,0,0), uevrUtils.vector(0.001, 0.001, 0.001))
+			--while boneName:to_string() ~= "None" do
+				M.setBoneSpaceLocalTransform(poseableComponent, boneName, localTransform, boneSpace, rootTransform)
+	
+		parentFName = uevrUtils.fname_from_string(targetBoneName)
+		--if parentPathOnly == true then
+			--only affect bones in the parent hierarchy
+		boneName = parentFName
+		localTransform = kismet_math_library:MakeTransform(location, rotation, scale)
+			--while boneName:to_string() ~= "None" do
+				M.setBoneSpaceLocalTransform(poseableComponent, boneName, localTransform, boneSpace, rootTransform)
+				--boneName = poseableComponent:GetParentBone(boneName)
+			--end
+
+		-- else
+		-- 	--loop through all other bones of the skeleton and set their transforms with respect to the root to 0. Do not do this for bones that are children of the target
+		-- 	local localTransform = kismet_math_library:MakeTransform(uevrUtils.vector(0, 0, 0), uevrUtils.rotator(0,0,0), uevrUtils.vector(0.001, 0.001, 0.001))
+		-- 	local count = poseableComponent:GetNumBones()
+		-- 	for index = 1 , count do	
+		-- 		local childFName = poseableComponent:GetBoneName(index)
+		-- 		if not poseableComponent:BoneIsChildOf(childFName, parentFName) then	
+		-- 			M.setBoneSpaceLocalTransform(poseableComponent, childFName, localTransform, boneSpace, rootTransform)
+		-- 		end
+		-- 	end
+		-- end
+
+		-- --special handling for the bone above the target bone to allow for a taper
+		-- if taperOffset == nil then taperOffset = uevrUtils.vector(0, 0, 0) end
+		-- local localTransform = kismet_math_library:MakeTransform(kismet_math_library:Add_VectorVector(location, taperOffset), uevrUtils.rotator(0,0,0), uevrUtils.vector(0.001, 0.001, 0.001))
+		-- M.setBoneSpaceLocalTransform(poseableComponent, parentFName, localTransform, boneSpace, rootTransform)
+		
+		-- --apply a transform of the target bone with respect the the tranform of the root bone of the skeleton
+		-- localTransform = kismet_math_library:MakeTransform(location, rotation, scale)
+		-- M.setBoneSpaceLocalTransform(poseableComponent, uevrUtils.fname_from_string(targetBoneName), localTransform, boneSpace, rootTransform)
+	end
+end
+
+
+function M.transformBoneToRoot(poseableComponent, targetBoneName, location, rotation, scale, taperOffset, parentPathOnly, rootBoneForPath)
 	if uevrUtils.validate_object(poseableComponent) ~= nil then
 		local boneSpace = 0
 		local rootBoneName = M.getRootBoneOfBone(poseableComponent, targetBoneName) --should always be the 0 index bone but just to be safe we trace it back
@@ -107,7 +169,14 @@ function M.transformBoneToRoot(poseableComponent, targetBoneName, location, rota
 			--only affect bones in the parent hierarchy
 			local boneName = parentFName
 			local localTransform = kismet_math_library:MakeTransform(uevrUtils.vector(0, 0, 0), uevrUtils.rotator(0,0,0), uevrUtils.vector(0.001, 0.001, 0.001))
-			while boneName:to_string() ~= "None" do
+			--while boneName:to_string() ~= "None" do 
+			if rootBoneForPath == nil or rootBoneForPath == "" then
+				rootBoneForPath = "None"
+			else
+				local pName = poseableComponent:GetParentBone(uevrUtils.fname_from_string(rootBoneForPath))
+				rootBoneForPath = pName:to_string()
+			end
+			while boneName:to_string() ~= rootBoneForPath do
 				M.setBoneSpaceLocalTransform(poseableComponent, boneName, localTransform, boneSpace, rootTransform)
 				boneName = poseableComponent:GetParentBone(boneName)
 			end
@@ -521,6 +590,7 @@ function M.getRootBoneOfBone(skeletalMeshComponent, boneName)
 	local boneName = fName
 	while fName:to_string() ~= "None" do
 		boneName = fName
+--		print(boneName:to_string())
 		fName = skeletalMeshComponent:GetParentBone(fName)
 	end
 	return boneName
@@ -639,6 +709,18 @@ function M.getDescendantBones(component, targetBoneName, includeRoot)
 				table.insert(boneNames, childFName:to_string()) 		
 			end
 		end
+	end
+	return boneNames
+end
+
+function M.getAncestorBones(component, boneName)
+	if component == nil then return {} end
+	if boneName == nil or boneName == "" then return {component:GetBoneName(1)} end
+	local boneNames = {}
+	local fName = uevrUtils.fname_from_string(boneName)
+	while fName:to_string() ~= "None" do
+		table.insert(boneNames, fName:to_string())
+		fName = component:GetParentBone(fName)
 	end
 	return boneNames
 end

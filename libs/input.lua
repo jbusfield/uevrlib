@@ -54,8 +54,8 @@ local snapAngle = 30
 local pawnPositionAnimationScale = 0.2
 local pawnPositionSweepMovement = true
 local eyeOffset = 0
-local pawnPositionMode = M.PawnPositionMode.NONE
-local pawnRotationMode = M.PawnRotationMode.NONE
+local pawnPositionMode = M.PawnPositionMode.FOLLOWS
+local pawnRotationMode = M.PawnRotationMode.RIGHT_CONTROLLER
 local adjustForAnimation = false
 local adjustForEyeOffset = false
 local fixSpatialAudio = true
@@ -64,6 +64,10 @@ local currentHeadRotator = uevrUtils.rotator(0,0,0)
 local headBoneName = ""
 local rootBoneName = ""
 local boneList = {}
+
+--this module is designed to work with these UEVR settings 
+uevrUtils.set_decoupled_pitch(true)
+uevrUtils.set_decoupled_pitch_adjust_ui(true)
 
 local configWidgets = spliceableInlineArray{
 	{
@@ -449,8 +453,9 @@ local function setBoneNames()
 	local mesh = pawnModule.getBodyMesh()
 	if mesh ~= nil then
 		boneList = uevrUtils.getBoneNames(mesh)
-		if #boneList == 0 then error() end
-		configui.setSelections("headBones", boneList)
+		if boneList ~= nil and #boneList > 0 then 
+			configui.setSelections("headBones", boneList)
+		end
 	end
 	local currentHeadBoneIndex = configui.getValue("headBones")
 	if currentHeadBoneIndex~= nil and currentHeadBoneIndex > 1 then
@@ -613,6 +618,7 @@ local function updateAim()
 			pawn.CharacterMovement.bUseControllerDesiredRotation = false
 		end
 		--print(rotation.X,rotation.Y,rotation.Z)
+		--rotation.Pitch = rotation.Pitch - 30
 		pawn.Controller:SetControlRotation(rotation) --because the previous booleans were set, aiming with the hand or head doesnt affect the rotation of the pawn
 	end
 end
@@ -649,13 +655,14 @@ uevr.params.sdk.callbacks.on_early_calculate_stereo_view_offset(function(device,
 		end
 
 		--Change the UEVR camera position and rotation to align with the pawn
-		if bodyRotationOffset ~= nil and rootComponent ~= nil then
+		if bodyRotationOffset ~= nil and rootComponent ~= nil and uevrUtils.getValid(rootComponent) ~= nil and rootComponent.K2_GetComponentLocation ~= nil then
 			local pawnPos = rootComponent:K2_GetComponentLocation()
 			local pawnRot = rootComponent:K2_GetComponentRotation()
 
+			local capsuleHeight = rootComponent.CapsuleHalfHeight or 0
 			position.x = pawnPos.x
 			position.y = pawnPos.y
-			position.z = pawnPos.z + rootComponent.CapsuleHalfHeight + headOffset.Z
+			position.z = pawnPos.z + capsuleHeight + headOffset.Z
 			rotation.Pitch = 0--pawnRot.Pitch 
 			rotation.Yaw = pawnRot.Yaw - bodyRotationOffset
 			rotation.Roll = 0--pawnRot.Roll 	

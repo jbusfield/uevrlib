@@ -7,6 +7,9 @@ local pawnModule = require("libs/pawn")
 local M = {}
 
 local autoHandleInput = true
+local autoCreateHands = true
+local autoCreateConfigName = nil
+local autoCreateAnimationName = nil
 
 local handComponents = {}
 local handDefinitions = {}
@@ -21,6 +24,11 @@ local armsAnimationMeshes = {}
 armsAnimationMeshes[Handed.Left] = {animating=false, mesh=nil, componentName=nil}
 armsAnimationMeshes[Handed.Right] = {animating=false, mesh=nil, componentName=nil}
 local defaultAnimationMesh = nil
+-- Set to true to only update bones from wrist to root when copying pose from mesh. 
+-- This is faster (less CPU intensive) but may not work for all skeletons. 
+-- If the hand disappears when set to true then set it to false.
+-- For example, Atomic Heart can be set to true but Robocop cannot.
+--local optimizeAnimationFromMesh = false
 
 local currentLogLevel = LogLevel.Error
 function M.setLogLevel(val)
@@ -36,6 +44,7 @@ end
 local createInputHandler = doOnce(function()
 	attachments.registerOnGripAnimationCallback(function(gripAnimation, gripHand)
 		--M.print("Grip animation changed to " .. (gripAnimation and gripAnimation or "None") .. " for " .. (gripHand == Handed.Left and "Left" or "Right") .. " hand", LogLevel.Debug)
+		print("Grip animation changed to ", gripAnimation, gripHand)
 		M.updateAnimationState(gripHand)
 	end)
 
@@ -112,6 +121,12 @@ function M.exists()
 	return M.getHandComponent(Handed.Left) ~= nil or M.getHandComponent(Handed.Right) ~= nil
 end
 
+function M.resetAutoCreate()
+	autoCreateHands = true
+	autoCreateConfigName = nil
+	autoCreateAnimationName = nil
+end
+
 -- if using multiple components like hands and gloves then include componentName or which one is picked will be random
 function M.getHandComponent(hand, componentName)
 	componentName = getComponentName(componentName)
@@ -143,23 +158,32 @@ local function registerFOVFix(profile)
 end
 
 function M.updateAnimationState(hand)
-	if autoHandleInput and M.exists() then
+	if M.exists() then
 		local attachment = holdingAttachment[hand]
 		if attachment == nil then
 			attachment = attachments.getCurrentGripAnimation(hand)
 		end
 		local isHoldingAttachment = false
 		local attachmentExtension = ""
+		print("In updateAnimationState", hand, attachment, type(attachment))
 		if type(attachment) == "boolean" then
 			isHoldingAttachment = attachment
-		elseif type(attachment) == "string" and attachment ~= "" then
+		elseif type(attachment) == "string" and attachment ~= "attachment_none" then
 			isHoldingAttachment = true
-			attachmentExtension = "_" .. attachment
+			if attachment ~= "" then
+				attachmentExtension = "_" .. attachment
+			end
 		end
+		print("isHoldingAttachment", isHoldingAttachment)
 		if isHoldingAttachment then
 			for id, target in pairs(inputHandlerAnimID) do
 				local handStr = hand == Handed.Left and "left" or "right"
 				animation.pose(handStr .. "_" .. target, "grip_" .. handStr .. "_weapon" .. attachmentExtension)
+			end
+		else
+			for id, target in pairs(inputHandlerAnimID) do
+				local handStr = hand == Handed.Left and "left" or "right"
+				animation.pose(handStr .. "_" .. target, "open_" .. handStr)
 			end
 		end
 	end
@@ -322,6 +346,10 @@ function M.setInitialTransform(hand, componentName)
 	end
 end
 
+-- function M.enableOptimizedAnimations(val)
+-- 	optimizeAnimationFromMesh = val
+-- end
+
 --if, in debug mode, the skeleton is not pointed forward when the wrist is pointed forward then make adjustments with this function
 function  M.setOffset(newOffset)
 	offset = newOffset
@@ -345,6 +373,7 @@ function M.setAnimationMesh(mesh)
 end
 
 function M.updateAnimationFromMesh(hand, mesh, componentName)
+	--print("Updating animation from mesh", hand, mesh:get_full_name(), componentName)
 	if mesh ~= nil then
 		componentName = getComponentName(componentName)
 		if componentName == nil or componentName == "" or handDefinitions[componentName] == nil then
@@ -358,12 +387,16 @@ function M.updateAnimationFromMesh(hand, mesh, componentName)
 				if jointName ~= nil and jointName ~= "" then
 					local success, response = pcall(function()		
 						component:CopyPoseFromSkeletalComponent(mesh)
+						--component:SetLeaderPoseComponent(mesh, true)
 						local location = getValidVector(definition, "Location", {0,0,0})
 						local rotation = getValidRotator(definition, "Rotation", {0,0,0})
 						local scale = getValidVector(definition, "Scale", {1,1,1})
 						local taperOffset = getValidVector(definition, "TaperOffset", {0,0,0})
 						--When an animation is applied, every bone in the entire skeleton is moved, so we need to reapply the transform from wrist to root
-						animation.transformBoneToRoot(component, jointName, location, rotation, scale, taperOffset, true)
+						local optimizeAnimationFromMesh = handDefinitions[componentName]["OptimizeAnimations"] ~= false
+						local optimizationRootBone = definition["OptimizeAnimationsRootBone"]
+						animation.transformBoneToRoot(component, jointName, location, rotation, scale, taperOffset, optimizeAnimationFromMesh, optimizationRootBone)
+						--component:SetLeaderPoseComponent(nil, false)
 					end)
 					if success == false then
 						M.print("[hands] " .. response, LogLevel.Error)
@@ -899,11 +932,11 @@ end
 
 local isHiddenLast = nil
 uevrUtils.setInterval(100, function()
-	local isHidden, priority = executeIsHiddenCallback()
-	if isHidden ~= isHiddenLast then
-		isHiddenLast = isHidden
-		if isHidden ~= nil then
-			M.hideHands(isHidden)
+	if M.exists() then
+		local isHidden, priority = executeIsHiddenCallback()
+		if isHidden ~= isHiddenLast then
+			isHiddenLast = isHidden
+			M.hideHands(isHidden or false)
 		end
 	end
 end)
@@ -911,21 +944,24 @@ end)
 local isLeftAnimatingLast = nil
 local isRightAnimatingLast = nil
 uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
-	local isLeftAnimating,  leftPriority = executeIsAnimatingFromMeshCallback(Handed.Left)
-	local isRightAnimating, rightPriority = executeIsAnimatingFromMeshCallback(Handed.Right)
-	local left = isLeftAnimating
-	if isLeftAnimatingLast ~= nil and isLeftAnimating == nil then left = false end
-	local right = isRightAnimating
-	if isRightAnimatingLast ~= nil and isRightAnimating == nil then right = false end
-	M.setHandsAreAnimatingFromMesh(left, right)
-	isLeftAnimatingLast = isLeftAnimating
-	isRightAnimatingLast = isRightAnimating
+	if M.exists() then
+		local isLeftAnimating,  leftPriority = executeIsAnimatingFromMeshCallback(Handed.Left)
+		local isRightAnimating, rightPriority = executeIsAnimatingFromMeshCallback(Handed.Right)
+		--print(isLeftAnimating, isRightAnimating)
+		local left = isLeftAnimating
+		if isLeftAnimatingLast ~= nil and isLeftAnimating == nil then left = false end
+		local right = isRightAnimating
+		if isRightAnimatingLast ~= nil and isRightAnimating == nil then right = false end
+		M.setHandsAreAnimatingFromMesh(left, right)
+		isLeftAnimatingLast = isLeftAnimating
+		isRightAnimatingLast = isRightAnimating
 
-	if armsAnimationMeshes[Handed.Left] ~= nil and armsAnimationMeshes[Handed.Left].mesh ~= nil then
-		M.updateAnimationFromMesh(Handed.Left, armsAnimationMeshes[Handed.Left].mesh,  armsAnimationMeshes[Handed.Left].componentName)
-	end
-	if armsAnimationMeshes[Handed.Right] ~= nil and armsAnimationMeshes[Handed.Right].mesh ~= nil then
-		M.updateAnimationFromMesh(Handed.Right, armsAnimationMeshes[Handed.Right].mesh,  armsAnimationMeshes[Handed.Right].componentName)
+		if armsAnimationMeshes[Handed.Left] ~= nil and armsAnimationMeshes[Handed.Left].mesh ~= nil then
+			M.updateAnimationFromMesh(Handed.Left, armsAnimationMeshes[Handed.Left].mesh,  armsAnimationMeshes[Handed.Left].componentName)
+		end
+		if armsAnimationMeshes[Handed.Right] ~= nil and armsAnimationMeshes[Handed.Right].mesh ~= nil then
+			M.updateAnimationFromMesh(Handed.Right, armsAnimationMeshes[Handed.Right].mesh,  armsAnimationMeshes[Handed.Right].componentName)
+		end
 	end
 end)
 
@@ -940,8 +976,53 @@ uevrUtils.registerPreLevelChangeCallback(function(level)
 	autoHandleInput = true
 	isLeftAnimatingLast = nil
 	isRightAnimatingLast = nil
+	autoCreateConfigName = nil
+	autoCreateAnimationName = nil
 end)
 
+local function tryAutoCreateHands()
+	if autoCreateHands and not M.exists()then
+		--see if the defaults params file exists
+		local paramsFile = "hands_parameters"
+		--if we already found it once we dont ned to keep reading from json to see if it exists
+		if autoCreateConfigName ~= nil then
+			M.createFromConfig(paramsFile, autoCreateConfigName, autoCreateAnimationName)
+		else
+			local configuration = json.load_file(paramsFile .. ".json")
+			if configuration ~= nil then
+				--get the first profile and animation found
+				M.print("Loaded hands parameters from hands_parameters.json")
+				if configuration["profiles"] ~= nil then
+					for key, _ in pairs(configuration["profiles"]) do
+						M.print("Found profile: " .. key)
+						autoCreateConfigName = key
+						break
+					end
+				end
+				if configuration["animations"] ~= nil then
+					for key, _ in pairs(configuration["animations"]) do
+						M.print("Found animation: " .. key)
+						autoCreateAnimationName = key
+						break
+					end
+				end
+				if autoCreateConfigName ~= nil then
+					M.createFromConfig(paramsFile, autoCreateConfigName, autoCreateAnimationName)
+				else
+					M.print("Could not auto create hands because no profiles were found")
+					autoCreateHands = false --dont keep trying
+				end
+			else
+				M.print("Could not auto create hands")
+				autoCreateHands = false --dont keep trying
+			end
+		end
+	end
+end
+
+uevrUtils.setInterval(1000, function()
+	tryAutoCreateHands()
+end)
 
 return M
 

@@ -30,3 +30,4 @@ ERendererStencilMask =
 	ERSM_128                                 = 9,
 	ERSM_MAX                                 = 10,
 }
+

@@ -25,13 +25,13 @@ Usage
         example:
             attachments.detach(myAttachment)
 
-    attachments.registerOnGripUpateCallback(callback) - registers a callback function that handles automatic grip updates.
+    attachments.registerOnGripUpdateCallback(callback) - registers a callback function that handles automatic grip updates.
 		Your callback will be called periodically to request the item that is being gripped in the right or left hand as
 		well as the mesh or controller being used for the right and left hands. If no item is currently being gripped then return nil.
 		Return parameters are rightAttachment, rightMesh, rightSocketName, leftAttachment, leftMesh, leftSocketName, handleParentAttachment
 		The handleParentAttachment parameter tells the system whether to handle detaching the attachment from its parent when attaching to a new mesh.
         example:
-			attachments.registerOnGripUpateCallback(function()
+			attachments.registerOnGripUpdateCallback(function()
 				if uevrUtils.getValid(pawn) ~= nil and pawn.GetCurrentWeapon ~= nil then
 					local currentWeapon = pawn:GetCurrentWeapon()
 					if currentWeapon ~= nil and currentWeapon.RootComponent ~= nil then
@@ -124,8 +124,8 @@ local attachmentOffsets = {}
 local defaultLocation = nil
 local defaultRotation = nil
 local defaultScale = nil
-local animationLabels = {"None"}
-local animationIDs = {""}
+local animationLabels = {"Default", "None"}
+local animationIDs = {"", "attachment_none"}
 --local activeAnimationID = false
 
 local meshAttachmentList = {}
@@ -409,7 +409,7 @@ function M.setAttachmentNames(attachmentNamesList)
 end
 
 local function hasNamedObject(attachment, parentName, childName)
-	M.print("Called hasNamedObject with parent: " .. parentName .. " child: " .. childName)
+	--M.print("Called hasNamedObject with parent: " .. parentName .. " child: " .. childName)
 	local result = false
 	if parentName == nil or parentName == "" then
 		result = true
@@ -432,7 +432,7 @@ local function hasNamedObject(attachment, parentName, childName)
 			result = false
 		end
 	end
-	M.print("hasNamedObject result is " .. (result and "true" or "false"))
+	--M.print("hasNamedObject result is " .. (result and "true" or "false"))
 	return result
 end
 
@@ -510,7 +510,7 @@ local function getNamedAttachmentFromMeshAttachmentList(parentName, childName)
 				print("getNamedAttachmentFromMeshAttachmentList had nil attachmentData", parentName, childName)
 			elseif uevrUtils.getValid(attachmentData.attachment) ~= nil then
 				if hasNamedObject(attachmentData.attachment, parentName, childName) then
-					return attachmentData.attachment, attachmentData.attachType
+					return attachmentData.attachment, attachmentData.attachType, attachmentData.state
 				end
 			end
 		end
@@ -523,12 +523,16 @@ function M.updateAttachmentTransform(pos, rot, scale, parentName, childName)
 		M.setAttachmentOffset(parentName, childName, pos, rot)
 	end
 
-	local attachment, attachType = getNamedAttachmentFromMeshAttachmentList(parentName, childName)
+	local attachment, attachType, attachState = getNamedAttachmentFromMeshAttachmentList(parentName, childName)
 	if attachType == M.AttachType.RAW_CONTROLLER then
-		-- if attachmentState ~= nil then
-		-- 	if pos ~= nil then attachmentState:set_location_offset(Vector3f.new( pos.X, pos.Y, pos.Z)) end
-		-- 	if rot ~= nil then attachmentState:set_rotation_offset(Vector3f.new( math.rad(rot.X), math.rad(rot.Y+90),  math.rad(rot.Z))) end
-		-- end
+		--print("Updating RAW_CONTROLLER attachment transform not supported yet")
+		-- if pos ~= nil then uevrUtils.set_component_relative_location(attachment, pos) end
+		-- if rot ~= nil then uevrUtils.set_component_relative_rotation(attachment, rot) end
+		-- if scale ~= nil then uevrUtils.set_component_relative_scale(attachment, scale) end
+		if attachState ~= nil then
+			if pos ~= nil then attachState:set_location_offset(Vector3f.new( pos.X, pos.Y, pos.Z)) end
+			if rot ~= nil then attachState:set_rotation_offset(Vector3f.new( math.rad(rot.X), math.rad(rot.Y+90),  math.rad(rot.Z))) end
+		end
 	end
 	if attachment ~= nil and (attachType == M.AttachType.MESH or attachType == M.AttachType.CONTROLLER) then
 		if pos ~= nil then uevrUtils.set_component_relative_location(attachment, pos) end
@@ -589,8 +593,10 @@ function M.setActiveAnimation(attachment, gripHand)
 				local parent = attachmentOffsets[i]["parent"]
 				local child = attachmentOffsets[i]["child"]
 				--local name = parent .. "_" .. child
-				if hasNamedObject(attachment, parent, child) then
-					activeGripAnimations[gripHand] = attachmentOffsets[i]["animation"]
+				--if attachmentOffsets[i]["animation"] is nil then its never been set so just use the default animation by returning true
+				if hasNamedObject(attachment, parent, child) and attachmentOffsets[i]["animation"] ~= nil then
+					activeGripAnimations[gripHand] = attachmentOffsets[i]["animation"] == "animation_none" and false or attachmentOffsets[i]["animation"]
+					break
 				end
 			end
 		else
@@ -639,10 +645,8 @@ function M.attachToMesh(attachment, mesh, socketName, gripHand, detachFromParent
 		end
 		if socketName == nil then socketName = attachment.AttachSocketName end
 		success = attachment:K2_AttachTo(mesh, socketName, 0, false)
-		attachment:SetHiddenInGame(false,true)
-		attachment:SetVisibility(true,true)
 
-		--attachType = M.AttachType.MESH
+		attachment:call("SetRenderInMainPass", true)
 		M.updateOffset(attachment)
 		M.setActiveAnimation(attachment, gripHand)
 		M.print("Attached attachment to mesh" .. (success and " successfully" or " with errors"))
@@ -653,31 +657,90 @@ function M.attachToMesh(attachment, mesh, socketName, gripHand, detachFromParent
 end
 
 function M.attachToController(attachment, controllerID, detachFromParent)
+	M.attachToMesh(attachment, controllers.getController(controllerID), nil, controllerID, detachFromParent)
+	-- if uevrUtils.getValid(attachment) ~= nil then
+	-- 	if detachFromParent == true and attachment ~= nil and attachment.AttachParent ~= nil then
+	-- 		attachment:DetachFromParent(false,false)
+	-- 	end
+	-- 	M.print("Attaching " .. attachment:get_full_name() .. " to controller with ID " .. controllerID)
+	-- 	controllers.attachComponentToController(controllerID, attachment, nil, nil, nil, true)
+		
+	-- 	attachment:call("SetRenderInMainPass", true)
+	-- 	M.updateOffset(attachment)
+	-- 	M.setActiveAnimation(attachment, controllerID)
+	-- 	M.print("Attached attachment to controller")
+	-- else
+	-- 	M.print("Failed to attach attachment to controller")
+	-- end
+end
+
+function M.attachToRawController(attachment, gripHand, detachFromParent)
 	if uevrUtils.getValid(attachment) ~= nil then
-		if detachFromParent == true then
+		local meshName = "Controller_Raw"
+		if meshAttachmentList[meshName] ==  nil then
+			meshAttachmentList[meshName] = {mesh=nil}
+		end
+		local attachmentName = attachment:get_full_name()
+		--if it's already attached then just return
+		if meshAttachmentList[meshName][attachmentName] ~= nil then
+			if meshAttachmentList[meshName][attachmentName]["attachment"] == attachment then
+				return true
+			end
+		end
+
+		M.detachAttachmentsFromMesh(meshName)
+
+		meshAttachmentList[meshName][attachmentName] = {attachment=attachment,  detachFromParent = detachFromParent, attachType = M.AttachType.RAW_CONTROLLER, gripHand = gripHand}
+
+		--print("Detaching", detachFromParent, attachment, attachment.AttachParent)
+		if detachFromParent == true and attachment ~= nil and attachment.AttachParent ~= nil then
 			attachment:DetachFromParent(false,false)
 		end
-		M.print("Attaching " .. attachment:get_full_name() .. " to controller with ID " .. controllerID)
-		controllers.attachComponentToController(controllerID, attachment, nil, nil, nil, true)
-		attachment:SetHiddenInGame(false,true)
-		attachment:SetVisibility(true,true)
-		--attachType = M.AttachType.CONTROLLER
+		M.print("Attaching " .. attachment:get_full_name() .. " to controller with ID " .. gripHand)
+		local state = UEVR_UObjectHook.get_or_add_motion_controller_state(attachment)
+		state:set_hand(gripHand)
+		state:set_permanent(true)
+		meshAttachmentList[meshName][attachmentName].state = state
+
+		attachment:call("SetRenderInMainPass", true)
 		M.updateOffset(attachment)
-		M.setActiveAnimation(attachment, controllerID)
-		M.print("Attached attachment to controller")
+		M.setActiveAnimation(attachment, gripHand)
+		M.print("Attached attachment to raw controller")
 	else
-		M.print("Failed to attach attachment to controller")
+		M.print("Failed to attach attachment to raw controller")
 	end
 end
 
-function M.detach(attachment, parent)
+function M.detach(attachment, parent, attachType)
 	if uevrUtils.getValid(attachment) ~= nil then
-		M.print("Detaching attachment: " .. attachment:get_full_name())
 		if parent ~= nil then
+			M.print("Detaching attachment: " .. attachment:get_full_name())
 			attachment:K2_AttachTo(parent, attachment.AttachSocketName, 0, false)
 		end
+		if attachType == M.AttachType.RAW_CONTROLLER then
+			UEVR_UObjectHook.remove_motion_controller_state(attachment)
+		end
+
 	else
 		M.print("Failed to detach attachment")
+	end
+end
+
+--detach only the attachments that are grip attachments
+function M.detachGripAttachments(gripHand)
+	if gripHand ~= nil then
+		for meshName, meshData in pairs(meshAttachmentList) do
+			for attachmentName, attachmentData in pairs(meshData) do
+				if attachmentData.gripHand == gripHand then
+					M.print("Detaching grip attachments for " .. attachmentName .. " for hand: " .. gripHand)
+					activeGripAnimations[attachmentData.gripHand] = false
+					M.detach(attachmentData.attachment, attachmentData.parent or nil, attachmentData.attachType)
+					meshData[attachmentName] = nil
+				end
+			end
+		end
+	else
+		M.print("Failed to detach grip attachments from meshes")
 	end
 end
 
@@ -690,7 +753,7 @@ function M.detachAttachmentFromMeshes(attachment, reattachToParent)
 				if meshData[attachmentName].gripHand ~= nil then
 					activeGripAnimations[meshData[attachmentName].gripHand] = false
 				end
-				M.detach(meshData[attachmentName].attachment, reattachToParent and meshData[attachmentName].parent or nil)
+				M.detach(meshData[attachmentName].attachment, reattachToParent and meshData[attachmentName].parent or nil,meshData[attachmentName].attachType)
 				meshData[attachmentName] = nil
 			end
 		end
@@ -699,19 +762,24 @@ function M.detachAttachmentFromMeshes(attachment, reattachToParent)
 	end
 end
 
-function M.detachAttachmentsFromMesh(mesh, reattachToParent)
-	if uevrUtils.getValid(mesh) ~= nil then
-		M.print("Detaching all attachments from mesh: " .. mesh:get_full_name())
-		local meshName = mesh:get_full_name()
+function M.detachAttachmentsFromMesh(mesh)
+	local meshName = mesh
+	if type(mesh) ~= "string" then
+		if uevrUtils.getValid(mesh) ~= nil then
+			meshName = mesh:get_full_name()
+		end
+	end
+	if meshName ~= nil and meshName ~= "" then
+		M.print("Detaching all attachments from mesh: " .. meshName)
 		local meshData = meshAttachmentList[meshName]
 		if meshData ~= nil then
 			for attachmentName, attachmentData in pairs(meshData) do
 				if attachmentData.gripHand ~= nil then
 					activeGripAnimations[attachmentData.gripHand] = false
 				end
-				M.detach(attachmentData.attachment, reattachToParent and attachmentData.parent or nil)
+				M.detach(attachmentData.attachment, attachmentData.parent or nil, attachmentData.attachType)
 			end
-			meshAttachmentList[meshName] = nil
+			meshAttachmentList[meshName] = {}
 		end
 	else
 		M.print("Failed to detach attachments from mesh")
@@ -719,7 +787,7 @@ function M.detachAttachmentsFromMesh(mesh, reattachToParent)
 end
 
 local function getAnimationLabelsArray(animationIDList)
-	local labels = {"None"}
+	local labels = {"Default", "None"}
 	for id, data in pairs(animationIDList) do
 		table.insert(labels, data["label"])
 	end
@@ -727,7 +795,7 @@ local function getAnimationLabelsArray(animationIDList)
 end
 
 local function getAnimationIDsArray(animationIDList)
-	local ids = {""}
+	local ids = {"", "attachment_none"}
 	for id, data in pairs(animationIDList) do
 		table.insert(ids, id)
 	end
@@ -756,31 +824,51 @@ end
 local autoUpdateCallbackCreated = false
 --local autoUpdateCurrentAttachment = nil
 --local autoUpdateCurrentMesh = nil
-function M.registerOnGripUpateCallback(callback)
+function M.registerOnGripUpdateCallback(callback)
 	if not autoUpdateCallbackCreated then
-		uevrUtils.setInterval(1000, function()
+		uevrUtils.setInterval(200, function()
 			local rightAttachment, rightMesh, rightSocketName, leftAttachment, leftMesh, leftSocketName, handleParentAttachment = callback()
 			--print(attachment, mesh, autoUpdateCurrentAttachment)
-			if handleParentAttachment == nil then handleParentAttachment = false end
-			if rightMesh == nil and rightAttachment == nil then
-				--do nothing
-			elseif rightMesh == nil and rightAttachment ~= nil then
-				M.detachAttachmentFromMeshes(rightAttachment, handleParentAttachment)
-			elseif rightMesh ~= nil and rightAttachment == nil then
-				M.detachAttachmentsFromMesh(rightMesh, handleParentAttachment)
-			elseif rightMesh ~= nil and rightAttachment ~= nil then
+			if handleParentAttachment == nil then handleParentAttachment = true end
+
+			-- if rightAttachment is nil then remove all right grip attachments
+			if rightAttachment == nil then
+				M.detachGripAttachments(Handed.Right)
+			elseif rightMesh == nil then
+				M.attachToRawController(rightAttachment, Handed.Right, handleParentAttachment)
+			else
 				M.attachToMesh(rightAttachment, rightMesh, rightSocketName, Handed.Right, handleParentAttachment)
 			end
 
-			if leftMesh == nil and leftAttachment == nil then
-				--do nothing
-			elseif leftMesh == nil and leftAttachment ~= nil then
-				M.detachAttachmentFromMeshes(leftAttachment, handleParentAttachment)
-			elseif leftMesh ~= nil and leftAttachment == nil then
-				M.detachAttachmentsFromMesh(leftMesh, handleParentAttachment)
-			elseif leftMesh ~= nil and leftAttachment ~= nil then
+			-- if leftAttachment is nil then remove all left grip attachments
+			if leftAttachment == nil then
+				M.detachGripAttachments(Handed.Left)
+			elseif leftMesh == nil then
+				M.attachToRawController(leftAttachment, Handed.Left, handleParentAttachment)
+			else
 				M.attachToMesh(leftAttachment, leftMesh, leftSocketName, Handed.Left, handleParentAttachment)
 			end
+			
+			-- if rightMesh == nil and rightAttachment == nil then
+			-- 	--do nothing
+			-- elseif rightMesh == nil and rightAttachment ~= nil then
+			-- 	--M.detachAttachmentFromMeshes(rightAttachment, handleParentAttachment)
+			-- elseif rightMesh ~= nil and rightAttachment == nil then
+			-- 	M.detachAttachmentsFromMesh(rightMesh, handleParentAttachment)
+			-- elseif rightMesh ~= nil and rightAttachment ~= nil then
+			-- 	M.attachToMesh(rightAttachment, rightMesh, rightSocketName, Handed.Right, handleParentAttachment)
+			-- end
+
+			-- if leftMesh == nil and leftAttachment == nil then
+			-- 	--do nothing
+			-- elseif leftMesh == nil and leftAttachment ~= nil then
+			-- 	--M.detachAttachmentFromMeshes(leftAttachment, handleParentAttachment)
+			-- 	M.attachToRawController(leftAttachment, Handed.Left, handleParentAttachment)
+			-- elseif leftMesh ~= nil and leftAttachment == nil then
+			-- 	M.detachAttachmentsFromMesh(leftMesh, handleParentAttachment)
+			-- elseif leftMesh ~= nil and leftAttachment ~= nil then
+			-- 	M.attachToMesh(leftAttachment, leftMesh, leftSocketName, Handed.Left, handleParentAttachment)
+			-- end
 
 			-- if mesh ~= nil then
 			-- 	print("Children",mesh:get_full_name(),mesh.AttachChildren and #mesh.AttachChildren or 0)

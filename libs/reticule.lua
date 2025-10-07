@@ -38,6 +38,7 @@ Usage
             reticule.create()
 
     reticule.createFromWidget(widget, options) - creates a reticule from a UMG widget component
+		options - removeFromViewport, twoSided, drawSize, scale, rotation, position, collisionChannel
         example:
 			reticule.setReticuleType(reticule.ReticuleType.None) --disable auto creation
 			function createReticule()
@@ -60,6 +61,7 @@ Usage
 			end)
 
     reticule.createFromMesh(mesh, options) - creates a reticule from a static mesh
+		options - materialName, scale, rotation, position, collisionChannel
         example:
 			local meshName = "StaticMesh /Engine/BasicShapes/Cube.Cube"
 			local options = {
@@ -184,11 +186,33 @@ M.ReticuleType = {
 	Widget = 4,
 	Custom = 5
 }
+
+local parametersFileName = "reticule_parameters"
+local parameters = {}
+local isParametersDirty = false
+
+parameters = {
+	reticuleList = {
+		{
+			label = "WB_ReticleLaser_C",
+			id = "WB_ReticleLaser_C",
+			type = "Widget",
+			class = "WidgetBlueprintGeneratedClass /Game/Core/UI/Widgets/WB_ReticleLaser.WB_ReticleLaser_C",
+			material = "Material /Engine/EngineMaterials/Widget3DPassThrough.Widget3DPassThrough",
+			options = { removeFromViewport = true, twoSided = true  },
+			position = {X = 0.0, Y = 0.0},
+		}
+	}
+}
+
+local reticuleWidgetLabelList = {}
+local reticuleWidgetIDList = {}
+
 ---@class reticuleComponent
 ---@field [any] any
 local reticuleComponent = nil
 local reticuleRotation = nil
-local reticulePosition = nil
+local reticulePosition = {X = 0.0, Y = 0.0}
 local reticuleScale = nil
 local reticuleCollisionChannel = 0
 local restoreWidgetPosition = nil
@@ -200,12 +224,16 @@ local reticuleUpdateRotation = {0.0, 0.0, 0.0}
 local reticuleAutoCreationType = M.ReticuleType.None
 local autoHandleInput = true
 
-local reticuleNames = {}
+local possibleReticuleNames = {}
 local currentReticuleSelectionIndex = 0
 local selectedReticuleWidget = nil
 local selectedReticuleWidgetDefaultVisibility = nil
-local reticuleRemoveFromViewport = true
-local reticuleTwoSided = true
+local autoReticuleRemoveFromViewport = true
+local autoReticuleTwoSided = true
+local autoReticuleCollisionChannel = 0
+local autoReticulePosition = {X = 0.0, Y = 0.0}
+local autoReticuleScale = {0.1, 0.1}
+--local autoReticuleDrawSize = {X = 0.0, Y = 0.0}
 local reticuleDefaultWidgetClass = ""
 local reticuleDefaultMeshMaterialClass = "Material /Engine/EngineMaterials/Widget3DPassThrough.Widget3DPassThrough"
 local reticuleDefaultMeshClass = "StaticMesh /Engine/BasicShapes/Plane.Plane"
@@ -287,20 +315,42 @@ local developerWidgets = spliceableInlineArray{
 			initialValue = reticuleAutoCreationType
 		},
 		{ widgetType = "begin_group", id = "uevr_reticule_widget_group", isHidden = false },
---			{ widgetType = "begin_group", id = "uevr_reticule_widget_finder", isHidden = false }, { widgetType = "new_line" }, { widgetType = "indent", width = 5 }, { widgetType = "text", label = "Reticule Widget Finder" }, { widgetType = "begin_rect", },
 			{ widgetType = "new_line" },
+--			{ widgetType = "indent", width = 40 },
 			{
-				widgetType = "tree_node",
-				id = "uevr_reticle_widget_finder_tree",
-				initialOpen = false,
-				label = "Reticule Widget Finder"
+				widgetType = "button",
+				id = "uevr_reticule_find_add_button",
+				label = "Add Using Finder",
+				size = {150,22},
+				color = "#888888FF",
+				hoveredColor = "#888888FF",
+				--activeColor = "#0000FFFF",
 			},
+			{ widgetType = "same_line", },
+			{ widgetType = "space_horizontal", space = -8 },
+			{
+				widgetType = "button",
+				id = "uevr_reticule_manual_add_button",
+				label = "Add Manually",
+				size = {150,22},
+			},
+--			{ widgetType = "unindent", width = 40 },
+--			{ widgetType = "new_line" },
+			{ widgetType = "space_vertical", space = 8 },
+			{ widgetType = "begin_group", id = "uevr_reticule_add_with_finder", isHidden = false }, { widgetType = "indent", width = 10 }, { widgetType = "begin_rect", },
 				{
-					widgetType = "text",
-					id = "uevr_reticule_finder_instructions",
-					label = "Instructions: Perform the search when the game reticule is currently visible on the screen. The finder will automatically search for widgets that contain the words Cursor, Reticule, Reticle or Crosshair in their name. You can also enter text in the Find box to search for other widgets. Press Refresh to see an updated list of widgets. After selecting a widget press Toggle Visibility to see if it is the correct one. If it is, press Use Selected Reticule to set it as the attached reticule.",
-					wrapped = true
+					widgetType = "tree_node",
+					id = "uevr_reticle_widget_finder_tree",
+					initialOpen = false,
+					label = "Reticule Widget Finder Instructions"
 				},
+					{
+						widgetType = "text",
+						id = "uevr_reticule_finder_instructions",
+						label = "Perform the search when the game reticule is currently visible on the screen. The finder will automatically search for widgets that contain the words Cursor, Reticule, Reticle or Crosshair in their name. You can also enter text in the Find box to search for other widgets. Press Refresh to see an updated list of widgets. After selecting a widget press Toggle Visibility to see if it is the correct one. If it is, press Use Selected Reticule to set it as the attached reticule.",
+						wrapped = true
+					},
+				{ widgetType = "tree_pop" },
 				{
 					widgetType = "input_text",
 					id = "uevr_reticule_filter",
@@ -318,7 +368,7 @@ local developerWidgets = spliceableInlineArray{
 				},
 				{
 					widgetType = "combo",
-					id = "uevr_reticule_list",
+					id = "uevr_reticule_possibilities_list",
 					label = "Possible Reticules",
 					selections = {"None"},
 					initialValue = 1,
@@ -337,13 +387,11 @@ local developerWidgets = spliceableInlineArray{
 					label = "Toggle Visibility",
 					size = {150,22}
 				},
-				{
-					widgetType = "same_line",
-				},
+				{ widgetType = "same_line", },
 				{
 					widgetType = "button",
 					id = "uevr_reticule_use_button",
-					label = "Use Selected Reticule",
+					label = "Add Selected Reticule",
 					size = {150,22}
 				},
 				{ widgetType = "unindent", width = 60 },
@@ -354,34 +402,78 @@ local developerWidgets = spliceableInlineArray{
 					isHidden = true,
 					initialValue = ""
 				},
-			{ widgetType = "tree_pop" },
---			{ widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },
+			{ widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 10 }, { widgetType = "end_group", },
+			{ widgetType = "begin_group", id = "uevr_reticule_add_manually", isHidden = true }, { widgetType = "indent", width = 10 },  { widgetType = "begin_rect", },
+				{
+					widgetType = "input_text",
+					id = "uevr_reticule_manual_add_widget_class",
+					label = "Widget Class",
+					initialValue = "",
+				},		
+				{ widgetType = "indent", width = 120 },
+				{
+					widgetType = "button",
+					id = "uevr_reticule_manual_add_widget_class_button",
+					label = "Add Reticule",
+					size = {150,22}
+				},
+				{ widgetType = "unindent", width = 120 },
+			{ widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 10 }, { widgetType = "end_group", },
+			{ widgetType = "new_line" },
 			{ widgetType = "new_line" },
 			{
-				widgetType = "input_text",
-				id = "uevr_reticule_widget_class",
-				label = "Widget Class",
-				initialValue = ""
+				widgetType = "combo",
+				id = "uevr_reticule_widget_list",
+				label = "Current Reticule",
+				selections = {"None"},
+				initialValue = 1,
 			},
-			-- {
-			-- 	widgetType = "text",
-			-- 	id = "uevr_reticule_custom_description",
-			-- 	label = "You have either not chosen a widget to use as the reticule or you have chosen to use a custom reticule. Therefore, you should implement the RegisterCustomCallback in your code and supply your own widget",
-			-- 	initialValue = "",
-			-- 	wrapped = true
-			-- },
-			{
-				widgetType = "checkbox",
-				id = "reticuleRemoveFromViewport",
-				label = "Remove From Viewport",
-				initialValue = reticuleRemoveFromViewport
-			},
-			{
-				widgetType = "checkbox",
-				id = "reticuleTwoSided",
-				label = "Two Sided",
-				initialValue = reticuleTwoSided
-			},
+			{ widgetType = "begin_group", id = "uevr_reticule_current_widget_info", isHidden = true }, { widgetType = "indent", width = 10 }, { widgetType = "text", label = "Current Reticule Settings" }, { widgetType = "begin_rect", },
+				{
+					widgetType = "input_text",
+					id = "uevr_reticule_widget_class",
+					label = "Widget Class",
+					initialValue = "",
+--					disabled = true
+				},
+				{
+					widgetType = "drag_float2",
+					id = "autoReticulePosition",
+					label = "Position",
+					speed = .1,
+					range = {-20, 20},
+					initialValue = {autoReticulePosition.X, autoReticulePosition.Y}
+				},
+				{
+					widgetType = "drag_float2",
+					id = "autoReticuleScale",
+					label = "Scale",
+					speed = .001,
+					range = {0.001, 10},
+					initialValue = {autoReticuleScale[1], autoReticuleScale[2]}
+				},
+				{
+					widgetType = "checkbox",
+					id = "autoReticuleRemoveFromViewport",
+					label = "Remove From Viewport",
+					initialValue = autoReticuleRemoveFromViewport
+				},
+				{
+					widgetType = "checkbox",
+					id = "autoReticuleTwoSided",
+					label = "Two Sided",
+					initialValue = autoReticuleTwoSided
+				},
+				{
+					widgetType = "slider_int",
+					id = "autoReticuleCollisionChannel",
+					label = "Collision Channel",
+					speed = 0.1,
+					range = {0, 100},
+					initialValue = autoReticuleCollisionChannel
+				},
+			{ widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 10 }, { widgetType = "end_group", },
+			{ widgetType = "new_line" },
 		{ widgetType = "end_group", },
 		{ widgetType = "begin_group", id = "uevr_reticule_mesh_group", isHidden = false },
 --			{ widgetType = "begin_group", id = "uevr_reticule_widget_finder", isHidden = false }, { widgetType = "new_line" }, { widgetType = "indent", width = 5 }, { widgetType = "text", label = "Mesh Reticule" }, { widgetType = "begin_rect", },
@@ -417,7 +509,6 @@ local developerWidgets = spliceableInlineArray{
 	{
 		widgetType = "tree_pop"
 	},
-	{ widgetType = "new_line" },
 	{
 		widgetType = "tree_node",
 		id = "uevr_pawn_help_tree",
@@ -435,11 +526,73 @@ local developerWidgets = spliceableInlineArray{
 	},
 }
 
-local function updateReticuleList()
+local function destroyReticuleComponent()
+	if uevrUtils.getValid(reticuleComponent) ~= nil then
+		if reticuleComponent:is_a(uevrUtils.get_class("Class /Script/UMG.WidgetComponent")) then
+			local widget = reticuleComponent:GetWidget()
+			if widget ~= nil then
+				widget:AddToViewport(0)
+				if restoreWidgetPosition ~= nil then
+					widget:SetAlignmentInViewport(restoreWidgetPosition)
+					restoreWidgetPosition = nil
+				end
+			end
+		end
+		uevrUtils.destroyComponent(reticuleComponent, true, true)
+	end
+    ---@diagnostic disable-next-line: cast-local-type
+	reticuleComponent = nil
+end
+
+
+local function updateSelectedReticleWidget(reticuleWidgetID)
+	if reticuleWidgetID == nil or reticuleWidgetID == "" or reticuleWidgetID == "None" then
+		configui.hideWidget("uevr_reticule_current_widget_info", true)
+		configui.setValue("uevr_reticule_widget_class", "")
+	else
+		configui.hideWidget("uevr_reticule_current_widget_info", false)
+		for i = 1, #reticuleWidgetIDList do
+			if reticuleWidgetIDList[i] == reticuleWidgetID then
+				if parameters ~= nil and parameters.reticuleList ~= nil then
+					for j = 1, #parameters.reticuleList do
+						if parameters.reticuleList[j].id == reticuleWidgetID then
+							configui.setValue("uevr_reticule_widget_class", parameters.reticuleList[j]["id"])
+							configui.setValue("autoReticulePosition", {parameters.reticuleList[j].position.X, parameters.reticuleList[j].position.Y})
+							configui.setValue("autoReticuleRemoveFromViewport", parameters.reticuleList[j].options.removeFromViewport)
+							configui.setValue("autoReticuleTwoSided", parameters.reticuleList[j].options.twoSided)
+							configui.setValue("autoReticuleCollisionChannel", parameters.reticuleList[j].collisionChannel or 0)
+							configui.setValue("autoReticuleScale", parameters.reticuleList[j].scale or {0.1, 0.1})
+
+							destroyReticuleComponent() --destroy previous reticule if any
+							return
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+local function updateReticuleWidgetList()
+	reticuleWidgetLabelList = {}
+	reticuleWidgetIDList = {}
+	if parameters ~= nil and parameters.reticuleList ~= nil then
+		for i = 1, #parameters.reticuleList do
+			if parameters.reticuleList[i].type == "Widget" then
+				table.insert(reticuleWidgetLabelList, parameters.reticuleList[i].label)
+				table.insert(reticuleWidgetIDList, parameters.reticuleList[i].id)
+			end
+		end
+	end
+	table.insert(reticuleWidgetLabelList, 1, "None")
+	table.insert(reticuleWidgetIDList, 1, "None")
+	configui.setSelections("uevr_reticule_widget_list", reticuleWidgetLabelList)
+end
+
+local function updatePossibileReticuleList()
 	local searchText = configui.getValue("uevr_reticule_filter")
-	M.print("Searching for widgets " .. searchText)
 	local widgets = uevrUtils.find_all_instances("Class /Script/UMG.Widget", false)
-	reticuleNames = {}
+	possibleReticuleNames = {}
 	--local activeWidgets = {}
 
 	if widgets ~= nil then
@@ -453,12 +606,12 @@ local function updateReticuleList()
 							isActive = widget:GetOwningPlayerPawn() == pawn
 							if isActive then
 								--table.insert(activeWidgets, widget)
-								table.insert(reticuleNames, widgetName)
+								table.insert(possibleReticuleNames, widgetName)
 							end
 						end
 						--print(widget:get_full_name(), isActive and "true" or "false")
 					else
-						table.insert(reticuleNames, widgetName)
+						table.insert(possibleReticuleNames, widgetName)
 					end
 				end
 			end
@@ -466,8 +619,8 @@ local function updateReticuleList()
 	end
 
 	--configui.setLabel("uevr_dev_reticule_total_count", "Reticule count:" .. #reticuleNames)
-	table.insert(reticuleNames, 1, "Custom")
-	configui.setSelections("uevr_reticule_list", reticuleNames)
+	table.insert(possibleReticuleNames, 1, "Custom")
+	configui.setSelections("uevr_reticule_possibilities_list", possibleReticuleNames)
 end
 
 local function updateMeshLists()
@@ -502,22 +655,22 @@ local function resetSelectedWidget()
 	end
 end
 
-local function getSelectedReticuleWidget()
-	if reticuleNames ~= nil and currentReticuleSelectionIndex <= #reticuleNames and currentReticuleSelectionIndex > 1 then
+local function getSelectedPossibleReticuleWidget()
+	if possibleReticuleNames ~= nil and currentReticuleSelectionIndex <= #possibleReticuleNames and currentReticuleSelectionIndex > 1 then
 		--local widget = uevrUtils.getLoadedAsset(reticuleNames[currentReticuleSelectionIndex])	
-		return uevrUtils.find_instance_of("Class /Script/UMG.Widget", reticuleNames[currentReticuleSelectionIndex])
+		return uevrUtils.find_instance_of("Class /Script/UMG.Widget", possibleReticuleNames[currentReticuleSelectionIndex])
 	end
 	return nil
 end
 
-local function updateSelectedReticule()
+local function updateSelectedPossibleReticule()
 	resetSelectedWidget()
 	if currentReticuleSelectionIndex == 1 then
 		--custom widget do callback
 		configui.setValue("uevr_reticule_selected_name", "")
 	else
 		--local widget = uevrUtils.getLoadedAsset(reticuleNames[currentReticuleSelectionIndex])	
-		local widget = getSelectedReticuleWidget()
+		local widget = getSelectedPossibleReticuleWidget()
 		if widget == nil then
 			configui.hideWidget("uevr_reticule_error" ,false)
 			delay(3000, function()
@@ -543,38 +696,22 @@ local function updateSelectedReticule()
 	end
 end
 
-local function toggleSelectedReticuleVisibility()
-	local widget = getSelectedReticuleWidget()
+local function toggleSelectedPossibleReticuleVisibility()
+	local widget = getSelectedPossibleReticuleWidget()
 	if uevrUtils.getValid(widget) ~= nil then
 		---@cast widget -nil
 		local vis = widget:GetVisibility()
+		--print("Current visibility is " .. tostring(vis))
 		if vis == 0 or vis == 4 or vis == 3 then
 			vis = 1
 		else
 			vis = 0
 		end
 		widget:SetVisibility(vis)
+		--print("Post visibility is " .. tostring(vis))
 	else
 		M.print("Selected widget is not valid in toggleSelectedReticuleVisibility")
 	end
-end
-
-local function destroyReticuleComponent()
-	if uevrUtils.getValid(reticuleComponent) ~= nil then
-		if reticuleComponent:is_a(uevrUtils.get_class("Class /Script/UMG.WidgetComponent")) then
-			local widget = reticuleComponent:GetWidget()
-			if widget ~= nil then
-				widget:AddToViewport(0)
-				if restoreWidgetPosition ~= nil then
-					widget:SetAlignmentInViewport(restoreWidgetPosition)
-					restoreWidgetPosition = nil
-				end
-			end
-		end
-		uevrUtils.destroyComponent(reticuleComponent, true, true)
-	end
-    ---@diagnostic disable-next-line: cast-local-type
-	reticuleComponent = nil
 end
 
 local function autoCreateReticule()
@@ -584,7 +721,7 @@ local function autoCreateReticule()
 		M.create()
 	elseif reticuleAutoCreationType == M.ReticuleType.Widget  then
 		if reticuleDefaultWidgetClass ~= nil and reticuleDefaultWidgetClass ~= "" then
-			local options = { removeFromViewport = reticuleRemoveFromViewport, twoSided = reticuleTwoSided }
+			local options = { removeFromViewport = autoReticuleRemoveFromViewport, twoSided = autoReticuleTwoSided, collisionChannel = autoReticuleCollisionChannel, scale = {1, autoReticuleScale[1] and autoReticuleScale[1] or 0.1, autoReticuleScale[2] and autoReticuleScale[2] or 0.1} }
 			M.createFromWidget(reticuleDefaultWidgetClass, options)
 		else
 			M.print("Reticule default widget class is empty, not creating reticule")
@@ -605,25 +742,26 @@ local function autoCreateReticule()
 end
 
 configui.onUpdate("uevr_reticule_toggle_visibility_button", function()
-	toggleSelectedReticuleVisibility()
+	toggleSelectedPossibleReticuleVisibility()
 end)
 
 configui.onUpdate("uevr_reticule_use_button", function()
-	local widget = getSelectedReticuleWidget()
+	local widget = getSelectedPossibleReticuleWidget()
 	local widgetClassName = ""
 	---@cast widget -nil
 	if uevrUtils.getValid(widget) ~= nil and widget:get_class() ~= nil then
 		widgetClassName = widget:get_class():get_full_name()
 	end
-	M.setDefaultWidgetClass(widgetClassName)
+	M.addReticuleByClassName(widgetClassName)
+	--M.setDefaultWidgetClass(widgetClassName)
 end)
 
-configui.onUpdate("uevr_reticule_list", function(value)
-	if value ~= nil and reticuleNames ~= nil and reticuleNames[value] ~= nil then
-		M.print("Using reticule at index " .. value .. " - " .. reticuleNames[value])
+configui.onUpdate("uevr_reticule_possibilities_list", function(value)
+	if value ~= nil and possibleReticuleNames ~= nil and possibleReticuleNames[value] ~= nil then
+		M.print("Using reticule at index " .. value .. " - " .. possibleReticuleNames[value])
 	end
 	currentReticuleSelectionIndex = value
-	updateSelectedReticule()
+	updateSelectedPossibleReticule()
 end)
 
 configui.onUpdate("uevr_reticule_mesh_class_list", function(value)
@@ -665,10 +803,22 @@ function M.setRotation(val)
 	configui.setValue("reticuleUpdateRotation", val, true)
 end
 
+local function saveParameters()
+	M.print("Saving reticule parameters " .. parametersFileName)
+	json.dump_file(parametersFileName .. ".json", parameters, 4)
+end
+
 local createDevMonitor = doOnce(function()
+    uevrUtils.setInterval(1000, function()
+        if isParametersDirty == true then
+            saveParameters()
+            isParametersDirty = false
+        end
+    end)
+
 	uevrUtils.registerLevelChangeCallback(function(level)
 		print("Level changed, updating reticule list")
-		updateReticuleList()
+		updatePossibileReticuleList()
 	end)
 end, Once.EVER)
 
@@ -683,11 +833,25 @@ function M.init(isDeveloperMode, logLevel)
     if isDeveloperMode then
 	    M.showDeveloperConfiguration("reticule_config_dev")
         createDevMonitor()
-        updateReticuleList()
+        updatePossibileReticuleList()
         updateMeshLists()
     else
-        M.loadConfiguration("interaction_config_dev")
+        M.loadConfiguration("reticule_config_dev")
     end
+	updateReticuleWidgetList()
+	updateSelectedReticleWidget(reticuleWidgetIDList[configui.getValue("uevr_reticule_widget_list")])
+end
+
+function M.loadParameters(fileName)
+	if fileName ~= nil then parametersFileName = fileName end
+	M.print("Loading reticule parameters " .. parametersFileName)
+	parameters = json.load_file(parametersFileName .. ".json")
+
+	if parameters == nil then
+		parameters = {}
+		M.print("Creating reticule parameters")
+	end
+
 end
 
 function M.getConfigurationWidgets(options)
@@ -720,6 +884,112 @@ function M.setReticuleType(value)
 	--M.ReticuleConfigType
 end
 
+function M.setSelectedReticulePosition(pos)
+	if pos ~= nil then
+		local reticulePos = uevrUtils.vector2D(pos)
+		if reticulePos ~= nil then
+			local reticuleWidgetID = reticuleWidgetIDList[configui.getValue("uevr_reticule_widget_list")]
+			if reticuleWidgetID ~= nil and reticuleWidgetID ~= "" and reticuleWidgetID ~= "None" then
+				if parameters ~= nil and parameters.reticuleList ~= nil then
+					for j = 1, #parameters.reticuleList do
+						if parameters.reticuleList[j].id == reticuleWidgetID then
+							parameters.reticuleList[j].position.X = reticulePos.X
+							parameters.reticuleList[j].position.Y = reticulePos.Y
+							isParametersDirty = true
+							M.setReticulePosition(pos)
+							return
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+function M.setSelectedReticuleRemoveFromViewport(val)
+	autoReticuleRemoveFromViewport = val
+	configui.setValue("autoReticuleRemoveFromViewport", val, true)
+	local reticuleWidgetID = reticuleWidgetIDList[configui.getValue("uevr_reticule_widget_list")]
+	if reticuleWidgetID ~= nil and reticuleWidgetID ~= "" and reticuleWidgetID ~= "None" then
+		if parameters ~= nil and parameters.reticuleList ~= nil then
+			for j = 1, #parameters.reticuleList do
+				if parameters.reticuleList[j].id == reticuleWidgetID then
+					parameters.reticuleList[j].options.removeFromViewport = val
+					isParametersDirty = true
+					destroyReticuleComponent()
+					return
+				end
+			end
+		end
+	end
+end
+
+function M.setSelectedReticuleTwoSided(val)
+	autoReticuleTwoSided = val
+	configui.setValue("autoReticuleTwoSided", val, true)
+	local reticuleWidgetID = reticuleWidgetIDList[configui.getValue("uevr_reticule_widget_list")]
+	if reticuleWidgetID ~= nil and reticuleWidgetID ~= "" and reticuleWidgetID ~= "None" then
+		if parameters ~= nil and parameters.reticuleList ~= nil then
+			for j = 1, #parameters.reticuleList do
+				if parameters.reticuleList[j].id == reticuleWidgetID then
+					parameters.reticuleList[j].options.twoSided = val
+					isParametersDirty = true
+					destroyReticuleComponent()
+					return
+				end
+			end
+		end
+	end
+end
+
+function M.setSelectedReticuleCollisionChannel(val)
+	autoReticuleCollisionChannel = val
+	configui.setValue("autoReticuleCollisionChannel", val, true)
+	local reticuleWidgetID = reticuleWidgetIDList[configui.getValue("uevr_reticule_widget_list")]
+	if reticuleWidgetID ~= nil and reticuleWidgetID ~= "" and reticuleWidgetID ~= "None" then
+		if parameters ~= nil and parameters.reticuleList ~= nil then
+			for j = 1, #parameters.reticuleList do
+				if parameters.reticuleList[j].id == reticuleWidgetID then
+					parameters.reticuleList[j].collisionChannel = val
+					isParametersDirty = true
+					reticuleCollisionChannel = val
+					return
+				end
+			end
+		end
+	end
+end
+
+function M.setSelectedReticuleScale(val)
+	if val ~= nil then
+		--print("Setting reticule scale to ", val.x, val.y)
+		autoReticuleScale = {val.x, val.y}
+		configui.setValue("autoReticuleScale", {val.x, val.y}, true)
+		local reticuleWidgetID = reticuleWidgetIDList[configui.getValue("uevr_reticule_widget_list")]
+		if reticuleWidgetID ~= nil and reticuleWidgetID ~= "" and reticuleWidgetID ~= "None" then
+			if parameters ~= nil and parameters.reticuleList ~= nil then
+				for j = 1, #parameters.reticuleList do
+					if parameters.reticuleList[j].id == reticuleWidgetID then
+						parameters.reticuleList[j].scale = {val.x, val.y}
+						isParametersDirty = true
+						reticuleScale = uevrUtils.vector(-1, -val.x, val.y)
+						return
+					end
+				end
+			end
+		end
+	end
+end
+
+function M.setReticulePosition(pos)
+	if pos ~= nil then
+		reticulePosition = uevrUtils.vector2D(pos)
+		if reticulePosition ~= nil then
+			configui.setValue("autoReticulePosition", {reticulePosition.X, reticulePosition.Y}, true)
+		end
+	end
+end
+
 function M.setDefaultWidgetClass(val)
 	reticuleDefaultWidgetClass = val
 	configui.setValue("uevr_reticule_widget_class", val, true)
@@ -749,7 +1019,7 @@ function M.reset()
     ---@diagnostic disable-next-line: cast-local-type
 	reticuleComponent = nil
 	restoreWidgetPosition = nil
-	reticuleNames = {}
+	possibleReticuleNames = {}
 	resetSelectedWidget()
 end
 
@@ -774,6 +1044,40 @@ function M.hide(val)
 	if uevrUtils.getValid(reticuleComponent) ~= nil then reticuleComponent:SetVisibility(not val) end
 end
 
+function M.addReticuleByClassName(className)
+	if parameters == nil then
+		parameters = {}
+	end
+	if parameters.reticuleList == nil then
+		parameters.reticuleList = {}
+	end
+	if className ~= nil and className ~= "" then
+		local widget = uevrUtils.getLoadedAsset(className)
+		if uevrUtils.getValid(widget) ~= nil then
+			local found = false
+			for i = 1, #parameters.reticuleList do
+				if parameters.reticuleList[i].type == "Widget" and parameters.reticuleList[i].id == className then
+					found = true
+					break
+				end
+			end
+			if not found then
+				table.insert(parameters.reticuleList, { type = "Widget", id = className, label = uevrUtils.getShortName(widget), options = { removeFromViewport = true, twoSided = true }, position = {X=0.0, Y=0.0} })
+				isParametersDirty = true
+				updateReticuleWidgetList()
+				updateSelectedReticleWidget(className)
+				M.print("Added reticule widget class " .. className)
+			else
+				M.print("Reticule widget class already exists " .. className)
+			end
+		else
+			M.print("Reticule widget class is not valid " .. className)
+		end
+	else
+		M.print("Reticule widget class is empty, not adding reticule")
+	end
+end
+
 -- widget can be string or object
 -- options can be removeFromViewport, twoSided, drawSize, scale, rotation, position, collisionChannel
 function M.createFromWidget(widget, options)
@@ -793,7 +1097,7 @@ function M.createFromWidget(widget, options)
 
 			uevrUtils.set_component_relative_transform(reticuleComponent, options.position, options.rotation, options.scale)
 			reticuleRotation = uevrUtils.rotator(options.rotation)
-			reticulePosition = uevrUtils.vector(options.position)
+			if options.position ~= nil then M.setReticulePosition(options.position) end
 			if options.scale ~= nil then --default return from vector() is 0,0,0 so need to do special check
 				reticuleScale = kismet_math_library:Multiply_VectorVector(uevrUtils.vector(options.scale), uevrUtils.vector(-1,-1, 1))
 			else
@@ -844,7 +1148,8 @@ function M.createFromMesh(mesh, options)
 
 		uevrUtils.set_component_relative_transform(component, options.position, options.rotation, options.scale)
 		reticuleRotation = uevrUtils.rotator(options.rotation)
-		reticulePosition = uevrUtils.vector(options.position)
+		if options.position ~= nil then M.setReticulePosition(options.position) end
+		--reticulePosition = uevrUtils.vector(options.position)
 		if options.scale ~= nil then --default return from vector() is 0,0,0 so need to do special check
 			reticuleScale = uevrUtils.vector(options.scale)
 		else
@@ -969,6 +1274,21 @@ function M.getTargetLocation(originPosition, originDirection)
 	return endLocation
 end
 
+local function getOffsetWorldPosition(targetPos, targetRot, offsetX, offsetY)
+    local result = targetPos
+    --local forward = kismet_math_library:GetForwardVector(targetRot)
+	if offsetX ~= 0 then
+		local right = kismet_math_library:GetRightVector(targetRot)
+		result = kismet_math_library:Add_VectorVector(result, kismet_math_library:Multiply_VectorFloat(right, offsetX))
+    end
+
+	if offsetY ~= 0 then
+		local up = kismet_math_library:GetUpVector(targetRot)
+		result = kismet_math_library:Add_VectorVector(result, kismet_math_library:Multiply_VectorFloat(up, offsetY))
+	end
+    return result
+end
+
 function M.update(originLocation, targetLocation, distance, scale, rotation, allowAutoHandle )
 	if allowAutoHandle ~= true then
 		autoHandleInput = false --if something else is calling this then dont auto handle input
@@ -1014,8 +1334,10 @@ function M.update(originLocation, targetLocation, distance, scale, rotation, all
 			local rot = kismet_math_library:Conv_VectorToRotator(temp_vec3f)
 			rot = uevrUtils.sumRotators(rot, reticuleRotation, rotation)
 			---@cast reticulePosition -nil
-			temp_vec3f:set(originLocation.X + (hmdToTargetDirection.X * distance) + reticulePosition.X, originLocation.Y + (hmdToTargetDirection.Y * distance) + reticulePosition.Y, originLocation.Z + (hmdToTargetDirection.Z * distance) + reticulePosition.Z)
-			reticuleComponent:K2_SetWorldLocationAndRotation(temp_vec3f, rot, false, reusable_hit_result, false)
+			temp_vec3f:set(originLocation.X + (hmdToTargetDirection.X * distance), originLocation.Y + (hmdToTargetDirection.Y * distance), originLocation.Z + (hmdToTargetDirection.Z * distance))
+--print("Reticule position at ", reticulePosition.X, reticulePosition.Y)
+			local adjustedPosition = getOffsetWorldPosition(temp_vec3f, rot, reticulePosition.X, reticulePosition.Y)
+			reticuleComponent:K2_SetWorldLocationAndRotation(adjustedPosition, rot, false, reusable_hit_result, false)
 			if scale ~= nil then
 				reticuleComponent:SetWorldScale3D(kismet_math_library:Multiply_VectorVector(uevrUtils.vector(scale), reticuleScale))
 			end
@@ -1037,18 +1359,24 @@ configui.onCreateOrUpdate("reticuleUpdateRotation", function(value)
 	M.setRotation(value)
 end)
 
-configui.onCreateOrUpdate("reticuleRemoveFromViewport", function(value)
-	reticuleRemoveFromViewport = value
-	destroyReticuleComponent()
+configui.onCreateOrUpdate("autoReticuleRemoveFromViewport", function(value)
+	M.setSelectedReticuleRemoveFromViewport(value)
 end)
 
-configui.onCreateOrUpdate("reticuleTwoSided", function(value)
-	reticuleTwoSided = value
-	destroyReticuleComponent()
+configui.onCreateOrUpdate("autoReticuleTwoSided", function(value)
+	M.setSelectedReticuleTwoSided(value)
+end)
+
+configui.onCreateOrUpdate("autoReticuleCollisionChannel", function(value)
+	M.setSelectedReticuleCollisionChannel(value)
+end)
+
+configui.onCreateOrUpdate("autoReticuleScale", function(value)
+	M.setSelectedReticuleScale(value)
 end)
 
 configui.onUpdate("uevr_reticule_refresh_button", function(value)
-	updateReticuleList()
+	updatePossibileReticuleList()
 end)
 
 configui.onCreateOrUpdate("uevr_reticule_widget_class", function(value)
@@ -1066,7 +1394,42 @@ end)
 configui.onCreateOrUpdate("uevr_reticule_type", function(value)
 	M.setReticuleType(value)
 end)
+--updateSelectedReticleWidget     1.7999999523163 -3.5999999046326
+configui.onCreateOrUpdate("autoReticulePosition", function(value)
+	M.setSelectedReticulePosition(value)
+end)
 
+configui.onUpdate("uevr_reticule_manual_add_button", function(value)
+	configui.setHidden("uevr_reticule_add_manually", false)
+	configui.setHidden("uevr_reticule_add_with_finder", true)
+	configui.setColor("uevr_reticule_manual_add_button", "#888888FF")
+	configui.setHoveredColor("uevr_reticule_manual_add_button", "#888888FF")
+	configui.setColor("uevr_reticule_find_add_button", nil)
+	configui.setHoveredColor("uevr_reticule_find_add_button", nil)
+end)
+
+configui.onUpdate("uevr_reticule_find_add_button", function(value)
+	configui.setHidden("uevr_reticule_add_manually", true)
+	configui.setHidden("uevr_reticule_add_with_finder", false)
+	configui.setColor("uevr_reticule_manual_add_button", nil)
+	configui.setHoveredColor("uevr_reticule_manual_add_button", nil)
+	configui.setColor("uevr_reticule_find_add_button", "#888888FF")
+	configui.setHoveredColor("uevr_reticule_find_add_button", "#888888FF")
+end)
+
+configui.onUpdate("uevr_reticule_manual_add_widget_class_button", function(value)
+	M.addReticuleByClassName(configui.getValue("uevr_reticule_manual_add_widget_class"))
+	configui.setValue("uevr_reticule_manual_add_widget_class", "")
+end)
+
+configui.onUpdate("uevr_reticule_widget_list", function(value)
+	if value ~= nil and reticuleWidgetIDList[value] ~= nil then
+		updateSelectedReticleWidget(reticuleWidgetIDList[value])
+	end
+end)
+
+
+--WidgetBlueprintGeneratedClass /Game/UI/WeaponsWidgets/WB_ReticleLaser.WB_ReticleLaser_C
 
 
 uevrUtils.setInterval(1000, function()
@@ -1101,5 +1464,7 @@ uevr.params.sdk.callbacks.on_script_reset(function()
 	resetSelectedWidget()
 	destroyReticuleComponent()
 end)
+
+M.loadParameters()
 
 return M

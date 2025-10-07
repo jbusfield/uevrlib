@@ -118,6 +118,18 @@ Usage
 		example:
 			configui.disableWidget("use_hands", true)
 
+	configui.setColor(widgetID, colorString) -- sets the base color of a button (in #BBGGRRAA format)
+		example:
+			configui.setColor("my_button", "#FF0000FF") -- Set to blue
+
+	configui.setHoveredColor(widgetID, colorString) -- sets the hover color of a button (in #BBGGRRAA format)
+		example:
+			configui.setHoveredColor("my_button", "#FF4444FF") -- Set to lighter blue
+
+	configui.setActiveColor(widgetID, colorString) -- sets the pressed color of a button (in #BBGGRRAA format)
+		example:
+			configui.setActiveColor("my_button", "#FF8888FF") -- Set to even lighter blue
+
 	configui.hidePanel(panelID, value) -- sets whether an entire panel is hidden
 		example:
 			configui.hidePanel("hands_panel", true)
@@ -141,9 +153,233 @@ Usage
 			}}
 			configui.createConfigPanel("My Panel", "my_config", widgets)
 
+Available Widget Types:
+
+	1. Basic Input Widgets:
+	- checkbox - Boolean checkbox input
+		properties: id, label, initialValue
+		example: { widgetType = "checkbox", id = "use_hands", label = "Use Hands", initialValue = true }
+
+	- combo - Dropdown selection menu
+		properties: id, label, selections, initialValue, width
+		example: { widgetType = "combo", id = "animation_hand", label = "Hand", selections = {"Left","Right","Both"}, initialValue = 1, width = 150 }
+
+	- button - Regular button
+		properties: id, label, size, color, hoveredColor, activeColor
+		example: { 
+			widgetType = "button", 
+			id = "generate_code_button", 
+			label = "Generate code", 
+			size = {140,24},
+			color = "#FF0000FF",       -- Base button color (#RRGGBBAA format)
+			hoveredColor = "#FF4444FF", -- Color when mouse hovers over button
+			activeColor = "#FF8888FF"   -- Color when button is pressed
+		}
+
+	- small_button - Smaller sized button
+		properties: id, label, size
+		example: { widgetType = "small_button", id = "refresh_button", label = "↻", size = {20,20} }
+
+	- input_text - Single line text input
+		properties: id, label, initialValue, width
+		example: { widgetType = "input_text", id = "widget_class", label = "Widget Class", initialValue = "", width = 200 }
+
+	- input_text_multiline - Multi-line text input area
+		properties: id, label, initialValue, size
+		example: { widgetType = "input_text_multiline", id = "description", label = "Description", initialValue = "", size = {440, 180} }
+
+	- text - Static text display
+		properties: label, wrapped, textWidth
+		example: { widgetType = "text", label = "Configuration Help", wrapped = true, textWidth = 60 }
+
+	2. Numeric Input Widgets:
+	- slider_int - Integer slider
+		properties: id, label, range, initialValue
+		example: { widgetType = "slider_int", id = "priority", label = "Priority", range = {0, 10}, initialValue = 5 }
+
+	- slider_float - Float slider
+		properties: id, label, range, initialValue, speed
+		example: { widgetType = "slider_float", id = "scale", label = "Scale", range = {0.1, 2.0}, initialValue = 1.0, speed = 0.01 }
+
+	- drag_int - Draggable integer input
+		properties: id, label, speed, range, initialValue
+		example: { widgetType = "drag_int", id = "count", label = "Count", speed = 1, range = {0, 100}, initialValue = 0 }
+
+	- drag_float - Draggable float input
+		properties: id, label, speed, range, initialValue
+		example: { widgetType = "drag_float", id = "distance", label = "Distance", speed = 0.1, range = {0, 100}, initialValue = 50 }
+
+	- drag_float2 - 2D vector input (X,Y)
+		properties: id, label, speed, range, initialValue
+		example: { widgetType = "drag_float2", id = "position_2d", label = "Position", speed = 0.1, range = {-10, 10}, initialValue = {0, 0} }
+
+	- drag_float3 - 3D vector input (X,Y,Z)
+		properties: id, label, speed, range, initialValue
+		example: { widgetType = "drag_float3", id = "position_3d", label = "Position", speed = 0.1, range = {-10, 10}, initialValue = {0, 0, 0} }
+
+	- drag_float4 - 4D vector input (X,Y,Z,W)
+		properties: id, label, speed, range, initialValue
+		example: { widgetType = "drag_float4", id = "rotation", label = "Rotation", speed = 1, range = {0, 360}, initialValue = {0, 0, 0, 1} }
+
+	3. Visual Widgets:
+	- color_picker - Color selection widget
+		properties: id, label, initialValue
+		example: { widgetType = "color_picker", id = "text_color", label = "Text Color", initialValue = "#FFFFFFFF" }
+
+	- text_colored - Colored text display
+		properties: label, color
+		example: { widgetType = "text_colored", label = "Warning!", color = "#FF0000FF" }
+
+	- tree_node - Collapsible tree node
+		properties: id, label, initialOpen
+		example: { widgetType = "tree_node", id = "settings_group", label = "Settings", initialOpen = true }
+
+	- tree_node_ptr_id - Tree node with pointer ID
+		properties: id, label, initialOpen
+		example: { widgetType = "tree_node_ptr_id", id = "ptr_settings", label = "Pointer Settings", initialOpen = true }
+
+	- tree_node_str_id - Tree node with string ID
+		properties: id, label, initialOpen
+		example: { widgetType = "tree_node_str_id", id = "str_settings", label = "String Settings", initialOpen = true }
+
+	- tree_pop - End of tree node
+		no properties required
+		example: { widgetType = "tree_pop" }
+		
+	- collapsing_header - Collapsible header element
+		properties: label
+		example: { widgetType = "collapsing_header", label = "Advanced Settings" }
+
+	- begin_group - Start a group of widgets
+		properties: id, isHidden
+		example: { widgetType = "begin_group", id = "advanced_settings", isHidden = false }
+
+	- end_group - End a group of widgets
+		no properties required
+		example: { widgetType = "end_group" }
+
+	- begin_rect - Start a rectangle container
+		properties: additionalSize, rounding (both optional)
+		example: { widgetType = "begin_rect", additionalSize = 12, rounding = 5 }
+
+	- end_rect - End a rectangle container
+		properties: additionalSize, rounding (both optional)
+		example: { widgetType = "end_rect", additionalSize = 12, rounding = 5 }
+
+	- begin_child_window - Start a scrollable child window
+		properties: size, border
+		example: { widgetType = "begin_child_window", size = {400, 300}, border = true }
+
+	- end_child_window - End a child window
+		no properties required
+		example: { widgetType = "end_child_window" }
+
+	4. Layout Widgets:
+	- indent - Increase indentation
+		properties: width
+		example: { widgetType = "indent", width = 20 }
+
+	- unindent - Decrease indentation
+		properties: width
+		example: { widgetType = "unindent", width = 20 }
+
+	- same_line - Place next widget on same line
+		no properties required
+		example: { widgetType = "same_line" }
+
+	- new_line - Force next widget to new line
+		no properties required
+		example: { widgetType = "new_line" }
+
+	- spacing - Add a standard amount of vertical space between widgets
+		no properties required
+		example: { widgetType = "spacing" }
+
+	- space_vertical - Add a specific amount of vertical space
+		properties: space (required, in pixels)
+		example: { widgetType = "space_vertical", space = 20 }
+
+	- space_horizontal - Add a specific amount of horizontal space
+		properties: space (required, in pixels)
+		example: { widgetType = "space_horizontal", space = 50 }
+
+	Common Properties:
+	- id: Unique identifier for the widget (required for interactive widgets)
+	- label: Display text
+	- initialValue: Starting value
+	- width: Widget width in pixels
+	- size: Widget size as {width, height}
+	- range: Value limits as {min, max} for numeric widgets
+	- speed: Adjustment speed for numeric widgets
+	- selections: Array of options for combo widgets
+	- isHidden: Boolean to control visibility
+	- wrapped: Boolean to enable text wrapping (for text widgets)
+	- disabled: Boolean to make the widget grayed out and/or non-interactive
+		example: { widgetType = "button", id = "save_button", label = "Save", disabled = true }
+
+
 ]]--
 
 local M = {}
+
+ImGui = {
+    Text = 0,
+    TextDisabled = 1,
+    TextSelectedBg = 47,
+    WindowBg = 2,
+    ChildBg = 3,
+    PopupBg = 4,
+    Border = 5,
+    BorderShadow = 6,
+    FrameBg = 7,
+    FrameBgHovered = 8,
+    FrameBgActive = 9,
+    TitleBg = 10,
+    TitleBgActive = 11,
+    TitleBgCollapsed = 12,
+    MenuBarBg = 13,
+    ScrollbarBg = 14,
+    ScrollbarGrab = 15,
+    ScrollbarGrabHovered = 16,
+    ScrollbarGrabActive = 17,
+    CheckMark = 18,
+    SliderGrab = 19,
+    SliderGrabActive = 20,
+    Button = 21,
+    ButtonHovered = 22,
+    ButtonActive = 23,
+    Header = 24,
+    HeaderHovered = 25,
+    HeaderActive = 26,
+    Separator = 27,
+    SeparatorHovered = 28,
+    SeparatorActive = 29,
+    ResizeGrip = 30,
+    ResizeGripHovered = 31,
+    ResizeGripActive = 32,
+    Tab = 33,
+    TabHovered = 34,
+    TabActive = 35,
+    TabUnfocused = 36,
+    TabUnfocusedActive = 37,
+    DockingPreview = 38,
+    DockingEmptyBg = 39,
+    PlotLines = 40,
+    PlotLinesHovered = 41,
+    PlotHistogram = 42,
+    PlotHistogramHovered = 43,
+    TableHeaderBg = 44,
+    TableBorderStrong = 45,
+    TableBorderLight = 46,
+    TableRowBg = 48,
+    TableRowBgAlt = 49,
+    DragDropTarget = 50,
+    NavHighlight = 51,
+    NavWindowingHighlight = 52,
+    NavWindowingDimBg = 53,
+    ModalWindowDimBg = 54,
+    COUNT = 55
+}
 
 local configValues = {}
 local itemMap = {}
@@ -160,16 +396,17 @@ local framePanelList = {}
 local customPanelList = {}
 
 local function doUpdate(panelID, widgetID, value, updateConfigValue, noCallbacks)
+	--print("doUpdate called for panelID:", panelID, " widgetID:", widgetID, " value:", tostring(value), " updateConfigValue:", tostring(updateConfigValue), " noCallbacks:", tostring(noCallbacks))
 	if panelID ~= nil then
 		if updateConfigValue == nil then updateConfigValue = true end
 		if updateConfigValue == true then
-			if configValues[panelID] == nil then 
-				configValues[panelID] = {} 
+			if configValues[panelID] == nil then
+				configValues[panelID] = {}
 				itemMap[widgetID] = panelID
 			end
 			configValues[panelID][widgetID] = value
 		end
-		
+
 		if noCallbacks ~= true then
 			local funcList = updateFunctions[widgetID]
 			if funcList ~= nil and #funcList > 0 then
@@ -184,21 +421,25 @@ local function doUpdate(panelID, widgetID, value, updateConfigValue, noCallbacks
 				end
 			end
 		end
-		panelList[panelID].isDirty = true
+		if panelList[panelID] ~= nil then panelList[panelID].isDirty = true end
 	else
-		print("panelID is nil in doUpdate")
+		print("[configui] panelID is nil in doUpdate")
 	end
 end
 
+--RRGGBBAA in
 local function colorStringToInteger(colorString)
 	if colorString == nil then
 		return 0
 	end
-    -- Remove the '#' character
+    -- Remove the '#' character 
     local hex = colorString:sub(2)
+    local b = tonumber(hex:sub(1,2), 16)
+    local g = tonumber(hex:sub(3,4), 16)
+    local r = tonumber(hex:sub(5,6), 16)
+    local a = tonumber(hex:sub(7,8), 16)
 
-    -- Convert hex string to integer
-    return tonumber(hex, 16)
+    return (a << 24) | (r << 16) | (g << 8) | b
 end
 
 local function getVector2FromArray(arr)
@@ -228,8 +469,10 @@ local function getVector4FromArray(arr)
 end
 
 local function getArrayFromVector2(vec)
-	--vector 2 is broken
-	return {0,0}
+	if vec == nil then
+		return {0,0}
+	end
+	return {vec.x, vec.y}
 end
 
 local function getArrayFromVector3(vec)
@@ -253,12 +496,12 @@ local function drawUI(panelID)
 	local isTreeOpen = false
 
 	for _, item in ipairs(layoutDefinitions[panelID]) do
-		if item.widgetType == "begin_group" and (groupHide > 0 or item.isHidden) then 
-			groupHide = groupHide + 1 
+		if item.widgetType == "begin_group" and (groupHide > 0 or item.isHidden) then
+			groupHide = groupHide + 1
 		end
 		if groupHide > 0 then goto continue end
-		
-		if item.isHidden ~= true and (treeDepth == 0 or treeState[treeDepth] == true or item.widgetType == "tree_node" or item.widgetType == "tree_node_ptr_id" or item.widgetType == "tree_node_str_id" or item.widgetType == "tree_pop") then 
+
+		if item.isHidden ~= true and (treeDepth == 0 or treeState[treeDepth] == true or item.widgetType == "tree_node" or item.widgetType == "tree_node_ptr_id" or item.widgetType == "tree_node_str_id" or item.widgetType == "tree_pop") then
 			if item.label == "" then item.label = " " end --with an empty label, combos wont open
 			if item.disabled == true then
 				imgui.begin_disabled()
@@ -267,24 +510,31 @@ local function drawUI(panelID)
 			if item.id ~= nil and item.id ~= "" then
 				imgui.push_id(item.id)
 			end
-			
+
 			if item.width ~= nil and item.widgetType ~= "unindent" and item.widgetType ~= "indent" then
 				imgui.set_next_item_width(item.width)
 			end
-			
+
 			if item.widgetType == "checkbox" then
 				local changed, newValue = imgui.checkbox(item.label, configValues[panelID][item.id])
-				if changed then 
+				if changed then
 					doUpdate(panelID, item.id, newValue)
 				end
 			elseif item.widgetType == "button" then
-				local changed, newValue = imgui.button(item.label, item.size) 
-				if changed then 
+				if item.color ~= nil then imgui.push_style_color(ImGui.Button, colorStringToInteger(item.color)) end
+				if item.hoveredColor ~= nil then imgui.push_style_color(ImGui.ButtonHovered, colorStringToInteger(item.hoveredColor)) end
+				if item.activeColor ~= nil then imgui.push_style_color(ImGui.ButtonActive, colorStringToInteger(item.activeColor)) end
+				--imgui.push_style_color(ImGui.Button, colorStringToInteger("#FF00FFFF"))
+				local changed, newValue = imgui.button(item.label, item.size)
+				if changed then
 					doUpdate(panelID, item.id, true, false)
 				end
+				if item.color ~= nil then imgui.pop_style_color(1) end
+				if item.hoveredColor ~= nil then imgui.pop_style_color(1) end
+				if item.activeColor ~= nil then imgui.pop_style_color(1) end
 			elseif item.widgetType == "small_button" then
-				local changed, newValue = imgui.small_button(item.label, item.size) 
-				if changed then 
+				local changed, newValue = imgui.small_button(item.label, item.size)
+				if changed then
 					doUpdate(panelID, item.id, true, false)
 				end
 			elseif item.widgetType == "combo" then
@@ -294,52 +544,52 @@ local function drawUI(panelID)
 				end
 			elseif item.widgetType == "slider_int" then
 				local changed, newValue = imgui.slider_int(item.label, configValues[panelID][item.id], item.range[1], item.range[2])
-				if changed then 
+				if changed then
 					doUpdate(panelID, item.id, newValue)
 				end
 			elseif item.widgetType == "slider_float" then
 				local changed, newValue = imgui.slider_float(item.label, configValues[panelID][item.id], item.range[1], item.range[2])
-				if changed then 
+				if changed then
 					doUpdate(panelID, item.id, newValue)
 				end
 			elseif item.widgetType == "drag_int" then
 				local changed, newValue = imgui.drag_int(item.label, configValues[panelID][item.id], item.speed, item.range[1], item.range[2])
-				if changed then 
+				if changed then
 					doUpdate(panelID, item.id, newValue)
 				end
 			elseif item.widgetType == "drag_float" then
 				local changed, newValue = imgui.drag_float(item.label, configValues[panelID][item.id], item.speed, item.range[1], item.range[2])
-				if changed then 
+				if changed then
 					doUpdate(panelID, item.id, newValue)
 				end
 			elseif item.widgetType == "drag_float2" then
 				local changed, newValue = imgui.drag_float2(item.label, configValues[panelID][item.id], item.speed, item.range[1], item.range[2])
-				if changed then 
+				if changed then
 					doUpdate(panelID, item.id, newValue)
 				end
 			elseif item.widgetType == "drag_float3" then
 				local changed, newValue = imgui.drag_float3(item.label, configValues[panelID][item.id], item.speed, item.range[1], item.range[2])
-				if changed then 
+				if changed then
 					doUpdate(panelID, item.id, newValue)
 				end
 			elseif item.widgetType == "drag_float4" then
 				local changed, newValue = imgui.drag_float4(item.label, configValues[panelID][item.id], item.speed, item.range[1], item.range[2])
-				if changed then 
+				if changed then
 					doUpdate(panelID, item.id, newValue)
 				end
 			elseif item.widgetType == "input_text" then
 				local changed, newValue, selectionStart, selectionEnd = imgui.input_text(item.label, configValues[panelID][item.id])
-				if changed then 
+				if changed then
 					doUpdate(panelID, item.id, newValue)
 				end
 			elseif item.widgetType == "input_text_multiline" then
 				local changed, newValue, selectionStart, selectionEnd = imgui.input_text_multiline(item.label, configValues[panelID][item.id], item.size)
-				if changed then 
+				if changed then
 					doUpdate(panelID, item.id, newValue)
 				end
 			elseif item.widgetType == "color_picker" then
 				local changed, newValue = imgui.color_picker(item.label, configValues[panelID][item.id])
-				if changed then 
+				if changed then
 					doUpdate(panelID, item.id, newValue)
 				end
 			elseif item.widgetType == "begin_rect" then
@@ -398,18 +648,26 @@ local function drawUI(panelID)
 				imgui.new_line()
 			elseif item.widgetType == "spacing" then
 				imgui.spacing()
+			elseif item.widgetType == "space_vertical" then
+				local current = imgui.get_cursor_pos()
+				current.y = current.y + item.space
+				imgui.set_cursor_pos(current)
+			elseif item.widgetType == "space_horizontal" then
+				local current = imgui.get_cursor_pos()
+				current.x = current.x + item.space
+				imgui.set_cursor_pos(current)
 			elseif item.widgetType == "same_line" then
 				if item.spacing ~= nil then
 					imgui.same_line(item.spacing)
 				else
 					imgui.same_line()
 				end
-			elseif item.widgetType == "spacing" then
-				if item.spacing ~= nil then
-					imgui.spacing(item.spacing)
-				else
-					imgui.spacing()
-				end
+			-- elseif item.widgetType == "spacing" then
+			-- 	if item.spacing ~= nil then
+			-- 		imgui.spacing(item.spacing)
+			-- 	else
+			-- 		imgui.spacing()
+			-- 	end
 			elseif item.widgetType == "text" then
 				imgui.text(item.label)
 			elseif item.widgetType == "indent" then
@@ -419,7 +677,7 @@ local function drawUI(panelID)
 			elseif item.widgetType == "text_colored" then
 				imgui.text_colored(item.label, colorStringToInteger(item.color))
 			end
-			
+
 			if item.id ~= nil and item.id ~= "" then
 				imgui.pop_id()
 			end
@@ -429,8 +687,8 @@ local function drawUI(panelID)
 			end
 		end
 		::continue::
-		
-		if item.widgetType == "end_group" then 
+
+		if item.widgetType == "end_group" then
 			if groupHide > 0 then
 				groupHide = groupHide - 1
 			end
@@ -487,13 +745,13 @@ function M.updatePanel(panelDefinition)
 	end
 
 	local panelID = panelDefinition["id"]
-	if panelID == nil or panelID == "" then 		
+	if panelID == nil or panelID == "" then
 		panelID = fileName
-		if panelID == nil or panelID == "" then 
+		if panelID == nil or panelID == "" then
 			panelID = label
 		end
 	end
-	
+
 	layoutDefinitions[panelID] = panelDefinition["layout"]
 
 	panelList[panelID] = {isDirty=false, timeSinceLastSave=0, fileName=fileName, isHidden=panelDefinition["isHidden"]}
@@ -531,21 +789,21 @@ function M.createPanel(panelDefinition)
 	end
 
 	local panelID = panelDefinition["id"]
-	if panelID == nil or panelID == "" then 		
+	if panelID == nil or panelID == "" then
 		panelID = fileName
-		if panelID == nil or panelID == "" then 
+		if panelID == nil or panelID == "" then
 			panelID = label
 		end
 	end
-	
+
 	layoutDefinitions[panelID] = panelDefinition["layout"]
 
 	panelList[panelID] = {isDirty=false, timeSinceLastSave=0, fileName=fileName, isHidden=panelDefinition["isHidden"]}
-	
-	print("Creating panel",label, fileName)
+
+	--print("[configui] Creating panel", label, fileName)
 	if configValues[panelID] == nil then
 		configValues[panelID] = {}
-		
+
 		if label == "__default__" then
 			--table.insert(defaultPanelList, panelID)
 			uevr.sdk.callbacks.on_draw_ui(function()
@@ -558,7 +816,7 @@ function M.createPanel(panelDefinition)
 					local opened = imgui.begin_window(label, true)
 					drawUI(panelID)
 					imgui.end_window()
-					if not opened then 
+					if not opened then
 						panelList[panelID]["isHidden"] = true
 					end
 				end
@@ -596,19 +854,19 @@ function M.createPanel(panelDefinition)
 
 
 	M.load(panelID, fileName)
-	
+
 end
 
 function M.update(configDefinition)
-	
+
 	if configDefinition ~= nil then
 		for _, panel in ipairs(configDefinition) do
 			M.updatePanel(panel)
 		end
 	else
-		print("Cant create create UI because no definition provided")
+		print("[configui] Cant create create UI because no definition provided")
 	end
-	
+
 	--Makes sure the default file is loaded if it exists so that dynamic config items can be loaded if necessary
 	if configValues[defaultFilename] == nil then
 		M.load(defaultFilename, defaultFilename)
@@ -616,15 +874,15 @@ function M.update(configDefinition)
 end
 
 function M.create(configDefinition)
-	
+
 	if configDefinition ~= nil then
 		for _, panel in ipairs(configDefinition) do
 			M.createPanel(panel)
 		end
 	else
-		print("Cant create create UI because no definition provided")
+		print("[configui] Cant create create UI because no definition provided")
 	end
-	
+
 	--Makes sure the default file is loaded if it exists so that dynamic config items can be loaded if necessary
 	if configValues[defaultFilename] == nil then
 		M.load(defaultFilename, defaultFilename)
@@ -635,32 +893,44 @@ function M.load(panelID, fileName)
 	if configValues[panelID] == nil then
 		configValues[panelID] = {}
 	end
-	--print("Loading config")
-	-- if json == nil then
-		-- json = require("jsonStorage")
-	-- end
 	if fileName ~= nil and fileName ~= "" and json ~= nil then
 		local loadConfig = json.load_file(fileName .. ".json")
 		if loadConfig ~= nil then
 			for key, val in pairs(loadConfig) do
-				local item = getDefinitionElement(panelID, key)
-				if item ~= nil then
-					if item.widgetType == "drag_float2" then
+				-- local item = getDefinitionElement(panelID, key)
+				-- print("The item is ", item)
+				-- if item ~= nil then
+				-- 	if item.widgetType == "drag_float2" then
+				-- 		configValues[panelID][key] = getVector2FromArray(val)
+				-- 	elseif item.widgetType == "drag_float3" then
+				-- 		configValues[panelID][key] = getVector3FromArray(val)
+				-- 	elseif item.widgetType == "drag_float4" then
+				-- 		configValues[panelID][key] = getVector4FromArray(val)
+				-- 	else
+				-- 		configValues[panelID][key] = val
+				-- 	end
+				-- else
+				-- 	configValues[panelID][key] = val
+				-- end
+				if type(val) == "table" then
+					if #val == 2 then
 						configValues[panelID][key] = getVector2FromArray(val)
-					elseif item.widgetType == "drag_float3" then
+					elseif #val == 3 then
 						configValues[panelID][key] = getVector3FromArray(val)
-					elseif item.widgetType == "drag_float4" then
+					elseif #val == 4 then
 						configValues[panelID][key] = getVector4FromArray(val)
-					else
-						configValues[panelID][key] = val
 					end
 				else
 					configValues[panelID][key] = val
 				end
+
+				itemMap[key] = panelID
+
+			--print("[configui] ", fileName, panelID, key, configValues[panelID][key])
 			end
 		end
 	end
-	
+
 	for widgetID, value in pairs(configValues[panelID]) do
 		local funcList = createFunctions[widgetID]
 		if funcList ~= nil and #funcList > 0 then
@@ -682,30 +952,38 @@ function M.save(panelID)
 	if panel ~= nil then
 		local fileName = panel.fileName
 		if fileName ~= nil and fileName ~= "" and json ~= nil then
-			--print("Saving config")
-			--things like vector3 need to be converted into a json friendly format
 			local saveConfig = {}
 			for key, val in pairs(configValues[panelID]) do
-				item = getDefinitionElement(panelID, key)
-				if item ~= nil then
-					if item.widgetType == "drag_float2" then
+				--print("Saving ", key, val, type(val))
+				--things like vector3 need to be converted into a json friendly format
+				if type(val) == "userdata" then
+					--print(val.x,val.y,val.z,val.w)
+					if val.x ~= nil and val.y ~= nil and val.z == nil and val.w == nil then
 						saveConfig[key] = getArrayFromVector2(val)
-					elseif item.widgetType == "drag_float3" then
+					elseif val.x ~= nil and val.y ~= nil and val.z ~= nil and val.w == nil then
 						saveConfig[key] = getArrayFromVector3(val)
-					elseif item.widgetType == "drag_float4" then
+					elseif val.x ~= nil and val.y ~= nil and val.z ~= nil and val.w ~= nil then
 						saveConfig[key] = getArrayFromVector4(val)
-					else
-						saveConfig[key] = val
 					end
 				else
 					saveConfig[key] = val
 				end
+				-- local item = getDefinitionElement(panelID, key)
+				-- if item ~= nil then
+				-- 	if item.widgetType == "drag_float2" then
+				-- 		saveConfig[key] = getArrayFromVector2(val)
+				-- 	elseif item.widgetType == "drag_float3" then
+				-- 		saveConfig[key] = getArrayFromVector3(val)
+				-- 	elseif item.widgetType == "drag_float4" then
+				-- 		saveConfig[key] = getArrayFromVector4(val)
+				-- 	else
+				-- 		saveConfig[key] = val
+				-- 	end
+				-- else
+				-- 	saveConfig[key] = val
+				-- end
 			end
-			
-			-- if json == nil then
-				-- json = require("jsonStorage")
-			-- end
-			--print(configValues)
+
 			json.dump_file(fileName .. ".json", saveConfig, 4)
 		end
 	end
@@ -750,6 +1028,7 @@ function M.getValue(widgetID)
 	if panelID == nil then
 		panelID = defaultFilename
 	end
+	--print("[configui] getValue", panelID, widgetID, #configValues or 0, configValues[panelID] and configValues[panelID][widgetID])
 	if configValues[panelID] ~= nil then
 		return configValues[panelID][widgetID]
 	else
@@ -759,19 +1038,31 @@ function M.getValue(widgetID)
 end
 
 function M.setValue(widgetID, value, noCallbacks)
-	local item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
-	if item ~= nil then
-		if item.widgetType == "drag_float2" and type(value) == "table" then
+	-- print("[configui] setValue", widgetID, value, type(value), type(value) == "table" and #value or "none")
+	-- local item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
+	-- if item ~= nil then
+	-- 	if item.widgetType == "drag_float2" and type(value) == "table" then
+	-- 		value = getVector2FromArray(value)
+	-- 	elseif item.widgetType == "drag_float3" and type(value) == "table" then
+	-- 		value = getVector3FromArray(value)
+	-- 	elseif item.widgetType == "drag_float4" and type(value) == "table" then
+	-- 		value = getVector4FromArray(value)
+	-- 	elseif item.widgetType == "color_picker" and type(value) == "table" then
+	-- 		value = colorStringToInteger(value)
+	-- 	end
+	-- 	doUpdate(M.getPanelID(widgetID), widgetID, value, nil, noCallbacks)
+	-- end
+
+	if type(value) == "table" then
+		if #value == 2 then
 			value = getVector2FromArray(value)
-		elseif item.widgetType == "drag_float3" and type(value) == "table" then
+		elseif #value == 3 then
 			value = getVector3FromArray(value)
-		elseif item.widgetType == "drag_float4" and type(value) == "table" then
+		elseif #value == 4 then
 			value = getVector4FromArray(value)
-		elseif item.widgetType == "color_picker" and type(value) == "table" then
-			value = colorStringToInteger(value)
 		end
-		doUpdate(M.getPanelID(widgetID), widgetID, value, nil, noCallbacks)
 	end
+	doUpdate(M.getPanelID(widgetID), widgetID, value, nil, noCallbacks)
 end
 
 function M.setSelections(widgetID, selections)
@@ -818,6 +1109,27 @@ function M.setLabel(widgetID, newLabel)
 	end
 end
 
+function M.setColor(widgetID, colorString)
+	local item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
+	if item ~= nil then
+		item.color = colorString
+	end
+end
+
+function M.setHoveredColor(widgetID, colorString)
+	local item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
+	if item ~= nil then
+		item.hoveredColor = colorString
+	end
+end
+
+function M.setActiveColor(widgetID, colorString)
+	local item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
+	if item ~= nil then
+		item.activeColor = colorString
+	end
+end
+
 function M.applyOptionsToConfigWidgets(configWidgets, options)
 	if options ~= nil then
 		for index, item in ipairs(options) do
@@ -849,10 +1161,11 @@ end
 
 function M.intToAARRGGBB(num)
     local a = (num >> 24) & 0xFF
-    local b = (num >> 16) & 0xFF
+    local r = (num >> 16) & 0xFF
     local g = (num >> 8) & 0xFF
-    local r = num & 0xFF
-    return string.format("#%02X%02X%02X%02X", a, r, g, b)
+    local b = num & 0xFF
+    -- Convert from AARRGGBB to BBGGRRAA format
+    return string.format("#%02X%02X%02X%02X", b, g, r, a)
 end
 
 uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)

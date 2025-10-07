@@ -99,6 +99,12 @@ local pawnUpperArmRight = ""
 local pawnUpperArmLeft = ""
 
 local hidePawnArmsBones = false
+local hidePawnBodyMesh = false
+local hidePawnArmsMesh = false
+local hideAnimationArms = false
+
+local bodyMeshFOVFixID = ""
+local armsMeshFOVFixID = ""
 
 local pawnMeshList = {}
 local boneList = {}
@@ -140,7 +146,7 @@ local developerWidgets = spliceableInlineArray{
 			widgetType = "checkbox",
 			id = "hidePawnBodyMesh",
 			label = "Hide",
-			initialValue = false
+			initialValue = hidePawnBodyMesh
 		},
 		{
 			widgetType = "input_text",
@@ -149,6 +155,14 @@ local developerWidgets = spliceableInlineArray{
 			initialValue = "",
 			isHidden = true
 		},
+		{
+			widgetType = "input_text",
+			id = "pawnBodyFOVFix",
+			label = "FOV Fix ID",
+			initialValue = bodyMeshFOVFixID,
+			isHidden = false
+		},
+
 	{
 		widgetType = "tree_pop"
 	},
@@ -171,14 +185,7 @@ local developerWidgets = spliceableInlineArray{
 			widgetType = "checkbox",
 			id = "hidePawnArmsMesh",
 			label = "Hide",
-			initialValue = false
-		},
-		{ widgetType = "same_line" },
-		{
-			widgetType = "checkbox",
-			id = "hidePawnArmsBones",
-			label = "Hide Arm Bones",
-			initialValue = hidePawnArmsBones
+			initialValue = hidePawnArmsMesh
 		},
 		{
 			widgetType = "input_text",
@@ -200,6 +207,19 @@ local developerWidgets = spliceableInlineArray{
 			label = "Right Upper Arm Bone",
 			selections = {"None"},
 			initialValue = 1
+		},
+		{
+			widgetType = "checkbox",
+			id = "hidePawnArmsBones",
+			label = "Hide Arm Bones",
+			initialValue = hidePawnArmsBones
+		},
+		{
+			widgetType = "input_text",
+			id = "pawnArmsFOVFix",
+			label = "FOV Fix ID",
+			initialValue = armsMeshFOVFixID,
+			isHidden = false
 		},
 	{
 		widgetType = "tree_pop"
@@ -223,7 +243,7 @@ local developerWidgets = spliceableInlineArray{
 			widgetType = "checkbox",
 			id = "hidePawnArmsAnimationMesh",
 			label = "Hide",
-			initialValue = false
+			initialValue = hideAnimationArms
 		},
 		{
 			widgetType = "input_text",
@@ -306,12 +326,83 @@ local function setPawnMeshList()
 
 end
 
+local function doHideArmsBones(val)
+	local armsMesh = M.getArmsMesh()
+	if armsMesh ~= nil then
+		M.print("Hiding arms bones: " .. tostring(val))
+		if val then
+			if pawnUpperArmRight ~= nil and pawnUpperArmRight ~= "" then
+				armsMesh:HideBoneByName(uevrUtils.fname_from_string(pawnUpperArmRight), 0)
+			end
+			if pawnUpperArmLeft ~= nil and pawnUpperArmLeft ~= "" then
+				armsMesh:HideBoneByName(uevrUtils.fname_from_string(pawnUpperArmLeft), 0)
+			end
+		else
+			if pawnUpperArmRight ~= nil and pawnUpperArmRight ~= "" then
+				armsMesh:UnHideBoneByName(uevrUtils.fname_from_string(pawnUpperArmRight))
+			end
+			if pawnUpperArmLeft ~= nil and pawnUpperArmLeft ~= "" then
+				armsMesh:UnHideBoneByName(uevrUtils.fname_from_string(pawnUpperArmLeft))
+			end
+		end
+	end
+end
+
+local function fixFOV()
+	local bodyMesh = nil
+	if hidePawnBodyMesh == false and bodyMeshFOVFixID ~= nil and bodyMeshFOVFixID ~= "" then
+		bodyMesh = M.getBodyMesh()
+		if bodyMesh ~= nil then
+			uevrUtils.fixMeshFOV(bodyMesh, bodyMeshFOVFixID, 0.0, true, true, false)
+		end
+	end
+	if hidePawnArmsMesh == false and armsMeshFOVFixID ~= nil and armsMeshFOVFixID ~= "" then
+		local armsMesh = M.getArmsMesh()
+		--dont do it again if it was already done on the body and body and arms are the same
+		if (bodyMesh == nil or bodyMesh ~= armsMesh) and armsMesh ~= nil then
+			uevrUtils.fixMeshFOV(armsMesh, armsMeshFOVFixID, 0.0, true, true, false)
+		end
+	end
+end
+
+local function doHideBodyMesh(val)
+	local mesh = M.getBodyMesh()
+	if mesh ~= nil then
+		M.print("Hiding body mesh: " .. tostring(val))
+		-- mesh:SetVisibility(not val, true)
+		-- mesh:SetHiddenInGame(val, true)
+		mesh:call("SetRenderInMainPass", not val)
+		fixFOV()
+	end
+end
+
+local function doHideArms(val)
+	local mesh = M.getArmsMesh()
+	if mesh ~= nil then
+		M.print("Hiding arms mesh: " .. tostring(val))
+		-- mesh:SetVisibility(not val, true)
+		-- mesh:SetHiddenInGame(val, true)
+		mesh:call("SetRenderInMainPass", not val)
+		fixFOV()
+	end
+end
+
+local function doHideAnimationArms(val)
+	local mesh = M.getArmsAnimationMesh()
+	if mesh ~= nil then
+		M.print("Hiding animation arms mesh: " .. tostring(val))
+		-- mesh:SetVisibility(not val, true)
+		-- mesh:SetHiddenInGame(val, true)
+		mesh:call("SetRenderInMainPass", not val)
+		fixFOV()
+	end
+end
+
 local createDevMonitor = doOnce(function()
 	uevrUtils.registerLevelChangeCallback(function(level)
 		setPawnMeshList()
 		setBoneNames()
 	end)
-
 end, Once.EVER)
 
 function M.init(isDeveloperMode, logLevel)
@@ -348,6 +439,11 @@ function M.showDeveloperConfiguration(saveFileName, options)
 	configui.createConfigPanel("Pawn Config Dev", saveFileName, spliceableInlineArray{expandArray(M.getDeveloperConfigurationWidgets, options)})
 end
 
+function M.loadConfiguration(fileName)
+    configui.load(fileName, fileName)
+end
+
+
 -- function M.showConfiguration(saveFileName, options)
 -- 	local configDefinition = {
 -- 		{
@@ -375,6 +471,13 @@ end
 
 function M.getArmsAnimationMesh()
 	return uevrUtils.getObjectFromDescriptor(armsAnimationMeshName)
+end
+
+function M.setBodyMeshFOVFixID(val)
+	bodyMeshFOVFixID = val
+end
+function M.setArmsMeshFOVFixID(val)
+	armsMeshFOVFixID = val
 end
 
 
@@ -434,90 +537,121 @@ configui.onCreateOrUpdate("pawnUpperArmLeft", function(value)
 	setPawnUpperArmLeft(value)
 end)
 
-function M.hideBodyMesh(val)
-	configui.setValue("hidePawnBodyMesh", val, true)
-	local mesh = M.getBodyMesh()
-	if mesh ~= nil then
-		mesh:SetVisibility(not val, true)
-		mesh:SetHiddenInGame(val, true)
+configui.onCreateOrUpdate("pawnBodyFOVFix", function(value)
+	M.setBodyMeshFOVFixID(value)
+end)
+
+configui.onCreateOrUpdate("pawnArmsFOVFix", function(value)
+	M.setArmsMeshFOVFixID(value)
+end)
+
+-- Since multiple settings can affect the same mesh, this function keeps the visibility states synchronized
+local function syncMeshVisibilityStates(isHidden, mesh)
+	local bodyMesh = M.getBodyMesh()
+	local armsMesh = M.getArmsMesh()
+	local armsAnimationMesh = M.getArmsAnimationMesh()
+	if mesh == bodyMesh then
+		hidePawnBodyMesh = isHidden
+		configui.setValue("hidePawnBodyMesh", isHidden, true)
 	end
+	if mesh == armsMesh then
+		hidePawnArmsMesh = isHidden
+		configui.setValue("hidePawnArmsMesh", isHidden, true)
+	end
+	if mesh == armsAnimationMesh then
+		hideAnimationArms = isHidden
+		configui.setValue("hidePawnArmsAnimationMesh", isHidden, true)
+	end
+end
+
+function M.hideBodyMesh(val)
+	syncMeshVisibilityStates(val, M.getBodyMesh())
+	doHideBodyMesh(val)
 end
 
 function M.hideAnimationArms(val)
-	configui.setValue("hidePawnArmsAnimationMesh", val, true)
-	local mesh = M.getArmsAnimationMesh()
-	if mesh ~= nil then
-		mesh:SetVisibility(not val, true)
-		mesh:SetHiddenInGame(val, true)
-	end
+	syncMeshVisibilityStates(val, M.getArmsAnimationMesh())
+	doHideAnimationArms(val)
 end
 
 function M.hideArms(val)
-	configui.setValue("hidePawnArmsMesh", val, true)
-	local mesh = M.getArmsMesh()
-	if mesh ~= nil then
-		mesh:SetVisibility(not val, true)
-		mesh:SetHiddenInGame(val, true)
-	end
+	syncMeshVisibilityStates(val, M.getArmsMesh())
+	doHideArms(val)
 end
 
 function M.hideArmsBones(val)
 	configui.setValue("hidePawnArmsBones", val, true)
-
-	local armsMesh = M.getArmsMesh()
-	if armsMesh ~= nil then
-		if val then
-			if pawnUpperArmRight ~= nil and pawnUpperArmRight ~= "" then
-				armsMesh:HideBoneByName(uevrUtils.fname_from_string(pawnUpperArmRight), 0)
-			end
-			if pawnUpperArmLeft ~= nil and pawnUpperArmLeft ~= "" then
-				armsMesh:HideBoneByName(uevrUtils.fname_from_string(pawnUpperArmLeft), 0)
-			end
-		else
-			if pawnUpperArmRight ~= nil and pawnUpperArmRight ~= "" then
-				armsMesh:UnHideBoneByName(uevrUtils.fname_from_string(pawnUpperArmRight))
-			end
-			if pawnUpperArmLeft ~= nil and pawnUpperArmLeft ~= "" then
-				armsMesh:UnHideBoneByName(uevrUtils.fname_from_string(pawnUpperArmLeft))
-			end
-		end
-	end
+	hidePawnArmsBones = val
+	doHideArmsBones(val)
 end
 
---local armBonesHiddenCallbacks = {}
 local function executeIsArmBonesHiddenCallback(...)
 	return uevrUtils.executeUEVRCallbacksWithPriorityBooleanResult("is_arms_bones_hidden", table.unpack({...}))
-	-- local result = false
-	-- for i, func in ipairs(armBonesHiddenCallbacks) do
-	-- 	result = result or func(...)
-	-- end
-	-- return result
 end
-
 function M.registerIsArmBonesHiddenCallback(func)
 	uevrUtils.registerUEVRCallback("is_arms_bones_hidden", func)
-	-- for i, existingFunc in ipairs(armBonesHiddenCallbacks) do
-	-- 	if existingFunc == func then
-	-- 		--print("Function already exists")
-	-- 		return
-	-- 	end
-	-- end
-	-- table.insert(armBonesHiddenCallbacks, func)
 end
 
-local isHiddenLast = nil
+local function executeIsPawnBodyHiddenCallback(...)
+	return uevrUtils.executeUEVRCallbacksWithPriorityBooleanResult("is_pawn_body_hidden", table.unpack({...}))
+end
+function M.registerIsPawnBodyHiddenCallback(func)
+	uevrUtils.registerUEVRCallback("is_pawn_body_hidden", func)
+end
+
+local function executeIsPawnArmsHiddenCallback(...)
+	return uevrUtils.executeUEVRCallbacksWithPriorityBooleanResult("is_pawn_arms_hidden", table.unpack({...}))
+end
+function M.registerIsPawnArmsHiddenCallback(func)
+	uevrUtils.registerUEVRCallback("is_pawn_arms_hidden", func)
+end
+
+local function executeIsPawnAnimationArmsHiddenCallback(...)
+	return uevrUtils.executeUEVRCallbacksWithPriorityBooleanResult("is_pawn_animation_arms_hidden", table.unpack({...}))
+end
+function M.registerIsPawnAnimationArmsHiddenCallback(func)
+	uevrUtils.registerUEVRCallback("is_pawn_animation_arms_hidden", func)
+end
+
+
+local pawnState = {}
 uevrUtils.setInterval(100, function()
 	local isHidden, priority = executeIsArmBonesHiddenCallback()
-	if isHidden ~= isHiddenLast then
-		isHiddenLast = isHidden
-		if isHidden ~= nil then
-			M.hideArmsBones(isHidden)
-		end
+	if isHidden == nil then isHidden = hidePawnArmsBones end
+	if pawnState.hideArmsBones ~= isHidden then
+		doHideArmsBones(isHidden)
+		pawnState.hideArmsBones = isHidden
 	end
+
+	isHidden, priority = executeIsPawnAnimationArmsHiddenCallback()
+	if isHidden == nil then isHidden = hideAnimationArms end
+	if pawnState.hideAnimationArms ~= isHidden then
+		doHideAnimationArms(isHidden)
+		pawnState.hideAnimationArms = isHidden
+	end
+
+	isHidden, priority = executeIsPawnBodyHiddenCallback()
+	if isHidden == nil then isHidden = hidePawnBodyMesh end
+	if pawnState.hideBodyMesh ~= isHidden then
+		doHideBodyMesh(isHidden)
+		pawnState.hideBodyMesh = isHidden
+	end
+
+	isHidden, priority = executeIsPawnArmsHiddenCallback()
+	if isHidden == nil then isHidden = hidePawnArmsMesh end
+	if pawnState.hideArmsMesh ~= isHidden then
+		doHideArms(isHidden)
+		pawnState.hideArmsMesh = isHidden
+	end
+
+end)
+
+uevrUtils.setInterval(2000, function()
+	fixFOV()
 end)
 
 uevrUtils.registerPreLevelChangeCallback(function(level)
-	isHiddenLast = nil
+	pawnState = {}
 end)
 
 return M
