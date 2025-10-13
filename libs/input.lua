@@ -14,6 +14,8 @@ M.AimMethod =
     HEAD = 2,
     RIGHT_CONTROLLER = 3,
     LEFT_CONTROLLER = 4,
+    RIGHT_WEAPON = 5,
+    LEFT_WEAPON = 6
 }
 
 M.PawnRotationMode =
@@ -48,6 +50,9 @@ local rootOffset = uevrUtils.vector(0,0,0)
 ---@cast rootOffset -nil
 local headOffset = uevrUtils.vector(0,0,0)
 ---@cast headOffset -nil
+local aimRotationOffset = uevrUtils.rotator(0,0,0)
+local weaponRotation = nil -- externally set for WEAPON aim method
+
 local useSnapTurn = false
 local smoothTurnSpeed = 50
 local snapAngle = 30
@@ -86,7 +91,7 @@ local configWidgets = spliceableInlineArray{
 			widgetType = "combo",
 			id = "aimMethod",
 			label = "Type",
-			selections = {"UEVR", "Head/HMD", "Right Controller", "Left Controller"},
+			selections = {"UEVR", "Head/HMD", "Right Controller", "Left Controller", "Right Weapon", "Left Weapon"},
 			initialValue = aimMethod
 		},
 		{
@@ -506,6 +511,18 @@ local function getEyeOffsetDelta(pawn, pawnYaw)
 	end
 end
 
+local function getAimOffsetAdjustedRotation(rotation)
+	if aimRotationOffset.Pitch == 0 and aimRotationOffset.Yaw == 0 and aimRotationOffset.Roll == 0 then
+		return rotation
+	end
+	--Quat_MakeFromEuler expects Roll Pitch Yaw
+	local quat1 = kismet_math_library:Quat_MakeFromEuler(uevrUtils.vector(aimRotationOffset.Roll, aimRotationOffset.Pitch, aimRotationOffset.Yaw))
+	local quat2 = kismet_math_library:Quat_MakeFromEuler(uevrUtils.vector(rotation.Roll, rotation.Pitch, rotation.Yaw))
+	local quat3 = kismet_math_library:Multiply_QuatQuat(quat2, quat1)
+	local final = kismet_math_library:Quat_Rotator(quat3)
+	return final
+end
+
 --this is called from both on_pre_engine_tick and on_early_calculate_stereo_view_offset but K2_SetWorldRotation can only be called once per tick
 --because of the currentOffset ~= bodyRotationOffset check
 local function updateBodyYaw(delta)
@@ -522,11 +539,22 @@ local function updateBodyYaw(delta)
 				if pawnRotationMode == M.PawnRotationMode.LOCKED then
 					bodyRotationOffset = currentHeadRotator.Yaw - decoupledYaw
 				elseif pawnRotationMode == M.PawnRotationMode.LEFT_CONTROLLER then
-					local rotation = controllers.getControllerRotation(Handed.Left)
-					if rotation ~= nil then bodyRotationOffset = rotation.Yaw - decoupledYaw end
+					local rotation = (aimMethod == M.AimMethod.LEFT_WEAPON and weaponRotation ~= nil and weaponRotation.left ~= nil) and weaponRotation.left or controllers.getControllerRotation(Handed.Left)
+					--did this to fix robocop. what happens with hello neighbor?
+					if rotation ~= nil then
+						local final = aimMethod ~= M.AimMethod.LEFT_WEAPON and getAimOffsetAdjustedRotation(rotation) or rotation
+						bodyRotationOffset = final.Yaw - decoupledYaw
+					end
+					--if rotation ~= nil then bodyRotationOffset = rotation.Yaw - decoupledYaw end
 				elseif pawnRotationMode == M.PawnRotationMode.RIGHT_CONTROLLER then
-					local rotation = controllers.getControllerRotation(Handed.Right)
-					if rotation ~= nil then bodyRotationOffset = rotation.Yaw - decoupledYaw end
+					local rotation = (aimMethod == M.AimMethod.RIGHT_WEAPON and weaponRotation ~= nil and weaponRotation.right ~= nil) and weaponRotation.right or controllers.getControllerRotation(Handed.Right)
+--					local rotation = controllers.getControllerRotation(Handed.Right)
+					--did this to fix robocop. what happens with hello neighbor? (even though hello neighbor doesnt need gunstock adjustments)
+					if rotation ~= nil then
+						local final = aimMethod ~= M.AimMethod.RIGHT_WEAPON and getAimOffsetAdjustedRotation(rotation) or rotation
+						bodyRotationOffset = final.Yaw - decoupledYaw
+					end
+					--if rotation ~= nil then bodyRotationOffset = rotation.Yaw - decoupledYaw end
 				end
 			end
 			if currentOffset ~= bodyRotationOffset then
@@ -604,8 +632,20 @@ local function updateMeshRelativePosition()
 end
 
 local function updateAim()
-	local controllerID = aimMethod == M.AimMethod.LEFT_CONTROLLER and 0 or (aimMethod == M.AimMethod.HEAD and 2 or 1)
-	local rotation = controllers.getControllerRotation(controllerID)
+	local rotation = nil
+	if aimMethod == M.AimMethod.RIGHT_WEAPON then
+		rotation = (weaponRotation ~= nil and weaponRotation.right ~= nil) and weaponRotation.right or controllers.getControllerRotation(Handed.Right)
+	elseif aimMethod == M.AimMethod.LEFT_WEAPON then
+		rotation = (weaponRotation ~= nil and weaponRotation.left ~= nil) and weaponRotation.left or controllers.getControllerRotation(Handed.Left)
+	else
+		local controllerID = aimMethod == M.AimMethod.LEFT_CONTROLLER and 0 or (aimMethod == M.AimMethod.HEAD and 2 or 1)
+		rotation = controllers.getControllerRotation(controllerID)
+		--only use aim offset adjust if aimMethod is left or right controller
+		if aimMethod == M.AimMethod.LEFT_CONTROLLER or aimMethod == M.AimMethod.RIGHT_CONTROLLER then
+			rotation = getAimOffsetAdjustedRotation(rotation)
+		end
+	end
+	--local forwardVector = controllers.getControllerDirection(controllerID)
 	--print(pawn,pawn.Controller,rotation)
 	if uevrUtils.getValid(pawn) ~= nil and pawn.Controller ~= nil and pawn.Controller.SetControlRotation ~= nil and rotation ~= nil then
 		--disassociates the rotation of the pawn from the rotation set by pawn.Controller:SetControlRotation()
@@ -617,10 +657,29 @@ local function updateAim()
 			pawn.CharacterMovement.bOrientRotationToMovement = false
 			pawn.CharacterMovement.bUseControllerDesiredRotation = false
 		end
-		--print(rotation.X,rotation.Y,rotation.Z)
-		--rotation.Pitch = rotation.Pitch - 30
+		
+		--Pitch is actually the only part of the rotation that is used here in games like Robocop
+		--Yaw is controlled by Movement Orientation for those games
 		pawn.Controller:SetControlRotation(rotation) --because the previous booleans were set, aiming with the hand or head doesnt affect the rotation of the pawn
 	end
+end
+
+function M.setAimRotationOffset(offset)
+	aimRotationOffset = uevrUtils.rotator(offset)
+end
+
+function M.setWeaponRotation(leftRotation, rightRotation)
+	weaponRotation = {
+		left = uevrUtils.rotator(leftRotation),
+		right = uevrUtils.rotator(rightRotation)
+	}
+	-- if weaponRotation.right ~= nil then
+	-- 	weaponRotation.right.Yaw = weaponRotation.right.Yaw + 90
+	-- 	local roll = weaponRotation.right.Pitch
+	-- 	weaponRotation.right.Pitch = -weaponRotation.right.Roll
+	-- 	weaponRotation.right.Roll = roll
+	-- end
+	--print("Weapon Rotation Set", weaponRotation.left.Pitch, weaponRotation.left.Yaw, weaponRotation.left.Roll, weaponRotation.right.Pitch, weaponRotation.right.Yaw, weaponRotation.right.Roll)
 end
 
 local function updateIsDisabled()
@@ -635,6 +694,8 @@ end
 uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
 	--set the global rootComponent variable on the earliest tick callback so it will be valid everywhere
 	getRootComponent()
+
+	--calculate the controller rotation here so it is available for updateBodyYaw and updateAim?
 
 	updateIsDisabled()
 
@@ -823,6 +884,14 @@ uevrUtils.registerLevelChangeCallback(function(level)
 	end
 
 	doFixSpatialAudio()
+end)
+
+uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, newLocation, newRotation)
+	M.setAimRotationOffset(newRotation)
+end)
+
+uevrUtils.registerUEVRCallback("attachment_grip_rotation_change", function(leftRotation, rightRotation)
+	M.setWeaponRotation(leftRotation, rightRotation)
 end)
 
 return M

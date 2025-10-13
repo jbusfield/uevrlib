@@ -669,13 +669,13 @@ local function drawUI(panelID)
 			-- 		imgui.spacing()
 			-- 	end
 			elseif item.widgetType == "text" then
-				imgui.text(item.label)
+				imgui.text(item.label_wrapped or item.label)
 			elseif item.widgetType == "indent" then
 				imgui.indent(item.width)
 			elseif item.widgetType == "unindent" then
 				imgui.unindent(item.width)
 			elseif item.widgetType == "text_colored" then
-				imgui.text_colored(item.label, colorStringToInteger(item.color))
+				imgui.text_colored(item.label_wrapped or item.label, colorStringToInteger(item.color))
 			end
 
 			if item.id ~= nil and item.id ~= "" then
@@ -772,7 +772,7 @@ function M.updatePanel(panelDefinition)
 			itemMap[item.id] = panelID
 		end
 		if item.widgetType == "text" and item.wrapped == true then
-			item.label = wrapTextOnWordBoundary(item.label, item.textWidth)
+			item.label_wrapped = wrapTextOnWordBoundary(item.label, item.textWidth)
 		end
 	end
 
@@ -848,7 +848,7 @@ function M.createPanel(panelDefinition)
 			itemMap[item.id] = panelID
 		end
 		if item.widgetType == "text" and item.wrapped == true then
-			item.label = wrapTextOnWordBoundary(item.label, item.textWidth)
+			item.label_wrapped = wrapTextOnWordBoundary(item.label, item.textWidth)
 		end
 	end
 
@@ -958,10 +958,13 @@ function M.save(panelID)
 				--things like vector3 need to be converted into a json friendly format
 				if type(val) == "userdata" then
 					--print(val.x,val.y,val.z,val.w)
+---@diagnostic disable-next-line: undefined-field
 					if val.x ~= nil and val.y ~= nil and val.z == nil and val.w == nil then
 						saveConfig[key] = getArrayFromVector2(val)
+---@diagnostic disable-next-line: undefined-field
 					elseif val.x ~= nil and val.y ~= nil and val.z ~= nil and val.w == nil then
 						saveConfig[key] = getArrayFromVector3(val)
+---@diagnostic disable-next-line: undefined-field
 					elseif val.x ~= nil and val.y ~= nil and val.z ~= nil and val.w ~= nil then
 						saveConfig[key] = getArrayFromVector4(val)
 					end
@@ -1103,7 +1106,7 @@ function M.setLabel(widgetID, newLabel)
 	local item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
 	if item ~= nil then
 		if item.widgetType == "text" and item.wrapped == true then
-			newLabel = wrapTextOnWordBoundary(newLabel, item.textWidth)
+			item.label_wrapped = wrapTextOnWordBoundary(newLabel, item.textWidth)
 		end
 		item.label = newLabel
 	end

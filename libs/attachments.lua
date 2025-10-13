@@ -56,17 +56,17 @@ Usage
         example:
             attachments.detachAttachmentsFromMesh(targetMesh, true)
 
-    attachments.setAttachmentOffset(parentName, childName, location, rotation) - sets the offset for an attachment relative to its parent
+    attachments.setAttachmentOffset(id, location, rotation) - sets the offset for an attachment relative to its parent
         example:
-            attachments.setAttachmentOffset("hand_mesh", "weapon", {0,0,10}, {0,90,0})
+            attachments.setAttachmentOffset("WP_BerettaAuto9_C_Beretta_Mesh", {0,0,10}, {0,90,0})
 
     attachments.getAttachmentOffset(attachment) - gets the current position, rotation and scale for an attachment
         example:
             local pos, rot, scale = attachments.getAttachmentOffset(myAttachment)
 
-    attachments.updateAttachmentTransform(pos, rot, scale, parentName, childName) - updates an attachment's transform
+    attachments.updateAttachmentTransform(pos, rot, scale, id) - updates an attachment's transform
         example:
-            attachments.updateAttachmentTransform({0,0,0}, {0,0,0}, {1,1,1}, "hand_mesh", "weapon")
+            attachments.updateAttachmentTransform({0,0,0}, {0,0,0}, {1,1,1}, "WP_BerettaAuto9_C_Beretta_Mesh")
 
     attachments.setActiveAnimation(attachment, gripHand) - sets the active grip animation for an attachment
         example:
@@ -76,9 +76,9 @@ Usage
         example:
             local anim = attachments.getCurrentGripAnimation(Handed.Right)
 
-    attachments.updateAttachmentAnimation(animationIndex, parentName, childName) - updates the animation for an attachment
+    attachments.updateAttachmentAnimation(id, animationIndex) - updates the animation for an attachment
         example:
-            attachments.updateAttachmentAnimation(1, "hand_mesh", "weapon")
+            attachments.updateAttachmentAnimation("WP_BerettaAuto9_C_Beretta_Mesh", 1)
 
     attachments.setLogLevel(val) - sets the logging level for attachment messages
         example:
@@ -104,6 +104,7 @@ Usage
 local uevrUtils = require("libs/uevr_utils")
 local configui = require("libs/configui")
 local controllers = require("libs/controllers")
+--local gunstock = require("libs/gunstock")
 
 local M = {}
 
@@ -128,6 +129,8 @@ local animationLabels = {"Default", "None"}
 local animationIDs = {"", "attachment_none"}
 --local activeAnimationID = false
 
+local gunstockRotationOffset = uevrUtils.rotator(0,0,0)
+
 local meshAttachmentList = {}
 local activeGripAnimations = {}
 --local attachmentCallbacks = {}
@@ -142,6 +145,20 @@ function M.print(text, logLevel)
 		uevrUtils.print("[attachments] " .. text, logLevel)
 	end
 end
+
+--called when an attachment that is a grip attachment has changed
+local function executeGripAttachmentChanged(...)
+	uevrUtils.executeUEVRCallbacks("attachment_grip_changed", table.unpack({...}))
+end
+
+local function executeGripAttachmentRotationChange(...)
+	uevrUtils.executeUEVRCallbacks("attachment_grip_rotation_change", table.unpack({...}))
+end
+
+local function executeGripAnimationChange(...)
+	uevrUtils.executeUEVRCallbacks("attachment_grip_animation_changed", table.unpack({...}))
+end
+
 
 local helpText = "This module allows you to configure attachment offsets for objects attached to meshes or controllers. You can specify position, rotation, scale, and grip animation for each attachment. New entries are added each time a new mesh is attached."
 
@@ -159,7 +176,10 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 	for i = 1, #m_attachmentOffsets do
 		local parent = m_attachmentOffsets[i]["parent"]
 		local child = m_attachmentOffsets[i]["child"]
-		local name = parent .. "_" .. child
+		local id = m_attachmentOffsets[i]["id"]
+		if id == nil then id = parent .. "_" .. child end
+		m_attachmentOffsets[i]["id"] = id
+		local name = id
 		local pos = m_attachmentOffsets[i]["location"]
 		local rot = m_attachmentOffsets[i]["rotation"]
 		local scale = m_attachmentOffsets[i]["scale"]
@@ -185,7 +205,7 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		table.insert(configDefinition[1]["layout"],
 					{
 						id = "attachment_" .. name .. "_rotation", label = "Rotation",
-						widgetType = "drag_float3", speed = .1, range = {-360, 360}, initialValue = rot
+						widgetType = "drag_float3", speed = .01, range = {-360, 360}, initialValue = rot
 					}
 		)
 		table.insert(configDefinition[1]["layout"],
@@ -207,16 +227,16 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		)
 
 		configui.onUpdate("attachment_" .. name .. "_position", function(value)
-			M.updateAttachmentTransform(value, nil, nil, parent, child)
+			M.updateAttachmentTransform(value, nil, nil, id)
 		end)
 		configui.onUpdate("attachment_" .. name .. "_rotation", function(value)
-			M.updateAttachmentTransform(nil, value, nil, parent, child)
+			M.updateAttachmentTransform(nil, value, nil, id)
 		end)
 		configui.onUpdate("attachment_" .. name .. "_scale", function(value)
-			M.updateAttachmentTransform(nil, nil, value, parent, child)
+			M.updateAttachmentTransform(nil, nil, value, id)
 		end)
 		configui.onUpdate("attachment_" .. name .. "_grip_animation", function(value)
-			M.updateAttachmentAnimation(value, parent, child)
+			M.updateAttachmentAnimation(id, value)
 		end)
 
 	end
@@ -264,6 +284,14 @@ function M.loadParameters(fileName)
 	end
 	if parameters["attachmentOffsets"] == nil then
 		parameters["attachmentOffsets"] = {}
+		isParametersDirty = true
+	end
+	for i = 1, #parameters["attachmentOffsets"] do
+		local parent = parameters["attachmentOffsets"][i]["parent"]
+		local child = parameters["attachmentOffsets"][i]["child"]
+		local id = parameters["attachmentOffsets"][i]["id"]
+		if id == nil then id = parent .. "_" .. child end
+		parameters["attachmentOffsets"][i]["id"] = id
 		isParametersDirty = true
 	end
 	attachmentOffsets = parameters["attachmentOffsets"]
@@ -367,47 +395,6 @@ local function getAttachmentNames(attachment)
 	return attachmentParentName, attachmentChildName, attachmentParentName .. "_" .. attachmentChildName
 end
 
--- function M.getActiveAttachment()
--- 	return activeAttachment
--- end
-
-function M.addAttachmentToConfig(attachment)
-	if parameters ~= nil then
-		local attachmentParentName, attachmentChildName = getAttachmentNames(attachment)
-
-		local exists = false
-		--if configuration["attachmentOffsets"] == nil then configuration["attachmentOffsets"] = {} end
-		if parameters["attachmentOffsets"] ~= nil then
-			for i = 1, #parameters["attachmentOffsets"] do
-				if attachmentParentName == attachmentOffsets[i]["parent"] and attachmentChildName == attachmentOffsets[i]["child"] then
-					exists = true
-				end
-			end
-			if not exists then
-				M.print("Adding attachment to config " .. attachmentParentName .. " - " .. attachmentChildName)
-				local attachmentLocation =  defaultLocation or {attachment.RelativeLocation.X, attachment.RelativeLocation.Y, attachment.RelativeLocation.Z}
-				local attachmentRotation = defaultRotation or {attachment.RelativeRotation.Pitch, attachment.RelativeRotation.Yaw, attachment.RelativeRotation.Roll}
-				local attachmentScale = defaultScale or {attachment.RelativeScale3D.X, attachment.RelativeScale3D.Y, attachment.RelativeScale3D.Z}
-
-				table.insert(parameters["attachmentOffsets"], {parent=attachmentParentName, child=attachmentChildName, location=attachmentLocation, rotation=attachmentRotation, scale=attachmentScale})
-				isParametersDirty = true
-
-				attachmentOffsets = parameters["attachmentOffsets"]
-				local configDefinition = M.addAttachmentOffsetsToConfigUI(getDefaultConfig())
-				configui.update(configDefinition)
-			end
-		end
-	end
-end
-
-function M.setAttachmentNames(attachmentNamesList)
-	attachmentNames = attachmentNamesList
-	attachmentOffsets = {}
-	for i, attachmentName in ipairs(attachmentNames) do
-		table.insert(attachmentOffsets, {parent=attachmentName, child="", location=defaultLocation or {0,0,0}, rotation=defaultRotation or {0,0,0}, scale=defaultScale or {1,1,1}})
-	end
-end
-
 local function hasNamedObject(attachment, parentName, childName)
 	--M.print("Called hasNamedObject with parent: " .. parentName .. " child: " .. childName)
 	local result = false
@@ -436,6 +423,47 @@ local function hasNamedObject(attachment, parentName, childName)
 	return result
 end
 
+-- function M.getActiveAttachment()
+-- 	return activeAttachment
+-- end
+
+function M.addAttachmentToConfig(attachment)
+	if parameters ~= nil then
+		local attachmentParentName, attachmentChildName, id = getAttachmentNames(attachment)
+
+		local exists = false
+		--if configuration["attachmentOffsets"] == nil then configuration["attachmentOffsets"] = {} end
+		if parameters["attachmentOffsets"] ~= nil then
+			for i = 1, #parameters["attachmentOffsets"] do
+				if attachmentParentName == attachmentOffsets[i]["parent"] and attachmentChildName == attachmentOffsets[i]["child"] then
+					exists = true
+				end
+			end
+			if not exists then
+				M.print("Adding attachment to config " .. attachmentParentName .. " - " .. attachmentChildName)
+				local attachmentLocation =  defaultLocation or {attachment.RelativeLocation.X, attachment.RelativeLocation.Y, attachment.RelativeLocation.Z}
+				local attachmentRotation = defaultRotation or {attachment.RelativeRotation.Pitch, attachment.RelativeRotation.Yaw, attachment.RelativeRotation.Roll}
+				local attachmentScale = defaultScale or {attachment.RelativeScale3D.X, attachment.RelativeScale3D.Y, attachment.RelativeScale3D.Z}
+
+				table.insert(parameters["attachmentOffsets"], {id = id, parent=attachmentParentName, child=attachmentChildName, location=attachmentLocation, rotation=attachmentRotation, scale=attachmentScale})
+				isParametersDirty = true
+
+				attachmentOffsets = parameters["attachmentOffsets"]
+				local configDefinition = M.addAttachmentOffsetsToConfigUI(getDefaultConfig())
+				configui.update(configDefinition)
+			end
+		end
+	end
+end
+
+function M.setAttachmentNames(attachmentNamesList)
+	attachmentNames = attachmentNamesList
+	attachmentOffsets = {}
+	for i, attachmentName in ipairs(attachmentNames) do
+		table.insert(attachmentOffsets, {parent=attachmentName, child="", location=defaultLocation or {0,0,0}, rotation=defaultRotation or {0,0,0}, scale=defaultScale or {1,1,1}})
+	end
+end
+
 function M.getAttachmentOffset(attachment)
 	local attachmentLocation = {0,0,0}
 	local attachmentRotation = {0,0,0}
@@ -445,15 +473,18 @@ function M.getAttachmentOffset(attachment)
 		for i = 1, #attachmentOffsets do
 			local parent = attachmentOffsets[i]["parent"]
 			local child = attachmentOffsets[i]["child"]
-			local name = parent .. "_" .. child
-			if hasNamedObject(attachment, parent, child) then
-				local position = configui.getValue("attachment_" .. name .. "_position")
+			local id = attachmentOffsets[i]["id"]
+			--local name = parent .. "_" .. child
+			--if hasNamedObject(attachment, parent, child) then
+			local _, _, attachmentID = getAttachmentNames(attachment)
+			if id == attachmentID then
+				local position = configui.getValue("attachment_" .. id .. "_position")
 				if position == nil then position = attachmentOffsets[i]["location"] end
 
-				local rotation = configui.getValue("attachment_" .. name .. "_rotation")
+				local rotation = configui.getValue("attachment_" .. id .. "_rotation")
 				if rotation == nil then rotation = attachmentOffsets[i]["rotation"] end
 
-				local scale = configui.getValue("attachment_" .. name .. "_scale")
+				local scale = configui.getValue("attachment_" .. id .. "_scale")
 				if scale == nil then scale = attachmentOffsets[i]["scale"] end
 				if scale == nil then --set a fixed scale in case something else tries to change it
 					attachmentOffsets[i]["scale"] = {attachment.RelativeScale3D.X, attachment.RelativeScale3D.Y, attachment.RelativeScale3D.Z}
@@ -478,11 +509,23 @@ function M.getAttachmentOffset(attachment)
 	return uevrUtils.vector(attachmentLocation), uevrUtils.rotator(attachmentRotation), uevrUtils.rotator(attachmentScale)
 end
 
-function M.setAttachmentOffset(parentName, childName, location, rotation)
+-- function M.setAttachmentOffset(parentName, childName, location, rotation)
+-- 	for i = 1, #attachmentOffsets do
+-- 		local parent = attachmentOffsets[i]["parent"]
+-- 		local child = attachmentOffsets[i]["child"]
+-- 		if parentName == parent and childName == child then
+-- 			if location ~= nil then attachmentOffsets[i]["location"] = {location.X, location.Y, location.Z} end
+-- 			if rotation ~= nil then attachmentOffsets[i]["rotation"] = {rotation.X, rotation.Y, rotation.Z} end
+-- 		end
+-- 	end
+-- 	parameters["attachmentOffsets"] = attachmentOffsets
+-- 	isParametersDirty = true
+-- end
+
+function M.setAttachmentOffset(id, location, rotation)
 	for i = 1, #attachmentOffsets do
-		local parent = attachmentOffsets[i]["parent"]
-		local child = attachmentOffsets[i]["child"]
-		if parentName == parent and childName == child then
+		local attachmentID = attachmentOffsets[i]["id"]
+		if id == attachmentID then
 			if location ~= nil then attachmentOffsets[i]["location"] = {location.X, location.Y, location.Z} end
 			if rotation ~= nil then attachmentOffsets[i]["rotation"] = {rotation.X, rotation.Y, rotation.Z} end
 		end
@@ -491,11 +534,10 @@ function M.setAttachmentOffset(parentName, childName, location, rotation)
 	isParametersDirty = true
 end
 
-function M.updateAttachmentAnimation(animationIndex, parentName, childName)
+function M.updateAttachmentAnimation(id, animationIndex)
 	for i = 1, #attachmentOffsets do
-		local parent = attachmentOffsets[i]["parent"]
-		local child = attachmentOffsets[i]["child"]
-		if parentName == parent and childName == child then
+		local attachmentID = attachmentOffsets[i]["id"]
+		if id == attachmentID then
 			attachmentOffsets[i]["animation"] = animationIDs[animationIndex]
 		end
 	end
@@ -503,40 +545,59 @@ function M.updateAttachmentAnimation(animationIndex, parentName, childName)
 	isParametersDirty = true
 end
 
-local function getNamedAttachmentFromMeshAttachmentList(parentName, childName)
+-- local function getNamedAttachmentFromMeshAttachmentList(parentName, childName)
+-- 	for meshName, meshData in pairs(meshAttachmentList) do
+-- 		for attachmentName, attachmentData in pairs(meshData) do
+-- 			if attachmentData == nil then
+-- 				print("getNamedAttachmentFromMeshAttachmentList had nil attachmentData", parentName, childName)
+-- 			elseif uevrUtils.getValid(attachmentData.attachment) ~= nil then
+-- 				if hasNamedObject(attachmentData.attachment, parentName, childName) then
+-- 					return attachmentData.attachment, attachmentData.attachType, attachmentData.state
+-- 				end
+-- 			end
+-- 		end
+-- 	end
+-- 	return nil, nil
+-- end
+
+local function getNamedAttachmentFromMeshAttachmentList(id)
 	for meshName, meshData in pairs(meshAttachmentList) do
 		for attachmentName, attachmentData in pairs(meshData) do
 			if attachmentData == nil then
-				print("getNamedAttachmentFromMeshAttachmentList had nil attachmentData", parentName, childName)
+				print("getNamedAttachmentFromMeshAttachmentList had nil attachmentData", id)
 			elseif uevrUtils.getValid(attachmentData.attachment) ~= nil then
-				if hasNamedObject(attachmentData.attachment, parentName, childName) then
+				local _, _, attachmentID = getAttachmentNames(attachmentData.attachment)
+				if id == attachmentID then
 					return attachmentData.attachment, attachmentData.attachType, attachmentData.state
 				end
 			end
 		end
 	end
-	return nil, nil
+	return nil, nil, nil
 end
 
-function M.updateAttachmentTransform(pos, rot, scale, parentName, childName)
-	if parentName ~= nil then
-		M.setAttachmentOffset(parentName, childName, pos, rot)
+--function M.updateAttachmentTransform(pos, rot, scale, parentName, childName)
+function M.updateAttachmentTransform(pos, rot, scale, id)
+	if id ~= nil then
+		M.setAttachmentOffset(id, pos, rot)
 	end
 
-	local attachment, attachType, attachState = getNamedAttachmentFromMeshAttachmentList(parentName, childName)
+	--only using rotationOffset on the Raw Controller currently assuming if the attachment is connected to a mesh then the mesh will be rotated
+	--local rotationOffset = gunstock.setActive(id)
+	local attachment, attachType, attachState = getNamedAttachmentFromMeshAttachmentList(id)
 	if attachType == M.AttachType.RAW_CONTROLLER then
-		--print("Updating RAW_CONTROLLER attachment transform not supported yet")
-		-- if pos ~= nil then uevrUtils.set_component_relative_location(attachment, pos) end
-		-- if rot ~= nil then uevrUtils.set_component_relative_rotation(attachment, rot) end
-		-- if scale ~= nil then uevrUtils.set_component_relative_scale(attachment, scale) end
 		if attachState ~= nil then
 			if pos ~= nil then attachState:set_location_offset(Vector3f.new( pos.X, pos.Y, pos.Z)) end
-			if rot ~= nil then attachState:set_rotation_offset(Vector3f.new( math.rad(rot.X), math.rad(rot.Y+90),  math.rad(rot.Z))) end
+			-- if rot ~= nil then
+			-- 	local final = kismet_math_library:ComposeRotators( uevrUtils.rotator(rot.X, rot.Y + 90, rot.Z), rotationOffset * 1)
+			-- 	attachState:set_rotation_offset(Vector3f.new( math.rad(final.Pitch), math.rad(final.Yaw),  math.rad(final.Roll)))
+			-- end
+			if rot ~= nil then attachState:set_rotation_offset(Vector3f.new( math.rad(rot.X - gunstockRotationOffset.Pitch), math.rad(rot.Y + 90 - gunstockRotationOffset.Yaw),  math.rad(rot.Z - gunstockRotationOffset.Roll))) end
 		end
 	end
 	if attachment ~= nil and (attachType == M.AttachType.MESH or attachType == M.AttachType.CONTROLLER) then
 		if pos ~= nil then uevrUtils.set_component_relative_location(attachment, pos) end
-		if rot ~= nil then uevrUtils.set_component_relative_rotation(attachment, rot) end
+		if rot ~= nil then uevrUtils.set_component_relative_rotation(attachment, rot + gunstockRotationOffset) end
 		if scale ~= nil then uevrUtils.set_component_relative_scale(attachment, scale) end
 	end
 
@@ -577,11 +638,30 @@ function M.updateAttachmentTransform(pos, rot, scale, parentName, childName)
 	-- end
 end
 
-function M.updateOffset(attachment)
+-- uevrUtils.registerUEVRCallback("aim_rotation_offset_change", function(newRotation)
+-- 	gunstockRotationOffset = newRotation
+-- end)
+
+uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, location, rotation)
+	gunstockRotationOffset = rotation
+	local attachment, _, _ = getNamedAttachmentFromMeshAttachmentList(id)
+	if uevrUtils.getValid(attachment) ~= nil then
+		local loc, rot, scale = M.getAttachmentOffset(attachment)
+		M.updateAttachmentTransform(loc, rot, scale, id)
+	end
+end)
+
+function M.initAttachment(attachment, gripHand)
 	if attachment ~= nil then
+		attachment:call("SetRenderInMainPass", true)
 		local location, rotation, scale = M.getAttachmentOffset(attachment)
 		local parentName, childName, id = getAttachmentNames(attachment)
-		M.updateAttachmentTransform(location, rotation, scale, parentName, childName)
+		--M.updateAttachmentTransform(location, rotation, scale, parentName, childName)
+		if gripHand ~= nil then
+			executeGripAttachmentChanged(id, gripHand)
+		end
+		M.updateAttachmentTransform(location, rotation, scale, id)
+		M.setActiveAnimation(attachment, gripHand)
 	end
 end
 
@@ -590,11 +670,14 @@ function M.setActiveAnimation(attachment, gripHand)
 		if uevrUtils.getValid(attachment) ~= nil then
 			activeGripAnimations[gripHand] = true
 			for i = 1, #attachmentOffsets do
-				local parent = attachmentOffsets[i]["parent"]
-				local child = attachmentOffsets[i]["child"]
+				local id = attachmentOffsets[i]["id"]
+				-- local parent = attachmentOffsets[i]["parent"]
+				-- local child = attachmentOffsets[i]["child"]
 				--local name = parent .. "_" .. child
 				--if attachmentOffsets[i]["animation"] is nil then its never been set so just use the default animation by returning true
-				if hasNamedObject(attachment, parent, child) and attachmentOffsets[i]["animation"] ~= nil then
+				--if hasNamedObject(attachment, parent, child) and attachmentOffsets[i]["animation"] ~= nil then
+				local _, _, attachmentID = getAttachmentNames(attachment)
+				if id == attachmentID and attachmentOffsets[i]["animation"] ~= nil then
 					activeGripAnimations[gripHand] = attachmentOffsets[i]["animation"] == "animation_none" and false or attachmentOffsets[i]["animation"]
 					break
 				end
@@ -603,9 +686,28 @@ function M.setActiveAnimation(attachment, gripHand)
 			activeGripAnimations[gripHand] = false
 		end
 		--M.print("Calling callback for grip animation " .. activeGripAnimations[gripHand] .. " " .. gripHand)
-		uevrUtils.executeUEVRCallbacks("grip_animation", activeGripAnimations[gripHand], gripHand)
+		executeGripAnimationChange(activeGripAnimations[gripHand], gripHand)
 		--executeAttachmentCallbacks("grip_animation", activeGripAnimations[gripHand], gripHand)
 	end
+end
+
+function M.getCurrentGrippedAttachment(gripHand)
+	if gripHand ~= nil then
+		for meshName, meshData in pairs(meshAttachmentList) do
+			for attachmentName, attachmentData in pairs(meshData) do
+				if attachmentData.gripHand == gripHand and uevrUtils.getValid(attachmentData.attachment) then
+					return attachmentData.attachment
+				end
+			end
+		end
+	end
+end
+
+function M.broadcastGrippedAttachmentRotation()
+	local leftAttachment = M.getCurrentGrippedAttachment(Handed.Left)
+	local rightAttachment = M.getCurrentGrippedAttachment(Handed.Right)
+	executeGripAttachmentRotationChange(leftAttachment and leftAttachment:GetSocketRotation(uevrUtils.fname_from_string("MuzzleSocket")) or nil, rightAttachment and rightAttachment:GetSocketRotation(uevrUtils.fname_from_string("MuzzleSocket")) or nil)
+	--print("Broadcasting gripped attachment rotation", leftAttachment, rightAttachment)
 end
 
 function M.getCurrentGripAnimation(handed)
@@ -646,9 +748,7 @@ function M.attachToMesh(attachment, mesh, socketName, gripHand, detachFromParent
 		if socketName == nil then socketName = attachment.AttachSocketName end
 		success = attachment:K2_AttachTo(mesh, socketName, 0, false)
 
-		attachment:call("SetRenderInMainPass", true)
-		M.updateOffset(attachment)
-		M.setActiveAnimation(attachment, gripHand)
+		M.initAttachment(attachment, gripHand)
 		M.print("Attached attachment to mesh" .. (success and " successfully" or " with errors"))
 	else
 		M.print("Failed to attach attachment to mesh")
@@ -702,9 +802,7 @@ function M.attachToRawController(attachment, gripHand, detachFromParent)
 		state:set_permanent(true)
 		meshAttachmentList[meshName][attachmentName].state = state
 
-		attachment:call("SetRenderInMainPass", true)
-		M.updateOffset(attachment)
-		M.setActiveAnimation(attachment, gripHand)
+		M.initAttachment(attachment, gripHand)
 		M.print("Attached attachment to raw controller")
 	else
 		M.print("Failed to attach attachment to raw controller")
@@ -887,12 +985,16 @@ function M.registerOnGripUpdateCallback(callback)
 end
 
 function M.registerOnGripAnimationCallback(callbackFunc)
-	registerAttachmentCallback("grip_animation", callbackFunc)
+	registerAttachmentCallback("attachment_grip_animation_changed", callbackFunc)
 end
 
 uevrUtils.registerPreLevelChangeCallback(function(level)
 	meshAttachmentList = {}
 	activeGripAnimations = {}
+end)
+
+uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
+	M.broadcastGrippedAttachmentRotation()
 end)
 
 M.loadParameters()

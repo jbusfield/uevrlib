@@ -24,11 +24,6 @@ local armsAnimationMeshes = {}
 armsAnimationMeshes[Handed.Left] = {animating=false, mesh=nil, componentName=nil}
 armsAnimationMeshes[Handed.Right] = {animating=false, mesh=nil, componentName=nil}
 local defaultAnimationMesh = nil
--- Set to true to only update bones from wrist to root when copying pose from mesh. 
--- This is faster (less CPU intensive) but may not work for all skeletons. 
--- If the hand disappears when set to true then set it to false.
--- For example, Atomic Heart can be set to true but Robocop cannot.
---local optimizeAnimationFromMesh = false
 
 local currentLogLevel = LogLevel.Error
 function M.setLogLevel(val)
@@ -711,6 +706,18 @@ function M.setFingerAngles(fingerIndex, jointIndex, angleID, angle, componentNam
 		end
 	end
 end
+
+uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, newLocation, newRotation)
+	local initialRotation = uevrUtils.rotator(0,0,0)
+	if handDefinitions["Arms"] ~= nil and handDefinitions["Arms"]["InitialTransform"] ~= nil and handDefinitions["Arms"]["InitialTransform"]["right_hand"] ~= nil and handDefinitions["Arms"]["InitialTransform"]["right_hand"]["hand_r"] ~= nil and handDefinitions["Arms"]["InitialTransform"]["right_hand"]["hand_r"]["rotation"] ~= nil then
+		local rot = handDefinitions["Arms"]["InitialTransform"]["right_hand"]["hand_r"]["rotation"]
+		initialRotation = uevrUtils.rotator(rot[1], rot[2], rot[3])
+	end
+	initialRotation.Pitch = initialRotation.Pitch - newRotation.Yaw
+	initialRotation.Yaw = initialRotation.Yaw + newRotation.Pitch
+	initialRotation.Roll = initialRotation.Roll - newRotation.Roll
+	animation.setBoneRotation(M.getHandComponent(Handed.Right), "hand_r", initialRotation, false)
+end)
 
 function M.printHandTranforms(transforms)
 	local logLevel = LogLevel.Critical

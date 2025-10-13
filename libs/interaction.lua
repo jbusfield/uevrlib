@@ -848,7 +848,7 @@ end
 --end
 
 local function lineTrace()
-    if uevrUtils.getValid(widgetInteractionComponent) == nil then return nil, nil end
+    if uevrUtils.getValid(widgetInteractionComponent) == nil or widgetInteractionComponent.K2_GetComponentLocation == nil then return nil, nil end
 
     local originPosition = widgetInteractionComponent:K2_GetComponentLocation()
     local originDirection = widgetInteractionComponent:GetForwardVector()
