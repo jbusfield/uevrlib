@@ -83,9 +83,10 @@ local isParametersDirty = false
 local montageList = {}
 local montageIDList = {}
 
-local montageState = {leftArm = nil, rightArm = nil, pawnBody = nil, pawnArms = nil, pawnArmBones = nil, motionSicknessCompensation = nil}
+local montageState = {hands = nil, leftArm = nil, rightArm = nil, pawnBody = nil, pawnArms = nil, pawnArmBones = nil, motionSicknessCompensation = nil}
 
 local stateConfig = {
+    {stateKey = "hands", valueKey = "handsWhenActive"},
     {stateKey = "leftArm", valueKey = "leftArmWhenActive"},
     {stateKey = "rightArm", valueKey = "rightArmWhenActive"},
     {stateKey = "pawnBody", valueKey = "pawnBodyWhenActive"},
@@ -120,7 +121,7 @@ local developerWidgets = spliceableInlineArray{
 			widgetType = "combo",
 			id = "knownMontageList",
 			label = "Montages",
-			selections = {"None"},
+			selections = {"Any"},
 			initialValue = 1,
 --			width = 400
 		},
@@ -132,6 +133,22 @@ local developerWidgets = spliceableInlineArray{
             { widgetType = "indent", width = 20 },
 	        { widgetType = "begin_group", id = "montage_behavior_config", isHidden = false }, { widgetType = "indent", width = 5 }, { widgetType = "text", label = "When Active" }, { widgetType = "begin_rect", },
 				{ widgetType = "text", label = "State                                       Priority"},
+				{
+					widgetType = "combo",
+					id = "handsWhenActive",
+					label = "",
+					selections = {"No effect", "Hidden", "Visibile"},
+					initialValue = 1,
+					width = 150,
+				},
+				{ widgetType = "same_line" },
+				{
+					widgetType = "input_text",
+					id = "handsWhenActivePriority",
+					label = " Hands Visibility",
+					initialValue = "0",
+					width = 35,
+				},
 				{
 					widgetType = "combo",
 					id = "leftArmWhenActive",
@@ -176,7 +193,7 @@ local developerWidgets = spliceableInlineArray{
 				{
 					widgetType = "input_text",
 					id = "pawnBodyWhenActivePriority",
-					label = " Pawn Body",
+					label = " Pawn Body Visibility",
 					initialValue = "0",
 					width = 35,
 				},
@@ -192,7 +209,7 @@ local developerWidgets = spliceableInlineArray{
 				{
 					widgetType = "input_text",
 					id = "pawnArmsWhenActivePriority",
-					label = " Pawn Arms",
+					label = " Pawn Arms Visibility",
 					initialValue = "0",
 					width = 35,
 				},
@@ -208,7 +225,7 @@ local developerWidgets = spliceableInlineArray{
 				{
 					widgetType = "input_text",
 					id = "pawnArmBonesWhenActivePriority",
-					label = " Pawn Arm Bones",
+					label = " Pawn Arm Bones Visibility",
 					initialValue = "0",
 					width = 35,
 				},
@@ -270,7 +287,7 @@ local developerWidgets = spliceableInlineArray{
 
 local function showMontageEditFields()
     local index = configui.getValue("knownMontageList")
-    if index == nil or index == 1 then
+    if index == nil then --or index == 1 then
         configui.setHidden("knowMontageSettings", true)
         return
     end
@@ -308,8 +325,8 @@ local function updateMontageList()
         table.sort(montageList)
         table.sort(montageIDList)
 
-        table.insert(montageList, 1, "None")
-        table.insert(montageIDList, 1, "")
+        --table.insert(montageList, 1, "Any")
+        --table.insert(montageIDList, 1, "Any")
         configui.setSelections("knownMontageList", montageList)
 		configui.setValue("knownMontageList", 1)
 
@@ -352,7 +369,7 @@ end, Once.EVER)
 
 local function updateCurrentMontageFields()
     local index = configui.getValue("knownMontageList")
-    if index ~= nil and index ~= 1 then
+    if index ~= nil then --and index ~= 1 then
         local id = montageIDList[index]
         if id ~= "" and  parameters ~= nil and parameters["montagelist"] ~= nil and parameters["montagelist"][id] ~= nil then
             for _, config in ipairs(stateConfig) do
@@ -417,6 +434,16 @@ function M.loadParameters(fileName)
 		M.print("Creating montage parameters")
 	end
 
+	if parameters["montagelist"] == nil then
+		parameters["montagelist"] = {}
+		isParametersDirty = true
+	end
+	if parameters["montagelist"]["Any"] == nil then
+		parameters["montagelist"]["Any"] = {}
+		parameters["montagelist"]["Any"]["label"] = "Any"
+		isParametersDirty = true
+	end
+
     updateMontageList()
 end
 
@@ -439,12 +466,12 @@ end
 -- Functions for managing recent montages
 function M.addRecentMontage(montageName)
     -- Remove if already in list (to move it to front)
-    for i = #recentMontages, 1, -1 do
-        if recentMontages[i] == montageName then
-            table.remove(recentMontages, i)
-            break
-        end
-    end
+    -- for i = #recentMontages, 1, -1 do
+    --     if recentMontages[i] == montageName then
+    --         table.remove(recentMontages, i)
+    --         break
+    --     end
+    -- end
     
     -- Add to front
     table.insert(recentMontages, 1, montageName)
@@ -496,6 +523,10 @@ end)
 
 pawn.registerIsPawnArmsHiddenCallback(function()
 	return montageState["pawnArms"], montageState["pawnArmsPriority"]
+end)
+
+hands.registerIsHiddenCallback(function()
+	return montageState["hands"], montageState["handsPriority"]
 end)
 
 -- Register update handlers for all state configs and their priorities

@@ -1,3 +1,128 @@
+--Hand component system for VR hand tracking and animation in Unreal Engine VR mods
+
+--[[ 
+Usage
+    Drop the lib folder containing this file into your project folder
+    To create hands for a game, add code like this in your script:
+		local uevrUtils = require('libs/uevr_utils')
+		local hands = require('libs/hands')
+		hands.enableConfigurationTool()
+	To use hands created with the configuration tool, just comment out the enableConfigurationTool() line.
+
+    This module provides comprehensive hand tracking, animation, and attachment management for VR applications.
+    It supports skeletal mesh hands, finger animations, weapon attachments, and integration with controller input.
+        
+    Available functions:
+    
+    hands.enableConfigurationTool() - enables the in-game configuration tool for hands
+        example:
+            hands.enableConfigurationTool()
+
+    hands.createFromConfig(configuration, profileName, animationName) - creates hands from configuration data
+        This call is optional. If not used then the module will attempt to automatically load the configuration
+		from hands_parameters.json if it exists in the data folder
+		example:
+			local paramsFile = 'hands_parameters' -- found in the [game profile]/data directory
+			local configName = 'Main' -- the name you gave your config
+			local animationName = 'Shared' -- the name you gave your animation
+			hands.createFromConfig(paramsFile, configName, animationName)
+
+    hands.setAutoHandleInput(val) - enables/disables automatic input handling for hand animations.
+		Automatic input handling is enabled by default. If you do not want automatic input handling then you will need 
+		to call hands.handleInput() or hands.handleInputForHands() manually each tick, like this
+			function on_xinput_get_state(retval, user_index, state)
+				if hands.exists() then
+					local isHoldingWeapon = false
+					local hand = Handed.Right
+					hands.handleInput(state, isHoldingWeapon, hand)
+				end
+			end
+
+        example:
+            hands.setAutoHandleInput(false)  -- Disable automatic input handling
+    
+	hands.handleInput(state, attachment, hand, overrideTrigger) - processes controller input for single hand
+		You only need to call this if you are not using automatic input handling. Call either handleInput or handleInputForHands, not both
+        examples:
+            hands.handleInput(inputState, true, Handed.Right, false)
+            hands.handleInput(inputState, "pistol", Handed.Right, false)
+
+    hands.handleInputForHands(state, rightAttachment, leftAttachment, overrideTrigger) - processes input for both hands
+		You only need to call this if you are not using automatic input handling. Call either handleInput or handleInputForHands, not both
+        example:
+            hands.handleInputForHands(inputState, "rifle", nil, false) -- right hand rifle attachment grip
+            hands.handleInputForHands(inputState, nil, true, false) -- left hand default attachment grip
+            hands.handleInputForHands(inputState, "rifle", true, false) -- right hand rifle attachment grip and left hand default attachment grip
+
+    hands.setHoldingAttachment(hand, val) - sets what attachment a hand is holding. If you are using
+		automatic input handling then you can use this to set which hand is holding what attachment.
+		If you are not using automatic input handling then hands.handleInput(state, isHoldingWeapon, hand)
+		determines what the hand is holding.
+        example:
+            hands.setHoldingAttachment(Handed.Left, true)  -- Left hand the default attachment
+            hands.setHoldingAttachment(Handed.Right, "rifle")  -- Right hand holding rifle attachment
+
+    hands.exists() - returns true if hand components exist and are valid
+        example:
+            if hands.exists() then
+                -- Do something with hands
+            end
+
+    hands.getHandComponent(hand, (optional)componentName) - gets the skeletal mesh component for a specific hand
+        example:
+            local rightHand = hands.getHandComponent(Handed.Right)
+
+    hands.setInitialTransform(hand, (optional)componentName) - resets hand to initial transform/pose
+        example:
+            hands.setInitialTransform(Handed.Left)
+
+    hands.updateAnimationFromMesh(hand, mesh, (optional)componentName) - updates hand animation from external mesh
+		The hands mesh is a copy of an original player mesh. The original player mesh has animations but the 
+		copy does not. While this function is being called on the tick, it copies the bone transforms from the 
+		original mesh to the hand mesh, thereby animating the hands as if they were the original mesh. If you
+		do not want to do this manually, call hands.setAnimationMesh(mesh) and then implement hands.registerIsAnimatingFromMeshCallback(func)
+        example:
+			uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
+            	hands.updateAnimationFromMesh(Handed.Right, originalArmsMesh)
+			end)
+    
+    hands.setAnimationMesh(mesh) - sets the default animation mesh for hands
+        example:
+            hands.setAnimationMesh(originalArmsMesh)
+
+	hands.registerIsAnimatingFromMeshCallback(func) - registers callback for external animation state changes
+		Return nil if no change, true/false to set animating state
+        example:
+			local isLeftHandAnimating = true --change this param at runtime based on game logic
+            hands.registerIsAnimatingFromMeshCallback(function(hand, isAnimating)
+				return hand == Handed.Left and isLeftHandAnimating or nil
+            end)
+
+    hands.hideHands(val) - shows/hides hand components
+        example:
+            hands.hideHands(true)  -- Hide hands
+
+    hands.registerIsHiddenCallback(func) - registers callback for when hands are shown/hidden
+        example:
+            hands.registerIsHiddenCallback(function(isHidden)
+                print("Hands hidden:", isHidden)
+            end)
+
+    hands.destroyHands() - destroys all hand components and cleans up resources
+        example:
+            hands.destroyHands()
+		
+	hands.reset() - resets the hand system to default state
+        example:
+            hands.reset()
+
+    hands.setLogLevel(val) - sets the logging level for hand system messages
+        example:
+            hands.setLogLevel(LogLevel.Debug)
+
+
+--]]
+
 local uevrUtils = require("libs/uevr_utils")
 local controllers = require("libs/controllers")
 local animation = require("libs/animation")
@@ -38,25 +163,19 @@ end
 
 local createInputHandler = doOnce(function()
 	attachments.registerOnGripAnimationCallback(function(gripAnimation, gripHand)
-		--M.print("Grip animation changed to " .. (gripAnimation and gripAnimation or "None") .. " for " .. (gripHand == Handed.Left and "Left" or "Right") .. " hand", LogLevel.Debug)
-		print("Grip animation changed to ", gripAnimation, gripHand)
+		M.print("Grip animation changed to " .. (gripAnimation and tostring(gripAnimation) or "None") .. " for " .. (gripHand == Handed.Left and "Left" or "Right") .. " hand", LogLevel.Debug)
+		--print("Grip animation changed to ", gripAnimation, gripHand)
 		M.updateAnimationState(gripHand)
 	end)
 
-	uevrUtils.registerOnInputGetStateCallback(function(retval, user_index, state)
+	uevrUtils.registerOnPreInputGetStateCallback(function(retval, user_index, state)
 		if autoHandleInput and M.exists() then
-			local rightAttachment = holdingAttachment[Handed.Right]
-			local leftAttachment = holdingAttachment[Handed.Left]
-			if rightAttachment == nil then
-				rightAttachment = attachments.getCurrentGripAnimation(Handed.Left)
-			end
-			if leftAttachment == nil then
-				leftAttachment = attachments.getCurrentGripAnimation(Handed.Right)
-			end
+			local rightAttachment = holdingAttachment[Handed.Right] or attachments.getCurrentGripAnimation(Handed.Right)
+			local leftAttachment = holdingAttachment[Handed.Left] or attachments.getCurrentGripAnimation(Handed.Left)
 			--M.handleInput(state, attachment, Handed.Right, nil, true)
-			M.handleInputTwoHanded(state, rightAttachment, leftAttachment, nil, true)
+			M.handleInputForHands(state, rightAttachment, leftAttachment, nil, true)
 		end
-	end)
+	end, 10) --high priority to intercept messages before possible remapper
 end, Once.EVER)
 
 local function getValidVector(definition, id, default)
@@ -99,6 +218,7 @@ end
 
 function M.setHoldingAttachment(hand, val)
 	holdingAttachment[hand] = val
+	M.updateAnimationState(hand)
 end
 
 function M.reset()
@@ -152,27 +272,35 @@ local function registerFOVFix(profile)
 	end
 end
 
+local function getAttachmentStateAndExtension(attachment)
+	local isHoldingAttachment = false
+	local attachmentExtension = ""
+	if type(attachment) == "boolean" then
+		isHoldingAttachment = attachment
+	elseif type(attachment) == "string" and attachment ~= "attachment_none" then
+		isHoldingAttachment = true
+		if attachment ~= "" then
+			attachmentExtension = "_" .. attachment
+		end
+	end
+	return isHoldingAttachment, attachmentExtension
+end
+
 function M.updateAnimationState(hand)
 	if M.exists() then
 		local attachment = holdingAttachment[hand]
 		if attachment == nil then
 			attachment = attachments.getCurrentGripAnimation(hand)
 		end
-		local isHoldingAttachment = false
-		local attachmentExtension = ""
-		print("In updateAnimationState", hand, attachment, type(attachment))
-		if type(attachment) == "boolean" then
-			isHoldingAttachment = attachment
-		elseif type(attachment) == "string" and attachment ~= "attachment_none" then
-			isHoldingAttachment = true
-			if attachment ~= "" then
-				attachmentExtension = "_" .. attachment
-			end
-		end
-		print("isHoldingAttachment", isHoldingAttachment)
+		M.print("Updating animation state for " .. (hand == Handed.Left and "Left" or "Right") .. " hand with attachment: " .. (type(attachment) == "string" and attachment or tostring(attachment)), LogLevel.Debug)
+		local isHoldingAttachment, attachmentExtension = getAttachmentStateAndExtension(attachment)
+		M.print("Is holding attachment: " .. tostring(isHoldingAttachment), LogLevel.Debug)
+
 		if isHoldingAttachment then
 			for id, target in pairs(inputHandlerAnimID) do
 				local handStr = hand == Handed.Left and "left" or "right"
+				animation.resetAnimation(handStr.."_"..target, handStr.."_grip_weapon" .. attachmentExtension, true) --forces an update regardless of current state
+				animation.resetAnimation(handStr.."_"..target, handStr.."_trigger_weapon" .. attachmentExtension, true) --forces an update regardless of current state
 				animation.pose(handStr .. "_" .. target, "grip_" .. handStr .. "_weapon" .. attachmentExtension)
 			end
 		else
@@ -414,7 +542,7 @@ function M.setHandsAreAnimatingFromMesh(isLeftAnimating, isRightAnimating, leftM
 		end
 		armsAnimationMeshes[Handed.Left].animating = isLeftAnimating
 	end
-	
+
 	if isRightAnimating ~= nil then
 		if isRightAnimating == true and armsAnimationMeshes[Handed.Right].animating ~= true then
 			armsAnimationMeshes[Handed.Right].mesh = rightMesh and rightMesh or (uevrUtils.getValid(defaultAnimationMesh) ~= nil and defaultAnimationMesh or pawnModule.getArmsAnimationMesh())
@@ -435,14 +563,7 @@ function M.handleInput(state, attachment, hand, overrideTrigger, allowAutoHandle
 		autoHandleInput = false --if something else is calling this then dont auto handle input
 	end
 
-	local isHoldingAttachment = false
-	local attachmentExtension = ""
-	if type(attachment) == "boolean" then
-		isHoldingAttachment = attachment
-	elseif type(attachment) == "string" and attachment ~= "" then
-		isHoldingAttachment = true
-		attachmentExtension = "_" .. attachment
-	end
+	local isHoldingAttachment, attachmentExtension = getAttachmentStateAndExtension(attachment)
 
 	if hand == nil then hand = Handed.Right end
 	if overrideTrigger == nil then overrideTrigger = false end
@@ -483,7 +604,7 @@ function M.handleInput(state, attachment, hand, overrideTrigger, allowAutoHandle
 	end
 end
 
-function M.handleInputTwoHanded(state, rightAttachment, leftAttachment, overrideTrigger, allowAutoHandle)
+function M.handleInputForHands(state, rightAttachment, leftAttachment, overrideTrigger, allowAutoHandle)
 	if allowAutoHandle ~= true then
 		autoHandleInput = false --if something else is calling this then dont auto handle input
 	end
@@ -493,19 +614,16 @@ function M.handleInputTwoHanded(state, rightAttachment, leftAttachment, override
 	for id, target in pairs(inputHandlerAnimID) do
 		for hand = Handed.Left, Handed.Right do
 			local handStr = hand == Handed.Right and "right" or "left"
-			local isHoldingAttachment = false
-			local attachmentExtension = ""
-			local attachment = hand == Handed.Right and rightAttachment or leftAttachment
-			if type(attachment) == "boolean" then
-				isHoldingAttachment = attachment
-			elseif type(attachment) == "string" and attachment ~= "" then
-				isHoldingAttachment = true
-				attachmentExtension = "_" .. attachment
-			end
+			--do not use ternary operators like this. If right attachment is nil then it will always pick leftAttachment for Handed.Right == true
+			--local attachment = hand == Handed.Right and rightAttachment or leftAttachment
+			local attachment = nil
+			if hand == Handed.Right then attachment = rightAttachment else attachment = leftAttachment end
+			local isHoldingAttachment, attachmentExtension = getAttachmentStateAndExtension(attachment)
+			--print("Handling input for " .. handStr .. " hand, attachment: " .. (type(attachment) == "string" and attachment or tostring(attachment)) .. ", isHoldingAttachment: " .. tostring(isHoldingAttachment) .. ", attachmentExtension: " .. attachmentExtension)
+
 			if not isHoldingAttachment then
 				local weaponHandTriggerValue = (hand == Handed.Right or overrideTrigger) and state.Gamepad.bRightTrigger or state.Gamepad.bLeftTrigger
 				animation.updateAnimation(handStr.."_"..target, handStr.."_trigger", weaponHandTriggerValue > 100, {duration=animDuration})
-
 				animation.updateAnimation(handStr.."_"..target, handStr.."_grip", uevrUtils.isButtonPressed(state, hand == Handed.Right and XINPUT_GAMEPAD_RIGHT_SHOULDER or XINPUT_GAMEPAD_LEFT_SHOULDER), {duration=animDuration})
 
 				local weaponhandController = uevr.params.vr.get_right_joystick_source()
@@ -515,11 +633,8 @@ function M.handleInputTwoHanded(state, rightAttachment, leftAttachment, override
 			else
 				local weaponHandTriggerValue = (hand == Handed.Right or overrideTrigger) and state.Gamepad.bRightTrigger or state.Gamepad.bLeftTrigger
 				animation.updateAnimation(handStr.."_"..target, handStr.."_trigger_weapon" .. attachmentExtension, weaponHandTriggerValue > 100, {duration=animDuration})
-				if uevrUtils.isButtonPressed(state, hand == Handed.Right and XINPUT_GAMEPAD_RIGHT_SHOULDER or XINPUT_GAMEPAD_LEFT_SHOULDER) then
-					animation.resetAnimation(handStr.."_"..target, handStr.."_grip_weapon" .. attachmentExtension, false) --forces an update regardless of current state
-	--print("Here",weaponHandStr.."_"..target,weaponHandStr.."_grip_weapon" .. attachmentExtension)
-					animation.updateAnimation(handStr.."_"..target, handStr.."_grip_weapon" .. attachmentExtension, true, {duration=animDuration})
-				end
+				local isButtonPressed = uevrUtils.isButtonPressed(state, hand == Handed.Right and XINPUT_GAMEPAD_RIGHT_SHOULDER or XINPUT_GAMEPAD_LEFT_SHOULDER)
+				animation.updateAnimation(handStr.."_"..target, handStr.."_grip_weapon" .. attachmentExtension, isButtonPressed, {duration=animDuration})
 			end
 		end
 	end

@@ -303,6 +303,14 @@ Available Widget Types:
 		properties: space (required, in pixels)
 		example: { widgetType = "space_horizontal", space = 50 }
 
+	- set_x - Set the x position of the cursor
+		properties: x (required, in pixels)
+		example: { widgetType = "set_x", x = 200 }
+
+	- set_y - Set the y position of the cursor
+		properties: y (required, in pixels)
+		example: { widgetType = "set_y", y = 100 }
+
 	Common Properties:
 	- id: Unique identifier for the widget (required for interactive widgets)
 	- label: Display text
@@ -379,6 +387,33 @@ ImGui = {
     NavWindowingDimBg = 53,
     ModalWindowDimBg = 54,
     COUNT = 55
+}
+
+ImGuiWindowFlags = {
+    None = 0, -- No flags
+    NoTitleBar = 1 << 0, -- Disable title-bar
+    NoResize = 1 << 1, -- Disable user resizing with the lower-right grip
+    NoMove = 1 << 2, -- Disable user moving the window
+    NoScrollbar = 1 << 3, -- Disable scrollbars (window can still scroll programmatically)
+    NoScrollWithMouse = 1 << 4, -- Disable user vertically scrolling with the mouse wheel
+    NoCollapse = 1 << 5, -- Disable user collapsing window by double-clicking on it
+    AlwaysAutoResize = 1 << 6, -- Resize every window to its content every frame
+    NoBackground = 1 << 7, -- Disable drawing background color and outside border
+    NoSavedSettings = 1 << 8, -- Never load/save settings in the .ini file
+    NoMouseInputs = 1 << 9, -- Disable catching mouse events, window becomes a pass-through
+    MenuBar = 1 << 10, -- Has a menu-bar
+    HorizontalScrollbar = 1 << 11, -- Allow horizontal scrollbar to appear
+    NoFocusOnAppearing = 1 << 12, -- Disable taking focus when transitioning from hidden to visible
+    NoBringToFrontOnFocus = 1 << 13, -- Disable bringing window to front when taking focus
+    AlwaysVerticalScrollbar = 1 << 14, -- Always show vertical scrollbar
+    AlwaysHorizontalScrollbar = 1 << 15, -- Always show horizontal scrollbar
+    AlwaysUseWindowPadding = 1 << 16, -- Ensure child windows without border use style.WindowPadding
+    NoNavInputs = 1 << 18, -- No gamepad/keyboard navigation inputs will affect this window
+    NoNavFocus = 1 << 19, -- No focusing toward this window with gamepad/keyboard navigation
+    UnsavedDocument = 1 << 20, -- Append '*' to title to indicate an unsaved document
+    NoNav = 1 << 18 | 1 << 19, -- Alias for NoNavInputs and NoNavFocus
+    NoDecoration = 1 << 0 | 1 << 1 | 1 << 2 | 1 << 5, -- Alias for NoTitleBar, NoResize, NoMove, NoCollapse
+    NoInputs = 1 << 9 | 1 << 18 | 1 << 19, -- Alias for NoMouseInputs and NoNav
 }
 
 local configValues = {}
@@ -611,7 +646,9 @@ local function drawUI(panelID)
 						imgui.set_next_item_open(item.initialOpen == true and true or false)
 						treeInitialized[item.id] = true
 					end
+					if item.color ~= nil then imgui.push_style_color(ImGui.Text, colorStringToInteger(item.color)) end
 					treeState[treeDepth] = imgui.tree_node(item.label)
+					if item.color ~= nil then imgui.pop_style_color(1) end
 				else
 					treeState[treeDepth] = false
 				end
@@ -655,6 +692,14 @@ local function drawUI(panelID)
 			elseif item.widgetType == "space_horizontal" then
 				local current = imgui.get_cursor_pos()
 				current.x = current.x + item.space
+				imgui.set_cursor_pos(current)
+			elseif item.widgetType == "set_x" then
+				local current = imgui.get_cursor_pos()
+				current.x = item.x
+				imgui.set_cursor_pos(current)
+			elseif item.widgetType == "set_y" then
+				local current = imgui.get_cursor_pos()
+				current.y = item.y
 				imgui.set_cursor_pos(current)
 			elseif item.widgetType == "same_line" then
 				if item.spacing ~= nil then
@@ -813,7 +858,7 @@ function M.createPanel(panelDefinition)
 			--table.insert(framePanelList, panelID)
 			uevr.sdk.callbacks.on_frame(function()
 				if (panelList[panelID]["isHidden"] == nil or panelList[panelID]["isHidden"] == false) then
-					local opened = imgui.begin_window(label, true)
+					local opened = imgui.begin_window(label, true, panelDefinition["flags"] or ImGuiWindowFlags.None)
 					drawUI(panelID)
 					imgui.end_window()
 					if not opened then

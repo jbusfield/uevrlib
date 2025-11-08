@@ -522,6 +522,7 @@ function M.updateAnimation(animID, animName, isPressed, lerpParam)
 end
 
 function M.resetAnimation(animID, animName, isPressed)
+	M.print("Resetting animation state for " .. animID .. " " .. animName .. " to " .. tostring(isPressed), LogLevel.Info)
 	if animStates[animID] == nil then
 		animStates[animID] = {}
 	end

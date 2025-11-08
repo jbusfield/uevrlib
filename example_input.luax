@@ -10,9 +10,11 @@ local animation = require('libs/animation')
 local montage = require('libs/montage')
 local interaction = require('libs/interaction')
 local ui = require('libs/ui')
+local gunstock = require('libs/gunstock')
 
 uevrUtils.setDeveloperMode(true)
 
+input.setLogLevel(LogLevel.Debug)
 hands.enableConfigurationTool()
 ui.init()
 montage.init()
@@ -20,6 +22,7 @@ interaction.init()
 attachments.init(nil, LogLevel.Debug, {0,0,0}, {0,0,0})
 reticule.init(nil, LogLevel.Debug)
 pawnModule.init(nil, LogLevel.Debug)
+gunstock.showConfiguration()
 
 local versionTxt = "v1.0.0"
 local title = "Sample Input Configuration " .. versionTxt
@@ -101,6 +104,25 @@ end
 ]]--
 
 attachments.registerOnGripUpdateCallback(function()
-	return getWeaponMesh() 
+	local hands = hands.getHandComponent(Handed.Right)
+	if hands ~= nil then
+		--return getWeaponMesh(), hands, "Weapon_socket" --"hand_r" -- "Weapon_socket"
+		return getWeaponMesh()
+	end
+	return nil
+	
+--	return getWeaponMesh()
+
 end)
 
+-- register_key_bind("F1", function()
+	-- local cameraLocation = uevrUtils.getValid(pawn, {"Camera", "RelativeLocation"}) 
+	-- print(cameraLocation.X, cameraLocation.Y, cameraLocation.Z)
+	-- local cameraLocationX = uevrUtils.getValid(pawn, {"Camera", "RelativeLocation","X"}) 
+	-- print(cameraLocationX)
+	-- local cameraLocationQ = uevrUtils.getValid(pawn, {"Camera", "RelativeLocation","Q","Q"}) 
+	-- print(cameraLocationQ)
+	-- local keys = uevrUtils.getValid(pawn, {"AimingComponent", "AimingCurve", "FloatCurve","PreInfinityExtrap"}) 
+	-- print(keys, pawn.AimingComponent.AimingCurve.FloatCurve.PreInfinityExtrap)
+
+-- end)

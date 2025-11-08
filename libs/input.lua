@@ -83,6 +83,22 @@ local configWidgets = spliceableInlineArray{
 	},
 	{
 		widgetType = "tree_node",
+		id = "uevr_input_handedness",
+		initialOpen = true,
+		label = "Handedness"
+	},
+		{
+			widgetType = "combo",
+			id = "uevr_handedness",
+			label = "Hand",
+			selections = {"Left", "Right"},
+			initialValue = uevrUtils.getHandedness()
+		},
+	{
+		widgetType = "tree_pop"
+	},
+	{
+		widgetType = "tree_node",
 		id = "uevr_input_aim_method",
 		initialOpen = true,
 		label = "Aim Method"
@@ -592,12 +608,16 @@ local function updatePawnPositionRoomscale(world_to_meters)
 		--add the decoupledYaw yaw rotation to the delta vector
 		forwardVector = kismet_math_library:RotateAngleAxis( forwardVector,  decoupledYaw, uevrUtils.vector(0,0,1))
 		forwardVector.Z = 0 --do not affect up/down
-		if pawnPositionMode == M.PawnPositionMode.ANIMATED then
-			pawn:AddMovementInput(forwardVector, pawnPositionAnimationScale, false) --dont need to check for pawn because if rootComponent exists then pawn exists
+		if pawnPositionMode == M.PawnPositionMode.ANIMATED  then
+			if uevrUtils.getValid(pawn) ~= nil and pawn.AddMovementInput ~= nil then
+				pawn:AddMovementInput(forwardVector, pawnPositionAnimationScale, false) --dont need to check for pawn because if rootComponent exists then pawn exists
+			end
 		elseif pawnPositionMode == M.PawnPositionMode.FOLLOWS and rootComponent.K2_AddWorldOffset ~= nil then
-			pcall(function()
+			--pcall(function()
+			if uevrUtils.getValid(rootComponent) ~= nil then
 				rootComponent:K2_AddWorldOffset(forwardVector, pawnPositionSweepMovement, reusable_hit_result, false)
-			end)
+			end
+			--end)
 			--rootComponent:K2_SetWorldLocation(uevrUtils.vector(pawnPos.X+forwardVector.X,pawnPos.Y+forwardVector.Y,pawnPos.Z),pawnPositionSweepMovement,reusable_hit_result,false)
 		end
 
@@ -611,22 +631,25 @@ local function updateMeshRelativePosition()
 	if rootComponent ~= nil and decoupledYaw ~= nil then
 		local mesh = pawnModule.getBodyMesh()
 		if mesh ~= nil then
-			local pawnRot = rootComponent:K2_GetComponentRotation()
-			local animationDelta = getAnimationHeadDelta(pawn, pawnRot.Yaw)
-			local eyeOffsetDelta = getEyeOffsetDelta(pawn, pawnRot.Yaw)
+			pcall(function()
+				--the next line can fail even when checking for rootComprootComponent.K2_GetComponentRotation ~= nil so wrap in pcall
+				local pawnRot = rootComponent:K2_GetComponentRotation()
+				local animationDelta = getAnimationHeadDelta(pawn, pawnRot.Yaw)
+				local eyeOffsetDelta = getEyeOffsetDelta(pawn, pawnRot.Yaw)
 
-			temp_vec3:set(0, 0, 1) --the axis to rotate around
-			--headOffset is a global defining how far the head is offset from the mesh
-			local forwardVector = kismet_math_library:RotateAngleAxis(headOffset, pawnRot.Yaw - bodyRotationOffset - decoupledYaw, temp_vec3)
-			local x = -forwardVector.X
-			local y = -forwardVector.Y
-			if animationDelta ~= nil and eyeOffsetDelta ~= nil then
-				x = x + animationDelta.X + eyeOffsetDelta.X
-				y = y + animationDelta.Y - eyeOffsetDelta.Y
-			end
-			--dont worry about Z here. Z is applied directly to the RootComponent later
-			mesh.RelativeLocation.X = x
-			mesh.RelativeLocation.Y = y
+				temp_vec3:set(0, 0, 1) --the axis to rotate around
+				--headOffset is a global defining how far the head is offset from the mesh
+				local forwardVector = kismet_math_library:RotateAngleAxis(headOffset, pawnRot.Yaw - bodyRotationOffset - decoupledYaw, temp_vec3)
+				local x = -forwardVector.X
+				local y = -forwardVector.Y
+				if animationDelta ~= nil and eyeOffsetDelta ~= nil then
+					x = x + animationDelta.X + eyeOffsetDelta.X
+					y = y + animationDelta.Y - eyeOffsetDelta.Y
+				end
+				--dont worry about Z here. Z is applied directly to the RootComponent later
+				mesh.RelativeLocation.X = x
+				mesh.RelativeLocation.Y = y
+			end)
 		end
 	end
 end
@@ -721,9 +744,17 @@ uevr.params.sdk.callbacks.on_early_calculate_stereo_view_offset(function(device,
 			local pawnRot = rootComponent:K2_GetComponentRotation()
 
 			local capsuleHeight = rootComponent.CapsuleHalfHeight or 0
-			position.x = pawnPos.x
-			position.y = pawnPos.y
-			position.z = pawnPos.z + capsuleHeight + headOffset.Z
+
+			local forwardVector = {X=0,Y=0,Z=0}
+			if rootOffset.X ~= 0 and rootOffset.Y ~= 0 then
+				temp_vec3f:set(rootOffset.X, rootOffset.Y, rootOffset.Z) -- the vector representing the offset adjustment
+				temp_vec3:set(0, 0, 1) --the axis to rotate around
+				forwardVector = kismet_math_library:RotateAngleAxis(temp_vec3f, pawnRot.Yaw - bodyRotationOffset, temp_vec3)
+			end
+
+			position.x = pawnPos.x + forwardVector.X
+			position.y = pawnPos.y + forwardVector.Y
+			position.z = pawnPos.z + rootOffset.Z + capsuleHeight + headOffset.Z
 			rotation.Pitch = 0--pawnRot.Pitch 
 			rotation.Yaw = pawnRot.Yaw - bodyRotationOffset
 			rotation.Roll = 0--pawnRot.Roll 	
@@ -864,6 +895,10 @@ configui.onCreateOrUpdate("fixSpatialAudio", function(value)
 	M.setFixSpatialAudio(value)
 end)
 
+configui.onCreateOrUpdate("uevr_handedness", function(value)
+	uevrUtils.setHandedness(value)
+end)
+
 uevrUtils.registerPreLevelChangeCallback(function(level)
 	decoupledYaw = nil
 	bodyRotationOffset = 0
@@ -892,6 +927,10 @@ end)
 
 uevrUtils.registerUEVRCallback("attachment_grip_rotation_change", function(leftRotation, rightRotation)
 	M.setWeaponRotation(leftRotation, rightRotation)
+end)
+
+uevrUtils.registerHandednessChangeCallback(function(handed)
+	configui.setValue("uevr_handedness", handed, true)
 end)
 
 return M

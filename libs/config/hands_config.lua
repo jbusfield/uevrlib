@@ -1155,11 +1155,12 @@ local function getRelevantBonesForAnimationType(handIndex, typeIndex)
 	end
 end
 
-local function getAttachmentExtension(typeIndex)
+local function getAttachmentExtension(typeIndex, prepend)
 	local attachmentExt = ""
+	if prepend == nil then prepend = "_" end
 	local selectedAttachment = configui.getValue("attachments_list")
 	if selectedAttachment ~= 1 and (typeIndex == 4 or typeIndex == 5) then
-		attachmentExt = "_" .. attachmentIDs[selectedAttachment]
+		attachmentExt = prepend .. attachmentIDs[selectedAttachment]
 	end
 	return attachmentExt
 end
@@ -1883,10 +1884,41 @@ local function updateOptimizationUI()
 	end
 end
 
+local function updateTestingAnimation()
+	if configui.getValue("animation_test_left_handed_mode") then
+		if configui.getValue("animation_test_active_weapon_mode") then
+			local attachmentExt = getAttachmentExtension(configui.getValue("animation_type"),"")
+			hands.setHoldingAttachment(Handed.Left, attachmentExt)
+			hands.setHoldingAttachment(Handed.Right, nil)
+		else
+			hands.setHoldingAttachment(Handed.Left, nil)
+			hands.setHoldingAttachment(Handed.Right, nil)
+		end
+	else
+		if configui.getValue("animation_test_active_weapon_mode") then
+			local attachmentExt = getAttachmentExtension(configui.getValue("animation_type"),"")
+			hands.setHoldingAttachment(Handed.Right, attachmentExt)
+			hands.setHoldingAttachment(Handed.Left, nil)
+		else
+			hands.setHoldingAttachment(Handed.Right, nil)
+			hands.setHoldingAttachment(Handed.Left, nil)
+		end
+	end
+end
+
+configui.onUpdate("animation_test_left_handed_mode", function(value)
+	updateTestingAnimation()
+end)
+
+configui.onUpdate("animation_test_active_weapon_mode", function(value)
+	updateTestingAnimation()
+end)
 
 configui.onUpdate("test_button", function(value)
 	isTesting = not isTesting
 	updateHands()
+	updateTestingAnimation()
+
 	configui.hideWidget("prev_button", isTesting)
 	configui.hideWidget("next_button", isTesting)
 	configui.hideWidget("Step_13", isTesting)
@@ -2716,13 +2748,13 @@ uevrUtils.registerLevelChangeCallback(function(level)
 	initHandsCreator()
 end)
 
-uevrUtils.registerOnInputGetStateCallback(function(retval, user_index, state)
-	if isTesting then
-		if hands.exists() then
-			hands.handleInput(state, configui.getValue("animation_test_active_weapon_mode"), configui.getValue("animation_test_left_handed_mode") and Handed.Left or Handed.Right)
-		end
-	end
-end)
+-- uevrUtils.registerOnInputGetStateCallback(function(retval, user_index, state)
+-- 	if isTesting then
+-- 		if hands.exists() then
+-- 			hands.handleInput(state, configui.getValue("animation_test_active_weapon_mode"), configui.getValue("animation_test_left_handed_mode") and Handed.Left or Handed.Right)
+-- 		end
+-- 	end
+-- end)
 
 local timeSinceLastSave = 0
 uevrUtils.registerPreEngineTickCallback(function(engine, delta)

@@ -79,6 +79,24 @@ Usage
 			local hmdDirection = controllers.getControllerDirection(2)
 			print("Forward Vector is", hmdDirection.X, hmdDirection.Y, hmdDirection.Z)
 
+	controllers.getControllerUpVector(controllerID) - gets the current up vector FVector of the given controller or nil if none found
+		example:
+			local rightUpVector = controllers.getControllerUpVector(1)
+			print("Up Vector is", rightUpVector.X, rightUpVector.Y, rightUpVector.Z)
+
+	controllers.getControllerRightVector(controllerID) - gets the current right vector FVector of the given controller or nil if none found
+		example:
+			local leftRightVector = controllers.getControllerRightVector(0)
+			print("Right Vector is", leftRightVector.X, leftRightVector.Y, leftRightVector.Z)
+
+	controllers.getControllerTargetLocation(handed, collisionChannel, ignoreActors, traceComplex, minHitDistance) - performs line trace from controller and returns hit location
+		example:
+			local hitLocation = controllers.getControllerTargetLocation(0, 0, {}, false, 10)
+
+	controllers.setLogLevel(val) - sets the logging level for controller debug output
+		example:
+			controllers.setLogLevel(LogLevel.Info)
+
 ]]--
 
 local uevrUtils = require("libs/uevr_utils")
@@ -394,6 +412,24 @@ function M.getControllerRightVector(controllerID)
 	local controller = M.getController(controllerID, true)
 	if controller ~= nil then
 		return kismet_math_library:GetRightVector(M.getControllerRotation(controllerID))
+	end
+	return nil
+end
+
+function M.getControllerTargetLocation(handed, collisionChannel, ignoreActors, traceComplex, minHitDistance)
+	if not M.controllerExists(handed) then
+		M.createController(handed)
+	end
+	local direction = M.getControllerDirection(handed)
+	if direction ~= nil then
+		local startLocation = M.getControllerLocation(handed)
+		if startLocation ~= nil then
+			return uevrUtils.getTargetLocation(startLocation, direction, collisionChannel, ignoreActors, traceComplex, minHitDistance)
+		else
+			M.print("Error in getControllerTargetLocation. Controller location was nil")
+		end
+	else
+		M.print("Error in getControllerTargetLocation. Controller direction was nil")
 	end
 	return nil
 end

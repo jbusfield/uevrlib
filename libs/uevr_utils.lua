@@ -1,5 +1,5 @@
 
--- The following code includes contributions from markmon and Pande4360
+-- The following code includes contributions from markmon, Pande4360 and Rusty Gere
 
 --[[ 
 Usage
@@ -144,7 +144,19 @@ Usage
 			if uevrUtils.getDeveloperMode() then
 				-- Do developer-only things
 			end
+
+	uevrUtils.setHandedness(val) - sets the handedness preference (left or right handed)
+		example:
+			uevrUtils.setHandedness(Handed.Left)   -- set to left-handed
+			uevrUtils.setHandedness(Handed.Right)  -- set to right-handed
 			
+	uevrUtils.getHandedness() - gets the current handedness preference 
+		example:
+			local currentHandedness = uevrUtils.getHandedness()
+			if currentHandedness == Handed.Left then
+				print("User is left-handed")
+			end
+
 	uevrUtils.vector(x, y, z, (optional)reuseable) - returns a CoreUObject.Vector with the given params
 		If reuseable is true a cached struct is returned. This is faster but if you need two instances for the same function call this would not work
 		example:
@@ -451,7 +463,52 @@ Usage
 		many flat FPS games apply to player and weapon meshes using ScalarParameterValues
 		example:
 			uevrUtils.fixMeshFOV(hands.getHandComponent(0), "UsePanini", 0.0, true, true, true)
-	
+
+	uevrUtils.getTargetLocation(originPosition, originDirection, collisionChannel, ignoreActors, traceComplex, minHitDistance) - performs a line trace from origin in direction and returns hit location
+		example:
+			local hitLocation = uevrUtils.getTargetLocation(startPos, forwardVec, 0, {}, false, 10)
+			
+	uevrUtils.getArrayRange(arr, startIndex, endIndex) - returns a subset of an array from startIndex to endIndex (1-based indexing)
+		example:
+			local subset = uevrUtils.getArrayRange(myArray, 2, 5)  -- gets elements 2-5
+			
+	uevrUtils.wrapTextOnWordBoundary(text, maxCharsPerLine) - wraps text to specified line length while preserving word boundaries
+		example:
+			local wrapped = uevrUtils.wrapTextOnWordBoundary("This is a long line", 10)
+			
+	uevrUtils.parseHierarchyString(str) - parses a hierarchy string like "Pawn.Mesh(Arm).Glove" into traversable node structure
+		example:
+			local node = uevrUtils.parseHierarchyString("Pawn.Mesh(Arm).Glove")
+			
+	uevrUtils.getObjectFromHierarchy(node, object, showDebug) - traverses object hierarchy using parsed node structure
+		example:
+			local result = uevrUtils.getObjectFromHierarchy(node, pawn, true)
+			
+	uevrUtils.getObjectFromDescriptor(descriptor, showDebug) - gets object using hierarchy descriptor string
+		example:
+			local glove = uevrUtils.getObjectFromDescriptor("Pawn.Mesh(Arm).Glove", false)
+			
+	uevrUtils.getControllerIndex(controllerID) - gets VR controller index (0=left, 1=right, 2=HMD)
+		example:
+			local leftIndex = uevrUtils.getControllerIndex(0)
+			
+	uevrUtils.get_local_pawn() - returns the local player pawn
+		example:
+			local pawn = uevrUtils.get_local_pawn()
+			
+	uevrUtils.get_player_controller() - returns the local player controller
+		example:
+			local controller = uevrUtils.get_player_controller()
+			
+	uevrUtils.log_info(message) - logs message to log.txt file
+		example:
+			uevrUtils.log_info("Custom log message")
+			
+	uevrUtils.GetInstanceMatching(class_to_search, match_string) - finds first instance of class that contains match_string in its full name
+		example:
+			local instance = uevrUtils.GetInstanceMatching("Class /Script/Engine.StaticMesh", "Sphere")
+
+
 	uevrUtils.registerOnInputGetStateCallback(func) - registers a callback for input state changes
 		func receives (retval, user_index, state) parameters
 		example:
@@ -507,6 +564,14 @@ Usage
 			uevrUtils.registerGamePausedCallback(function(isPaused)
 				print("Game paused:", isPaused)
 			end)
+			
+	uevrUtils.registerUEVRUIChangeCallback(func, priority) - registers a callback for when the UEVR UI visibility state changes
+		func receives a boolean indicating whether the UEVR UI is visible
+		priority is optional (higher numbers execute first)
+		example:
+			uevrUtils.registerUEVRUIChangeCallback(function(isUIVisible)
+				print("UEVR UI visible:", isUIVisible)
+			end)
 	
 
 	hook_function(class_name, function_name, native, prefn, postfn, dbgout)	- a method of getting a function callback from the game engine
@@ -527,7 +592,51 @@ Usage
 			register_key_bind("LeftMouseButton", function()
 				print("Left mouse button pressed\n")
 			end)
-			
+
+		keyName list:
+			# Keyboard
+			Letters: "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"
+
+			Arrow keys: "Left", "Up", "Right", "Down"
+
+			Numbers (above alphabet, below function keys): "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"
+
+			NumPad: "NumPadZero", "NumPadOne", "NumPadTwo", "NumPadThree", "NumPadFour", "NumPadFive", "NumPadSix", "NumPadSeven", "NumPadEight", "NumPadNine"
+
+			NumPad operators: "Multiply", "Add", "Subtract", "Decimal", "Divide"
+
+			Control keys: "BackSpace", "Tab", "Enter", "Pause", "NumLock", "ScrollLock", "CapsLock", "Escape", "SpaceBar", "PageUp", "PageDown", "End", "Home", "Insert", "Delete"
+
+			Function keys: "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"
+
+			Modifier keys: "LeftShift", "RightShift", "LeftControl", "RightControl", "LeftAlt", "RightAlt", "LeftCommand", "RightCommand"
+
+			Symbols: "Semicolon", "Equals", "Comma", "Underscore", "Period", "Slash", "Tilde", "LeftBracket", "Backslash", "RightBracket", "Quote"
+
+			# Mouse
+			Axes: "MouseX", "MouseY", "MouseScrollUp", "MouseScrollDown", "MouseWheelSpin"
+			Note: There is a comment in InputCoreTypes stating that the viewport clients use "MouseScrollUp" and "MouseScrollDown" while Slate uses "MouseWheelSpin". Epic plan to merge these in the future.
+
+			Buttons: "LeftMouseButton", "RightMouseButton", "MiddleMouseButton", "ThumbMouseButton", "ThumbMouseButton2"
+
+			# Gamepads
+			Analog sticks: "Gamepad_LeftX", "Gamepad_LeftY", "Gamepad_RightX", "Gamepad_RightY"
+			Triggers: "Gamepad_LeftTriggerAxis", "Gamepad_RightTriggerAxis"
+			Stick buttons: "Gamepad_LeftThumbstick", "Gamepad_RightThumbstick"
+			Special buttons: "Gamepad_Special_Left", "Gamepad_Special_Right"
+			Face buttons: "Gamepad_FaceButton_Bottom", "Gamepad_FaceButton_Right", "Gamepad_FaceButton_Left", "Gamepad_FaceButton_Top"
+			Shoulder buttons: "Gamepad_LeftShoulder", "Gamepad_RightShoulder", "Gamepad_LeftTrigger", "Gamepad_RightTrigger"
+			D-Pad: "Gamepad_DPad_Up", "Gamepad_DPad_Down", "Gamepad_DPad_Right", "Gamepad_DPad_Left"
+
+			Virtual key codes for input axis button press/release emulation:
+			Left stick: "Gamepad_LeftStick_Up", "Gamepad_LeftStick_Down", "Gamepad_LeftStick_Right", "Gamepad_LeftStick_Left"
+			Right stick: "Gamepad_RightStick_Up", "Gamepad_RightStick_Down", "Gamepad_RightStick_Right", "Gamepad_RightStick_Left"
+
+			# Touch Devices
+			Motion: "Tilt", "RotationRate", "Gravity", "Acceleration"
+			Gestures: "Gesture_SwipeLeftRight", "Gesture_SwipeUpDown", "Gesture_TwoFingerSwipeLeftRight", "Gesture_TwoFingerSwipeUpDown", "Gesture_Pinch", "Gesture_Flick"
+			Special: "PS4_Special"
+
 
 	spliceableInlineArray, expandArray - is a utility that enables declarative construction 
 		of Lua arrays by allowing inline expansion of multiple return values such as those from functions 
@@ -580,7 +689,6 @@ Usage
 		end
 	
 
-	
 		UEVR lifecycle
 			Pre engine
 			Early Stereo --one eye
@@ -663,6 +771,102 @@ Handed = {
 	Left = 0,
 	Right = 1
 }
+
+KeyName = {
+	-- Mouse buttons
+	LeftMouseButton = "LeftMouseButton",
+	RightMouseButton = "RightMouseButton",
+	MiddleMouseButton = "MiddleMouseButton",
+	ThumbMouseButton = "ThumbMouseButton",
+	ThumbMouseButton2 = "ThumbMouseButton2",
+	
+	-- Mouse axes
+	MouseX = "MouseX",
+	MouseY = "MouseY",
+	MouseScrollUp = "MouseScrollUp",
+	MouseScrollDown = "MouseScrollDown",
+	MouseWheelSpin = "MouseWheelSpin",
+	
+	-- Letters
+	A = "A", B = "B", C = "C", D = "D", E = "E", F = "F", G = "G", H = "H", I = "I", J = "J",
+	K = "K", L = "L", M = "M", N = "N", O = "O", P = "P", Q = "Q", R = "R", S = "S", T = "T",
+	U = "U", V = "V", W = "W", X = "X", Y = "Y", Z = "Z",
+	
+	-- Numbers (above alphabet)
+	Zero = "Zero", One = "One", Two = "Two", Three = "Three", Four = "Four",
+	Five = "Five", Six = "Six", Seven = "Seven", Eight = "Eight", Nine = "Nine",
+	
+	-- Arrow keys
+	Left = "Left", Up = "Up", Right = "Right", Down = "Down",
+	
+	-- NumPad
+	NumPadZero = "NumPadZero", NumPadOne = "NumPadOne", NumPadTwo = "NumPadTwo", NumPadThree = "NumPadThree",
+	NumPadFour = "NumPadFour", NumPadFive = "NumPadFive", NumPadSix = "NumPadSix", NumPadSeven = "NumPadSeven",
+	NumPadEight = "NumPadEight", NumPadNine = "NumPadNine",
+	
+	-- NumPad operators
+	Multiply = "Multiply", Add = "Add", Subtract = "Subtract", Decimal = "Decimal", Divide = "Divide",
+	
+	-- Control keys
+	BackSpace = "BackSpace", Tab = "Tab", Enter = "Enter", Pause = "Pause", NumLock = "NumLock",
+	ScrollLock = "ScrollLock", CapsLock = "CapsLock", Escape = "Escape", SpaceBar = "SpaceBar",
+	PageUp = "PageUp", PageDown = "PageDown", End = "End", Home = "Home", Insert = "Insert", Delete = "Delete",
+	
+	-- Function keys
+	F1 = "F1", F2 = "F2", F3 = "F3", F4 = "F4", F5 = "F5", F6 = "F6",
+	F7 = "F7", F8 = "F8", F9 = "F9", F10 = "F10", F11 = "F11", F12 = "F12",
+	
+	-- Modifier keys
+	LeftShift = "LeftShift", RightShift = "RightShift", LeftControl = "LeftControl", RightControl = "RightControl",
+	LeftAlt = "LeftAlt", RightAlt = "RightAlt", LeftCommand = "LeftCommand", RightCommand = "RightCommand",
+	
+	-- Symbols
+	Semicolon = "Semicolon", Equals = "Equals", Comma = "Comma", Underscore = "Underscore",
+	Period = "Period", Slash = "Slash", Tilde = "Tilde", LeftBracket = "LeftBracket",
+	Backslash = "Backslash", RightBracket = "RightBracket", Quote = "Quote",
+	
+	-- Gamepad analog sticks
+	Gamepad_LeftX = "Gamepad_LeftX", Gamepad_LeftY = "Gamepad_LeftY",
+	Gamepad_RightX = "Gamepad_RightX", Gamepad_RightY = "Gamepad_RightY",
+	
+	-- Gamepad triggers
+	Gamepad_LeftTriggerAxis = "Gamepad_LeftTriggerAxis", Gamepad_RightTriggerAxis = "Gamepad_RightTriggerAxis",
+	
+	-- Gamepad stick buttons
+	Gamepad_LeftThumbstick = "Gamepad_LeftThumbstick", Gamepad_RightThumbstick = "Gamepad_RightThumbstick",
+	
+	-- Gamepad special buttons
+	Gamepad_Special_Left = "Gamepad_Special_Left", Gamepad_Special_Right = "Gamepad_Special_Right",
+	
+	-- Gamepad face buttons
+	Gamepad_FaceButton_Bottom = "Gamepad_FaceButton_Bottom", Gamepad_FaceButton_Right = "Gamepad_FaceButton_Right",
+	Gamepad_FaceButton_Left = "Gamepad_FaceButton_Left", Gamepad_FaceButton_Top = "Gamepad_FaceButton_Top",
+	
+	-- Gamepad shoulder buttons
+	Gamepad_LeftShoulder = "Gamepad_LeftShoulder", Gamepad_RightShoulder = "Gamepad_RightShoulder",
+	Gamepad_LeftTrigger = "Gamepad_LeftTrigger", Gamepad_RightTrigger = "Gamepad_RightTrigger",
+	
+	-- Gamepad D-Pad
+	Gamepad_DPad_Up = "Gamepad_DPad_Up", Gamepad_DPad_Down = "Gamepad_DPad_Down",
+	Gamepad_DPad_Right = "Gamepad_DPad_Right", Gamepad_DPad_Left = "Gamepad_DPad_Left",
+	
+	-- Gamepad virtual stick directions
+	Gamepad_LeftStick_Up = "Gamepad_LeftStick_Up", Gamepad_LeftStick_Down = "Gamepad_LeftStick_Down",
+	Gamepad_LeftStick_Right = "Gamepad_LeftStick_Right", Gamepad_LeftStick_Left = "Gamepad_LeftStick_Left",
+	Gamepad_RightStick_Up = "Gamepad_RightStick_Up", Gamepad_RightStick_Down = "Gamepad_RightStick_Down",
+	Gamepad_RightStick_Right = "Gamepad_RightStick_Right", Gamepad_RightStick_Left = "Gamepad_RightStick_Left",
+	
+	-- Touch device motion
+	Tilt = "Tilt", RotationRate = "RotationRate", Gravity = "Gravity", Acceleration = "Acceleration",
+	
+	-- Touch device gestures
+	Gesture_SwipeLeftRight = "Gesture_SwipeLeftRight", Gesture_SwipeUpDown = "Gesture_SwipeUpDown",
+	Gesture_TwoFingerSwipeLeftRight = "Gesture_TwoFingerSwipeLeftRight", Gesture_TwoFingerSwipeUpDown = "Gesture_TwoFingerSwipeUpDown",
+	Gesture_Pinch = "Gesture_Pinch", Gesture_Flick = "Gesture_Flick",
+	
+	-- Special
+	PS4_Special = "PS4_Special"
+}
 -------------------------------
 local coreLerp = require("libs/core/lerp")
 
@@ -675,7 +879,10 @@ local keyBindList = {}
 local usingLuaVR = false
 local isPaused = false
 local isInCutscene = false
+local isCharacterHidden = false
 local isDeveloperMode = nil
+local handedness = Handed.Right --a way to track handedness in a unified way
+
 
 function register_key_bind(keyName, callbackFunc)
 	keyBindList[keyName] = {}
@@ -704,6 +911,10 @@ local function updateKeyPress()
 		else
 			elem.isPressed = false
 		end
+		-- although these return analog states it's always 0.0 or 1.0
+		-- print(pc:GetInputAnalogKeyState(keyStruct))
+		-- local vector = pc:GetInputVectorKeyState(keyStruct)
+		-- print("Vector state:", vector.X, vector.Y, vector.Z)
 	end
 end
 
@@ -874,28 +1085,36 @@ local function updateLazyPoll(delta)
 	end
 end
 
-local function registerUEVRCallback(callbackName, callbackFunc)
+local function registerUEVRCallback(callbackName, callbackFunc, priority)
+	if priority == nil then priority = 0 end
 	if uevrCallbacks[callbackName] == nil then uevrCallbacks[callbackName] = {} end
-	for i, existingFunc in ipairs(uevrCallbacks[callbackName]) do
-		if existingFunc == callbackFunc then
+
+	for i, existingEntry in ipairs(uevrCallbacks[callbackName]) do
+		if existingEntry.func == callbackFunc then
 			--print("Function already exists")
 			return
 		end
 	end
-	table.insert(uevrCallbacks[callbackName], callbackFunc)
+
+	table.insert(uevrCallbacks[callbackName], {func = callbackFunc, priority = priority})
+	-- Sort by priority (highest priority first)
+	table.sort(uevrCallbacks[callbackName], function(a, b)
+		return a.priority > b.priority
+	end)
 end
 
-function M.registerUEVRCallback(callbackName, callbackFunc)
-	registerUEVRCallback(callbackName, callbackFunc)
+function M.registerUEVRCallback(callbackName, callbackFunc, priority)
+	registerUEVRCallback(callbackName, callbackFunc, priority)
 end
 
 --note that only the last result will be returned for functions that return results
---therefore, for function returning results, only one callback should be registered system wide
+--therefore, for function returning results, only one callback should be 
+--registered system wide or use executeUEVRCallbacksWithBooleanResult
 local function executeUEVRCallbacks(callbackName, ...)
 	if uevrCallbacks[callbackName] ~= nil then
 		local lastResults = nil
-		for i, func in ipairs(uevrCallbacks[callbackName]) do
-			local results = {func(table.unpack({...}))}
+		for i, entry in ipairs(uevrCallbacks[callbackName]) do
+			local results = {entry.func(table.unpack({...}))}
 			if #results > 0 then
 				lastResults = results
 			end
@@ -909,8 +1128,8 @@ end
 local function executeUEVRCallbacksWithBooleanResult(callbackName, ...)
 	local result = nil
 	if uevrCallbacks[callbackName] ~= nil then
-		for i, func in ipairs(uevrCallbacks[callbackName]) do
-			local funcResult = func(table.unpack({...}))
+		for i, entry in ipairs(uevrCallbacks[callbackName]) do
+			local funcResult = entry.func(table.unpack({...}))
 			if funcResult ~= nil then
 				result = result or funcResult
 			end
@@ -923,8 +1142,8 @@ local function executeUEVRCallbacksWithPriorityBooleanResult(callbackName, ...)
 	local result = nil
 	local priority = 0
 	if uevrCallbacks[callbackName] ~= nil then
-		for i, func in ipairs(uevrCallbacks[callbackName]) do
-			local funcResult, funcPriority = func(table.unpack({...}))
+		for i, entry in ipairs(uevrCallbacks[callbackName]) do
+			local funcResult, funcPriority = entry.func(table.unpack({...}))
 			if funcPriority == nil then funcPriority = 0 end
 			if funcResult ~= nil and funcPriority >= priority then
 				result = result or funcResult
@@ -1008,6 +1227,20 @@ local function updateGamePaused()
 	end
 end
 
+local function updateCharacterHidden()
+	if on_character_hidden ~= nil or hasUEVRCallbacks("on_character_hidden") then --don't bother doing anything if nothing is listening
+		local m_isHidden = M.getValid(pawn, {"Controller", "Character", "bHidden"}) or false
+		if isCharacterHidden ~= m_isHidden then
+			if on_character_hidden ~= nil then
+				on_character_hidden(m_isHidden)
+			end
+			executeUEVRCallbacks("on_character_hidden", m_isHidden)
+		end
+---@diagnostic disable-next-line: cast-local-type
+		isCharacterHidden = m_isHidden
+	end
+end
+
 local function updateCutscene()
 	if on_cutscene_change ~= nil or hasUEVRCallbacks("on_cutscene_change") then --don't bother doing anything if nothing is listening
 		if M.getValid(pawn) ~= nil then
@@ -1058,6 +1291,21 @@ local function updateMontage()
 	end
 end
 
+--courtesy of Rusty Gere
+local currentUEVRDrawn = nil
+local function updateUEVRUIState()
+	if on_uevr_ui_change ~= nil or hasUEVRCallbacks("on_uevr_ui_change") then --don't bother doing anything if nothing is listening
+		local uiDrawn = uevr.params.functions.is_drawing_ui()
+		if currentUEVRDrawn ~= uiDrawn then
+			if on_uevr_ui_change ~= nil then
+				on_uevr_ui_change(uiDrawn)
+			end
+			executeUEVRCallbacks("on_uevr_ui_change", uiDrawn)
+		end
+		currentUEVRDrawn = uiDrawn
+	end
+end
+
 
 local isInitialized = false
 function M.initUEVR(UEVR, callbackFunc)
@@ -1103,11 +1351,15 @@ function M.initUEVR(UEVR, callbackFunc)
 	temp_transform = M.get_reuseable_struct_object("ScriptStruct /Script/CoreUObject.Transform")
 
 	uevr.sdk.callbacks.on_xinput_get_state(function(retval, user_index, state)
+		executeUEVRCallbacks("onPreInputGetState", retval, user_index, state)
+
 		if on_xinput_get_state ~= nil then
 			on_xinput_get_state(retval, user_index, state)
 		end
 
 		executeUEVRCallbacks("onInputGetState", retval, user_index, state)
+
+		executeUEVRCallbacks("onPostInputGetState", retval, user_index, state)
 	end)
 
 	uevr.sdk.callbacks.on_pre_calculate_stereo_view_offset(function(device, view_index, world_to_meters, position, rotation, is_double)
@@ -1141,8 +1393,11 @@ function M.initUEVR(UEVR, callbackFunc)
 			updateKeyPress()
 			updateLerp(delta)
 			updateGamePaused()
+			updateCharacterHidden()
 			updateCutscene()
 			updateMontage()
+			updateUEVRUIState()
+
 			if on_pre_engine_tick ~= nil then
 				on_pre_engine_tick(engine, delta)
 			end
@@ -1212,47 +1467,74 @@ function M.getDeveloperMode()
 	return isDeveloperMode
 end
 
-function M.registerOnInputGetStateCallback(func)
-	registerUEVRCallback("onInputGetState", func)
+function M.registerOnInputGetStateCallback(func, priority)
+	registerUEVRCallback("onInputGetState", func, priority)
 end
 
-function M.registerPreEngineTickCallback(func)
-	registerUEVRCallback("preEngineTick", func)
+function M.registerOnPreInputGetStateCallback(func, priority)
+	registerUEVRCallback("onPreInputGetState", func, priority)
 end
 
-function M.registerPostEngineTickCallback(func)
-	registerUEVRCallback("postEngineTick", func)
+function M.registerOnPostInputGetStateCallback(func, priority)
+	registerUEVRCallback("onPostInputGetState", func, priority)
 end
 
-function M.registerPreCalculateStereoViewCallback(func)
-	registerUEVRCallback("preCalculateStereoView", func)
+function M.registerPreEngineTickCallback(func, priority)
+	registerUEVRCallback("preEngineTick", func, priority)
 end
 
-function M.registerPostCalculateStereoViewCallback(func)
-	registerUEVRCallback("postCalculateStereoView", func)
+function M.registerPostEngineTickCallback(func, priority)
+	registerUEVRCallback("postEngineTick", func, priority)
 end
 
-function M.registerLevelChangeCallback(func)
-	registerUEVRCallback("on_level_change", func)
+function M.registerPreCalculateStereoViewCallback(func, priority)
+	registerUEVRCallback("preCalculateStereoView", func, priority)
 end
 
-function M.registerPreLevelChangeCallback(func)
-	registerUEVRCallback("on_pre_level_change", func)
+function M.registerPostCalculateStereoViewCallback(func, priority)
+	registerUEVRCallback("postCalculateStereoView", func, priority)
 end
 
-function M.registerGamePausedCallback(func)
-	registerUEVRCallback("on_game_paused", func)
+function M.registerLevelChangeCallback(func, priority)
+	registerUEVRCallback("on_level_change", func, priority)
 end
 
-function M.registerCutsceneChangeCallback(func)
-	registerUEVRCallback("on_cutscene_change", func)
+function M.registerPreLevelChangeCallback(func, priority)
+	registerUEVRCallback("on_pre_level_change", func, priority)
 end
 
-function M.registerMontageChangeCallback(func)
-	registerUEVRCallback("on_montage_change", func)
+function M.registerGamePausedCallback(func, priority)
+	registerUEVRCallback("on_game_paused", func, priority)
 end
 
+function M.registerCharacterHiddenCallback(func, priority)
+	registerUEVRCallback("on_character_hidden", func, priority)
+end
 
+function M.registerCutsceneChangeCallback(func, priority)
+	registerUEVRCallback("on_cutscene_change", func, priority)
+end
+
+function M.registerMontageChangeCallback(func, priority)
+	registerUEVRCallback("on_montage_change", func, priority)
+end
+
+function M.registerHandednessChangeCallback(func, priority)
+	registerUEVRCallback("handedness_change", func, priority)
+end
+
+function M.registerUEVRUIChangeCallback(func, priority)
+	registerUEVRCallback("on_uevr_ui_change", func, priority)
+end
+
+function M.setHandedness(val)
+	handedness = val
+	M.executeUEVRCallbacks("handedness_change", val)
+end
+
+function M.getHandedness()
+	return handedness
+end
 
 function vector_2(x, y, reuseable)
 	local vector = M.get_struct_object("ScriptStruct /Script/CoreUObject.Vector2D", reuseable)
@@ -1775,7 +2057,18 @@ function M.getValid(object, properties)
 		if properties ~= nil and #properties > 0 then
 			for i = 1 , #properties do
 				object = object[properties[i]]
-				if M.validate_object(object) == nil then
+				if object ~= nil then
+					if type(object) == "userdata" then
+---@diagnostic disable-next-line: undefined-field
+						if object.as_class == nil then
+							--this is a property not an object
+						else
+							if not UEVR_UObjectHook.exists(object) then --check that is hasnt been deallocated
+								return nil
+							end
+						end
+					end
+				else
 					return nil
 				end
 			end
@@ -2193,10 +2486,6 @@ function M.set_decoupled_pitch(state)
 	uevr.params.vr.set_mod_value("VR_DecoupledPitch", state and "true" or "false")
 end
 
-function M.set_decoupled_pitch_adjust_ui(state)
-	uevr.params.vr.set_mod_value("VR_DecoupledPitchUIAdjust", state and "true" or "false")
-end
-
 function M.get_decoupled_pitch()
 	local mode = uevr.params.vr:get_mod_value("VR_DecoupledPitch")
 	if string.sub(mode, 1, 4 ) == "true" then
@@ -2205,6 +2494,20 @@ function M.get_decoupled_pitch()
 		return false
 	end
 end
+
+function M.set_decoupled_pitch_adjust_ui(state)
+	uevr.params.vr.set_mod_value("VR_DecoupledPitchUIAdjust", state and "true" or "false")
+end
+
+function M.get_decoupled_pitch_adjust_ui()
+	local mode = uevr.params.vr:get_mod_value("VR_DecoupledPitchUIAdjust")
+	if string.sub(mode, 1, 4 ) == "true" then
+		return true
+	else
+		return false
+	end
+end
+
 
 function M.enableCameraLerp(state, pitch, yaw, roll)
 	if pitch == true then
@@ -2220,6 +2523,10 @@ end
 
 function M.enableUIFollowsView(state)
 	uevr.params.vr.set_mod_value("UI_FollowView", state and "true" or "false")
+end
+
+function M.enableSnapTurn(state)
+	uevr.params.vr.set_mod_value("VR_SnapTurn", state and "true" or "false")
 end
 
 function M.setUIFollowsViewOffset(offset)
@@ -2737,6 +3044,27 @@ function M.cloneComponent(component, options)
 	return clone
 end
 
+function M.getTargetLocation(originPosition, originDirection, collisionChannel, ignoreActors, traceComplex, minHitDistance)
+	if originPosition ~= nil and originDirection ~= nil then
+		local endLocation = originPosition + (originDirection * 8192.0)
+		local ignore_actors = ignoreActors or {}
+		if traceComplex == nil then traceComplex = false end
+		if minHitDistance == nil then minHitDistance = 10 end
+		if collisionChannel == nil then collisionChannel = 0 end
+		local world = M.get_world()
+		if world ~= nil then
+			local hit = kismet_system_library:LineTraceSingle(world, originPosition, endLocation, collisionChannel, traceComplex, ignore_actors, 0, reusable_hit_result, true, zero_color, zero_color, 1.0)
+			if hit and reusable_hit_result.Distance > minHitDistance then
+				endLocation = M.vector(reusable_hit_result.Location) --{X=reusable_hit_result.Location.X, Y=reusable_hit_result.Location.Y, Z=reusable_hit_result.Location.Z}
+			end
+		end
+
+		return endLocation
+	end
+	return nil
+end
+
+
 function M.getArrayRange(arr, startIndex, endIndex)
     local result = {}
     -- Ensure startIndex and endIndex are within valid bounds
@@ -2841,7 +3169,7 @@ function M.getObjectFromHierarchy(node, object, showDebug)
 			object = M.getChildComponent(object, node.child.name)
 			object = M.getObjectFromHierarchy(node.child, object, showDebug)
 		end
-		if node.property then
+		if M.getValid(object) ~= nil and node.property and node.property.name ~= nil then
 			if showDebug == true then M.print("[getObjectFromHierarchy] Property " .. node.property.name) end
 			object = object[node.property.name]
 			object = M.getObjectFromHierarchy(node.property, object, showDebug)

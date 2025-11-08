@@ -101,7 +101,48 @@ Usage
         example:
             interaction.print("Interaction created", LogLevel.Info)
 
+    interaction.create() - manually creates the interaction component
+        example:
+            interaction.create()
+
+    interaction.setInteractionType(val) - sets the type of interaction (None, Mesh, Widget, MeshAndWidget)
+        example:
+            interaction.setInteractionType(interaction.InteractionType.Widget)
+
+    interaction.setMeshInteractionDistance(val) - sets how far mesh interaction can reach
+        example:
+            interaction.setMeshInteractionDistance(8000)  -- Set mesh interaction distance
+
+    interaction.setMeshTraceChannel(val) - sets which trace channel to use for mesh interaction
+        example:
+            interaction.setMeshTraceChannel(0)  -- Set mesh trace channel
+
+    interaction.setMeshEnableHitTesting(val) - enables/disables hit testing for mesh interaction
+        example:
+            interaction.setMeshEnableHitTesting(true)  -- Enable mesh hit testing
+
+    interaction.setInteractionLocationOffset(...) - sets the location offset for interaction
+        example:
+            interaction.setInteractionLocationOffset(0, 0, 10)  -- Set location offset
+
+    interaction.setInteractionRotationOffset(...) - sets the rotation offset for interaction
+        example:
+            interaction.setInteractionRotationOffset(0, 45, 0)  -- Set rotation offset
+
+    interaction.setInteractionAttachment(val) - sets which hand/controller the interaction is attached to
+        example:
+            interaction.setInteractionAttachment(Handed.Right)  -- Attach to right hand
+
+    interaction.setAllowMouseUpdate(val) - enables/disables mouse update functionality
+        example:
+            interaction.setAllowMouseUpdate(true)  -- Allow mouse updates
+
+    interaction.setMouseCursorVisibility(visible) - sets the visibility of the mouse cursor
+        example:
+            interaction.setMouseCursorVisibility(true)  -- Show mouse cursor
+
 ]]--
+
 
 local uevrUtils = require("libs/uevr_utils")
 local configui = require("libs/configui")
@@ -121,6 +162,7 @@ local interactionType = M.InteractionType.None
 local interactionAttachment = Handed.Right
 local showInteractionLaser = true
 local allowMouseUpdate = false
+local mouseCursorVisible = true
 local interactionLocationOffset = uevrUtils.vector(0,0,0)
 ---@cast interactionLocationOffset -nil
 local interactionRotationOffset = uevrUtils.rotator(0,0,0)
@@ -596,6 +638,11 @@ function M.setAllowMouseUpdate(val)
     configui.setValue("allowMouseUpdate", val, true)
 end
 
+function M.setMouseCursorVisibility(visible)
+    mouseCursorVisible = visible
+end
+
+
 configui.onCreateOrUpdate("allowMouseUpdate", function(value)
 	M.setAllowMouseUpdate(value)
 end)
@@ -859,7 +906,7 @@ local function lineTrace()
         local world = uevrUtils.get_world()
         if world ~= nil then
             local hit = kismet_system_library:LineTraceSingle(world, originPosition, endLocation, meshTraceChannel, true, ignore_actors, 0, reusable_hit_result, true, zero_color, zero_color, 1.0)
-            if hit and reusable_hit_result.Distance > 10 then
+            if hit and reusable_hit_result.Distance > 0 then
                 endLocation = {X=reusable_hit_result.Location.X, Y=reusable_hit_result.Location.Y, Z=reusable_hit_result.Location.Z}
                 uevrUtils.executeUEVRCallbacks("on_interaction_hit", reusable_hit_result)
                 --executeCallbacks("on_hit", reusable_hit_result)
@@ -921,7 +968,7 @@ local g_screenLocation = uevrUtils.vector_2(0,0)
 local function updateMouse(target)
 	local playerController = uevr.api:get_player_controller(0)
 	if allowMouseUpdate and playerController ~= nil then
-		playerController.bShowMouseCursor = true
+		playerController.bShowMouseCursor = mouseCursorVisible
 		playerController.bEnableMouseOverEvents = true
 		playerController.bEnableTouchOverEvents = true
 		playerController.bEnableClickEvents = true
@@ -1042,7 +1089,7 @@ uevr.sdk.callbacks.on_xinput_get_state(function(retval, user_index, state)
         if widgetInteractionComponent.ReleasePointerKey ~= nil then
 		    local result = widgetInteractionComponent:ReleasePointerKey(keyStruct)
         end
-        print("Releasing left")
+        --print("Releasing left")
 	end
     wasButtonPressed = isButtonPressed
 end)

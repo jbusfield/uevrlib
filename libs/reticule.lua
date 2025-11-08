@@ -38,7 +38,7 @@ Usage
             reticule.create()
 
     reticule.createFromWidget(widget, options) - creates a reticule from a UMG widget component
-		options - removeFromViewport, twoSided, drawSize, scale, rotation, position, collisionChannel
+		options - removeFromViewport, twoSided, drawSize, scale, rotation, position, collisionChannel, ignoreActors, traceComplex, minHitDistance
         example:
 			reticule.setReticuleType(reticule.ReticuleType.None) --disable auto creation
 			function createReticule()
@@ -48,7 +48,7 @@ Usage
 					if hud ~= nil then
 						local widget = hud.CrosshairWidget
 						if uevrUtils.getValid(widget) ~= nil then
-							local options = { removeFromViewport = true, twoSided = true }
+							local options = { removeFromViewport = true, twoSided = true, collisionChannel = 4, ignoreActors = {someactor} }
 							reticule.createFromWidget(widget, options)
 						end		
 					end
@@ -163,13 +163,31 @@ Usage
         example:
             local origin = reticule.getOriginPositionFromController()
 
-    reticule.getTargetLocationFromController(handed) - gets the target location from a specific controller
+    reticule.getTargetLocationFromController(handed, collisionChannel, ignoreActors, traceComplex, minHitDistance) - gets the target location from a specific controller
+        handed - controller hand (Handed.Left or Handed.Right)
+        collisionChannel - optional collision channel for line trace (default: 0)
+        ignoreActors - optional table of actors to ignore during line trace (default: empty table)
+        traceComplex - optional boolean for complex collision tracing (default: true)
+        minHitDistance - optional minimum hit distance threshold (default: 10)
         example:
             local target = reticule.getTargetLocationFromController(Handed.Right)
+            local target = reticule.getTargetLocationFromController(Handed.Right, 4, {someActor}, false, 20)
 
-    reticule.getTargetLocation(originPosition, originDirection) - gets the target location from a position and direction
+    reticule.getTargetLocation(originPosition, originDirection, collisionChannel, ignoreActors, traceComplex, minHitDistance) - gets the target location from a position and direction
+        originPosition - starting position for the trace
+        originDirection - direction vector for the trace
+        collisionChannel - optional collision channel for line trace (default: 0)
+        ignoreActors - optional table of actors to ignore during line trace (default: empty table)
+        traceComplex - optional boolean for complex collision tracing (default: false)
+        minHitDistance - optional minimum hit distance threshold (default: 100)
         example:
             local target = reticule.getTargetLocation(origin, direction)
+            local target = reticule.getTargetLocation(origin, direction, 4, {someActor}, true, 50)
+
+    reticule.setReticulePosition(pos) - sets the reticule position offset from the target location
+        pos - position offset as {X, Y} or vector2D
+        example:
+            reticule.setReticulePosition({1.5, -2.0})
 
 ]]--
 
@@ -215,7 +233,11 @@ local reticuleRotation = nil
 local reticulePosition = {X = 0.0, Y = 0.0}
 local reticuleScale = nil
 local reticuleCollisionChannel = 0
+local reticuleIgnoreActors = {}
+local reticuleTraceComplex = false
+local reticuleMinHitDistance = 10
 local restoreWidgetPosition = nil
+local reticuleCollisionOffset = 10 --distance to offset reticule from hit location to avoid z-fighting (so the reticule isnt embedded in a wall)
 
 local reticuleUpdateDistance = 200
 local reticuleUpdateScale = 1.0
@@ -527,6 +549,7 @@ local developerWidgets = spliceableInlineArray{
 }
 
 local function destroyReticuleComponent()
+	M.print("destroyReticuleComponent() called")
 	if uevrUtils.getValid(reticuleComponent) ~= nil then
 		if reticuleComponent:is_a(uevrUtils.get_class("Class /Script/UMG.WidgetComponent")) then
 			local widget = reticuleComponent:GetWidget()
@@ -539,11 +562,25 @@ local function destroyReticuleComponent()
 			end
 		end
 		uevrUtils.destroyComponent(reticuleComponent, true, true)
+	else
+		M.print("No valid reticule component to destroy")
 	end
     ---@diagnostic disable-next-line: cast-local-type
 	reticuleComponent = nil
 end
 
+local function setSelectedReticuleWidgetListItem(id)
+	if id == nil or id == "" or id == "None" then
+		configui.setValue("uevr_reticule_widget_list", 1)
+	else
+		for i = 1, #reticuleWidgetIDList do
+			if reticuleWidgetIDList[i] == id then
+				configui.setValue("uevr_reticule_widget_list", i, true)
+				return
+			end
+		end
+	end
+end
 
 local function updateSelectedReticleWidget(reticuleWidgetID)
 	if reticuleWidgetID == nil or reticuleWidgetID == "" or reticuleWidgetID == "None" then
@@ -562,6 +599,8 @@ local function updateSelectedReticleWidget(reticuleWidgetID)
 							configui.setValue("autoReticuleTwoSided", parameters.reticuleList[j].options.twoSided)
 							configui.setValue("autoReticuleCollisionChannel", parameters.reticuleList[j].collisionChannel or 0)
 							configui.setValue("autoReticuleScale", parameters.reticuleList[j].scale or {0.1, 0.1})
+
+							setSelectedReticuleWidgetListItem(parameters.reticuleList[j]["id"])
 
 							destroyReticuleComponent() --destroy previous reticule if any
 							return
@@ -745,6 +784,7 @@ configui.onUpdate("uevr_reticule_toggle_visibility_button", function()
 	toggleSelectedPossibleReticuleVisibility()
 end)
 
+--WidgetBlueprintGeneratedClass /Game/HNMain/UI/Widgets/WBP_Cursor.WBP_Cursor_C
 configui.onUpdate("uevr_reticule_use_button", function()
 	local widget = getSelectedPossibleReticuleWidget()
 	local widgetClassName = ""
@@ -766,7 +806,7 @@ end)
 
 configui.onUpdate("uevr_reticule_mesh_class_list", function(value)
 	if value ~= nil and systemMeshes ~= nil and systemMeshes[value] ~= nil then
-		M.print("Using mesh at index " .. value .. " - " .. systemMeshes[value])
+		M.print("Selecting systemMeshes index " .. value .. " - " .. systemMeshes[value])
 		if value == 1 then
 			configui.setValue("uevr_reticule_mesh_class", "")
 		else
@@ -778,7 +818,7 @@ end)
 
 configui.onUpdate("uevr_reticule_mesh_material_class_list", function(value)
 	if value ~= nil and systemMaterials ~= nil and systemMaterials[value] ~= nil then
-		M.print("Using material at index " .. value .. " - " .. systemMaterials[value])
+		M.print("Selecting systemMaterials index " .. value .. " - " .. systemMaterials[value])
 		if value == 1 then
 			configui.setValue("uevr_reticule_mesh_material_class", "")
 		else
@@ -1054,14 +1094,14 @@ function M.addReticuleByClassName(className)
 	if className ~= nil and className ~= "" then
 		local widget = uevrUtils.getLoadedAsset(className)
 		if uevrUtils.getValid(widget) ~= nil then
-			local found = false
+			local alreadyExists = false
 			for i = 1, #parameters.reticuleList do
 				if parameters.reticuleList[i].type == "Widget" and parameters.reticuleList[i].id == className then
-					found = true
+					alreadyExists = true
 					break
 				end
 			end
-			if not found then
+			if not alreadyExists then
 				table.insert(parameters.reticuleList, { type = "Widget", id = className, label = uevrUtils.getShortName(widget), options = { removeFromViewport = true, twoSided = true }, position = {X=0.0, Y=0.0} })
 				isParametersDirty = true
 				updateReticuleWidgetList()
@@ -1079,13 +1119,16 @@ function M.addReticuleByClassName(className)
 end
 
 -- widget can be string or object
--- options can be removeFromViewport, twoSided, drawSize, scale, rotation, position, collisionChannel
+-- options can be removeFromViewport, twoSided, drawSize, scale, rotation, position, collisionChannel, ignoreActors, traceComplex, minHitDistance
 function M.createFromWidget(widget, options)
 	M.print("Creating reticule from widget")
 	M.destroy()
 
 	if options == nil then options = {} end
 	if options.collisionChannel ~= nil then reticuleCollisionChannel = options.collisionChannel else reticuleCollisionChannel = 0 end
+	if options.ignoreActors ~= nil then reticuleIgnoreActors = options.ignoreActors else reticuleIgnoreActors = {} end
+	if options.traceComplex ~= nil then reticuleTraceComplex = options.traceComplex else reticuleTraceComplex = false end
+	if options.minHitDistance ~= nil then reticuleMinHitDistance = options.minHitDistance else reticuleMinHitDistance = 10 end
 	if widget ~= nil then
     	---@diagnostic disable-next-line: cast-local-type
 		reticuleComponent, restoreWidgetPosition = uevrUtils.createWidgetComponent(widget, options)
@@ -1234,44 +1277,12 @@ function M.getOriginPositionFromController()
 	return controllers.getControllerLocation(2)
 end
 
-function M.getTargetLocationFromController(handed)
-	if not controllers.controllerExists(handed) then
-		controllers.createController(handed)
-	end
-	local direction = controllers.getControllerDirection(handed)
-	if direction ~= nil then
-		local startLocation = controllers.getControllerLocation(handed)
-		--print(startLocation.X,startLocation.Y,startLocation.Z)
-		local endLocation = startLocation + (direction * 8192.0)
-
-		local ignore_actors = {}
-		local world = uevrUtils.get_world()
-		if world ~= nil then
-			local hit = kismet_system_library:LineTraceSingle(world, startLocation, endLocation, reticuleCollisionChannel, true, ignore_actors, 0, reusable_hit_result, true, zero_color, zero_color, 1.0)
-			if hit and reusable_hit_result.Distance > 10 then
-				endLocation = {X=reusable_hit_result.Location.X, Y=reusable_hit_result.Location.Y, Z=reusable_hit_result.Location.Z}
-			end
-		end
-
-		return endLocation
-	else
-		M.print("Error in getTargetLocationFromController. Controller direction was nil")
-	end
+function M.getTargetLocation(originPosition, originDirection, collisionChannel, ignoreActors, traceComplex, minHitDistance)
+	return uevrUtils.getTargetLocation(originPosition, originDirection, collisionChannel, ignoreActors, traceComplex, minHitDistance)
 end
 
-function M.getTargetLocation(originPosition, originDirection)
-	local endLocation = originPosition + (originDirection * 8192.0)
-
-	local ignore_actors = {}
-	local world = uevrUtils.get_world()
-	if world ~= nil then
-		local hit = kismet_system_library:LineTraceSingle(world, originPosition, endLocation, reticuleCollisionChannel, false, ignore_actors, 0, reusable_hit_result, true, zero_color, zero_color, 1.0)
-		if hit and reusable_hit_result.Distance > 100 then
-			endLocation = {X=reusable_hit_result.Location.X, Y=reusable_hit_result.Location.Y, Z=reusable_hit_result.Location.Z}
-		end
-	end
-
-	return endLocation
+function M.getTargetLocationFromController(handed, collisionChannel, ignoreActors, traceComplex, minHitDistance)
+	return controllers.getControllerTargetLocation(handed, collisionChannel, ignoreActors, traceComplex, minHitDistance)
 end
 
 local function getOffsetWorldPosition(targetPos, targetRot, offsetX, offsetY)
@@ -1289,13 +1300,13 @@ local function getOffsetWorldPosition(targetPos, targetRot, offsetX, offsetY)
     return result
 end
 
-function M.update(originLocation, targetLocation, distance, scale, rotation, allowAutoHandle )
+function M.update(originLocation, targetLocation, drawDistance, scale, rotation, allowAutoHandle )
 	if allowAutoHandle ~= true then
-		autoHandleInput = false --if something else is calling this then dont auto handle input
+		autoHandleInput = false --if something else is calling this function then dont auto handle input
 	end
 
 	if uevrUtils.getValid(reticuleComponent) ~= nil and reticuleComponent.K2_SetWorldLocationAndRotation ~= nil then
-		if distance == nil then distance = reticuleUpdateDistance end
+		if drawDistance == nil then drawDistance = reticuleUpdateDistance end
 		if scale == nil then scale = {reticuleUpdateScale,reticuleUpdateScale,reticuleUpdateScale} end
 		if rotation == nil then rotation = reticuleUpdateRotation end
 		rotation = uevrUtils.rotator(rotation)
@@ -1318,23 +1329,23 @@ function M.update(originLocation, targetLocation, distance, scale, rotation, all
 			if targetLocation == nil then
 				if playerCameraManager ~= nil and playerCameraManager.GetCameraRotation ~= nil then
 					local direction = kismet_math_library:GetForwardVector(playerCameraManager:GetCameraRotation())
-					targetLocation = M.getTargetLocation(originLocation, direction)
+					targetLocation = M.getTargetLocation(originLocation, direction, reticuleCollisionChannel, reticuleIgnoreActors, reticuleTraceComplex, reticuleMinHitDistance)
 				else
-					targetLocation = M.getTargetLocationFromController(Handed.Right)
+					targetLocation = M.getTargetLocationFromController(Handed.Right, reticuleCollisionChannel, reticuleIgnoreActors, reticuleTraceComplex, reticuleMinHitDistance)
 				end
 			end
 		end
 
 		if originLocation ~= nil and targetLocation ~= nil then
-			local maxDistance =  kismet_math_library:Vector_Distance(uevrUtils.vector(originLocation), uevrUtils.vector(targetLocation))
+			local distanceToTarget = kismet_math_library:Vector_Distance(uevrUtils.vector(originLocation), uevrUtils.vector(targetLocation))
 			--print(maxDistance)
 			local hmdToTargetDirection = kismet_math_library:GetDirectionUnitVector(uevrUtils.vector(originLocation), uevrUtils.vector(targetLocation))
-			if distance > maxDistance - 10 then distance = maxDistance - 10 end --move target distance back slightly so reticule doesnt go through the target
+			if drawDistance > distanceToTarget - reticuleCollisionOffset then drawDistance = distanceToTarget - reticuleCollisionOffset end --move target distance back slightly so reticule doesnt go through the target
 			temp_vec3f:set(hmdToTargetDirection.X,hmdToTargetDirection.Y,hmdToTargetDirection.Z)
 			local rot = kismet_math_library:Conv_VectorToRotator(temp_vec3f)
 			rot = uevrUtils.sumRotators(rot, reticuleRotation, rotation)
 			---@cast reticulePosition -nil
-			temp_vec3f:set(originLocation.X + (hmdToTargetDirection.X * distance), originLocation.Y + (hmdToTargetDirection.Y * distance), originLocation.Z + (hmdToTargetDirection.Z * distance))
+			temp_vec3f:set(originLocation.X + (hmdToTargetDirection.X * drawDistance), originLocation.Y + (hmdToTargetDirection.Y * drawDistance), originLocation.Z + (hmdToTargetDirection.Z * drawDistance))
 --print("Reticule position at ", reticulePosition.X, reticulePosition.Y)
 			local adjustedPosition = getOffsetWorldPosition(temp_vec3f, rot, reticulePosition.X, reticulePosition.Y)
 			reticuleComponent:K2_SetWorldLocationAndRotation(adjustedPosition, rot, false, reusable_hit_result, false)
