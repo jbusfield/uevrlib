@@ -903,15 +903,20 @@ local function lineTrace()
 	
     if meshEnableHitTesting == true then
         local ignore_actors = {}
-        local world = uevrUtils.get_world()
-        if world ~= nil then
-            local hit = kismet_system_library:LineTraceSingle(world, originPosition, endLocation, meshTraceChannel, true, ignore_actors, 0, reusable_hit_result, true, zero_color, zero_color, 1.0)
-            if hit and reusable_hit_result.Distance > 0 then
-                endLocation = {X=reusable_hit_result.Location.X, Y=reusable_hit_result.Location.Y, Z=reusable_hit_result.Location.Z}
-                uevrUtils.executeUEVRCallbacks("on_interaction_hit", reusable_hit_result)
-                --executeCallbacks("on_hit", reusable_hit_result)
-            end
+        local hitResult = uevrUtils.getLineTraceHitResult(originPosition, originDirection, meshTraceChannel, true, ignore_actors, 0, meshInteractionDistance, true)
+        if hitResult ~= nil then
+            endLocation = {X=hitResult.Location.X, Y=hitResult.Location.Y, Z=hitResult.Location.Z}
+            uevrUtils.executeUEVRCallbacks("on_interaction_hit", hitResult)
         end
+        -- local world = uevrUtils.get_world()
+        -- if world ~= nil then
+        --     local hit = kismet_system_library:LineTraceSingle(world, originPosition, endLocation, meshTraceChannel, true, ignore_actors, 0, reusable_hit_result, true, zero_color, zero_color, 1.0)
+        --     if hit and reusable_hit_result.Distance > 0 then
+        --         endLocation = {X=reusable_hit_result.Location.X, Y=reusable_hit_result.Location.Y, Z=reusable_hit_result.Location.Z}
+        --         uevrUtils.executeUEVRCallbacks("on_interaction_hit", reusable_hit_result)
+        --         --executeCallbacks("on_hit", reusable_hit_result)
+        --     end
+        -- end
     end
 	return originPosition, endLocation
 end

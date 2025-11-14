@@ -47,7 +47,7 @@ Usage
             hands.handleInput(inputState, true, Handed.Right, false)
             hands.handleInput(inputState, "pistol", Handed.Right, false)
 
-    hands.handleInputForHands(state, rightAttachment, leftAttachment, overrideTrigger) - processes input for both hands
+    hands.handleInputForHands(state, rightAttachment, leftAttachment, overrideTrigger) -- processes input for both hands
 		You only need to call this if you are not using automatic input handling. Call either handleInput or handleInputForHands, not both
         example:
             hands.handleInputForHands(inputState, "rifle", nil, false) -- right hand rifle attachment grip
@@ -93,6 +93,7 @@ Usage
 	hands.registerIsAnimatingFromMeshCallback(func) - registers callback for external animation state changes
 		Return nil if no change, true/false to set animating state
         example:
+            hands.setAnimationMesh(originalArmsMesh)
 			local isLeftHandAnimating = true --change this param at runtime based on game logic
             hands.registerIsAnimatingFromMeshCallback(function(hand, isAnimating)
 				return hand == Handed.Left and isLeftHandAnimating or nil
@@ -214,6 +215,10 @@ end
 
 function M.setAutoHandleInput(val)
 	autoHandleInput = val
+end
+
+function M.setAutoCreateHands(val)
+	autoCreateHands = val
 end
 
 function M.setHoldingAttachment(hand, val)

@@ -1,5 +1,5 @@
 
--- The following code includes contributions from markmon, Pande4360 and Rusty Gere
+-- The following code includes contributions from markmon, Pande4360, Rusty Gere and lobotomy
 
 --[[ 
 Usage
@@ -467,6 +467,10 @@ Usage
 	uevrUtils.getTargetLocation(originPosition, originDirection, collisionChannel, ignoreActors, traceComplex, minHitDistance) - performs a line trace from origin in direction and returns hit location
 		example:
 			local hitLocation = uevrUtils.getTargetLocation(startPos, forwardVec, 0, {}, false, 10)
+			
+	uevrUtils.getLineTraceHitResult(originPosition, originDirection, collisionChannel, traceComplex, ignoreActors, minHitDistance, maxTraceDistance, includeFullDetails) - performs a line trace from origin in direction and returns detailed hit result information
+		example:
+			local hitResult = uevrUtils.getLineTraceHitResult(startPos, forwardVec, 0, false, {}, 10, 1000, true)
 			
 	uevrUtils.getArrayRange(arr, startIndex, endIndex) - returns a subset of an array from startIndex to endIndex (1-based indexing)
 		example:
@@ -1663,14 +1667,19 @@ function M.rotator(...)
 		end
 	end
 
-	-- local rotator = M.get_struct_object("ScriptStruct /Script/CoreUObject.Rotator", reuseable)
-	-- if rotator ~= nil then
-		-- if rotator["Pitch"] ~= nil then rotator.Pitch = pitch else rotator.pitch = pitch end
-		-- if rotator["Yaw"] ~= nil then rotator.Yaw = yaw else rotator.yaw = yaw end
-		-- if rotator["Roll"] ~= nil then rotator.Roll = roll else rotator.roll = roll end
-	-- end
-	-- return rotator
-	return kismet_math_library:MakeRotator(roll, pitch, yaw)
+	if kismet_math_library.MakeRotator ~= nil then
+		return kismet_math_library:MakeRotator(roll, pitch, yaw)
+	end
+
+	local rotator = M.get_struct_object("ScriptStruct /Script/CoreUObject.Rotator", reuseable)
+	if rotator ~= nil then
+		if rotator["Pitch"] ~= nil then rotator.Pitch = pitch else rotator.pitch = pitch end
+		if rotator["Yaw"] ~= nil then rotator.Yaw = yaw else rotator.yaw = yaw end
+		if rotator["Roll"] ~= nil then rotator.Roll = roll else rotator.roll = roll end
+	else
+		rotator = {Pitch = pitch, Yaw = yaw, Roll = roll}
+	end
+	return rotator
 end
 
 function M.vector2D(...)
@@ -1823,7 +1832,7 @@ end
 
 function M.set_component_relative_rotation(component, rotation)
 	if component ~= nil and component.RelativeRotation ~= nil then
-		if rotation == nil then rotation = {Pitch=0, Yaw=0, Roll=0} else rotation = M.rotator(rotation)  end
+		if rotation == nil then rotation = {Pitch=0, Yaw=0, Roll=0} else rotation = M.rotator(rotation) end
 		component.RelativeRotation.Pitch = rotation.Pitch
 		component.RelativeRotation.Yaw = rotation.Yaw
 		component.RelativeRotation.Roll = rotation.Roll
@@ -2582,7 +2591,8 @@ function M.copyMaterials(fromComponent, toComponent, showDebug)
 			if showDebug == true then M.print("Copying materials. Found " .. #materials .. " materials on fromComponent") end
 			for i = 1 , #materials do
 				toComponent:SetMaterial(i - 1, materials[i])
-				if showDebug == true then M.print("Material index " .. i .. ": " .. materials[i]:get_full_name()) end
+				--print statement can cause crash
+				--if showDebug == true then M.print("Material index " .. i .. ": " .. materials[i]:get_full_name()) end
 			end
 		end
 	end
@@ -3044,9 +3054,57 @@ function M.cloneComponent(component, options)
 	return clone
 end
 
-function M.getTargetLocation(originPosition, originDirection, collisionChannel, ignoreActors, traceComplex, minHitDistance)
+--courtesy of lobotomy
+function M.getCleanHitResult(hitResult)
+	if hitResult ~= nil then
+		local bBlockingHit = {}
+		local bInitialOverlap = {}
+		local Time = {}
+		local Distance = {}
+		local Location = {}
+		local ImpactPoint = {}
+		local Normal = {}
+		local ImpactNormal = {}
+		local PhysMat = {}
+		local HitActor = {}
+		local HitComponent = {}
+		local HitBoneName = {}
+		local HitItem = {}
+		local ElementIndex = {}
+		local FaceIndex = {}
+		local TraceStart = {}
+		local TraceEnd = {}
+		Statics:BreakHitResult(hitResult, bBlockingHit, bInitialOverlap, Time, Distance, Location, ImpactPoint, Normal, ImpactNormal, PhysMat, HitActor, HitComponent, HitBoneName, HitItem, ElementIndex, FaceIndex, TraceStart, TraceEnd )
+
+		local details = {}
+		details.FaceIndex = hitResult.FaceIndex
+		details.Time = hitResult.Time
+		details.Distance = hitResult.Distance
+		details.Location = M.vector(hitResult.Location)
+		details.ImpactPoint = M.vector(hitResult.ImpactPoint)
+		details.Normal = M.vector(hitResult.Normal)
+		details.ImpactNormal = M.vector(hitResult.ImpactNormal)
+		details.TraceStart = M.vector(hitResult.TraceStart)
+		details.TraceEnd = M.vector(hitResult.TraceEnd)
+		details.PenetrationDepth = hitResult.PenetrationDepth
+		details.Item = hitResult.Item
+		details.ElementIndex = hitResult.ElementIndex
+		details.bBlockingHit = hitResult.bBlockingHit
+		details.bStartPenetrating = hitResult.bStartPenetrating
+		details.PhysMaterial = PhysMat.result
+		details.Actor = HitActor.result
+		details.Component = HitComponent.result
+		details.BoneName = HitBoneName.result and HitBoneName.result:to_string() or nil
+		details.MyBoneName = hitResult.MyBoneName and hitResult.MyBoneName:to_string() or nil
+		return details
+	end
+	return nil
+end
+
+function M.getLineTraceHitResult(originPosition, originDirection, collisionChannel, traceComplex, ignoreActors, minHitDistance, maxTraceDistance, includeFullDetails)
 	if originPosition ~= nil and originDirection ~= nil then
-		local endLocation = originPosition + (originDirection * 8192.0)
+		if maxTraceDistance == nil then maxTraceDistance = 8192.0 end
+		local endLocation = originPosition + (originDirection * maxTraceDistance)
 		local ignore_actors = ignoreActors or {}
 		if traceComplex == nil then traceComplex = false end
 		if minHitDistance == nil then minHitDistance = 10 end
@@ -3055,12 +3113,38 @@ function M.getTargetLocation(originPosition, originDirection, collisionChannel, 
 		if world ~= nil then
 			local hit = kismet_system_library:LineTraceSingle(world, originPosition, endLocation, collisionChannel, traceComplex, ignore_actors, 0, reusable_hit_result, true, zero_color, zero_color, 1.0)
 			if hit and reusable_hit_result.Distance > minHitDistance then
-				endLocation = M.vector(reusable_hit_result.Location) --{X=reusable_hit_result.Location.X, Y=reusable_hit_result.Location.Y, Z=reusable_hit_result.Location.Z}
+				if includeFullDetails == true then
+					return M.getCleanHitResult(reusable_hit_result)
+				end
+				return reusable_hit_result
 			end
 		end
-
-		return endLocation
 	end
+	return nil
+end
+
+
+function M.getTargetLocation(originPosition, originDirection, collisionChannel, ignoreActors, traceComplex, minHitDistance, maxTraceDistance)
+	local hitResult = M.getLineTraceHitResult(originPosition, originDirection, collisionChannel, traceComplex, ignoreActors, minHitDistance, maxTraceDistance)
+	if hitResult ~= nil then
+		return M.vector(hitResult.Location)
+	end
+	-- if originPosition ~= nil and originDirection ~= nil then
+	-- 	local endLocation = originPosition + (originDirection * 8192.0)
+	-- 	local ignore_actors = ignoreActors or {}
+	-- 	if traceComplex == nil then traceComplex = false end
+	-- 	if minHitDistance == nil then minHitDistance = 10 end
+	-- 	if collisionChannel == nil then collisionChannel = 0 end
+	-- 	local world = M.get_world()
+	-- 	if world ~= nil then
+	-- 		local hit = kismet_system_library:LineTraceSingle(world, originPosition, endLocation, collisionChannel, traceComplex, ignore_actors, 0, reusable_hit_result, true, zero_color, zero_color, 1.0)
+	-- 		if hit and reusable_hit_result.Distance > minHitDistance then
+	-- 			endLocation = M.vector(reusable_hit_result.Location) --{X=reusable_hit_result.Location.X, Y=reusable_hit_result.Location.Y, Z=reusable_hit_result.Location.Z}
+	-- 		end
+	-- 	end
+
+	-- 	return endLocation
+	-- end
 	return nil
 end
 

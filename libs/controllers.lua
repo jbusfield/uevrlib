@@ -157,7 +157,9 @@ local function destroyActor(actor)
 end
 
 local function createControllerComponent(parentActor, sourceName, handIndex)	
-	M.print("Creating controller" .. sourceName .. " " .. handIndex)
+	local sourceNameStr = sourceName or "Unknown"
+	local handIndexStr = handIndex ~= nil and tostring(handIndex) or "Unknown"
+	M.print("Creating controller " .. sourceNameStr .. " " .. handIndexStr) -- thanks to Lukasblaster
 	if parentActor ~= nil then
 		local motionControllerComponent = uevrUtils.create_component_of_class("Class /Script/HeadMountedDisplay.MotionControllerComponent", true, uevrUtils.get_transform(), false, parentActor)
 		--local motionControllerComponent = parentActor:AddComponentByClass(uevrUtils.get_class("Class /Script/HeadMountedDisplay.MotionControllerComponent"), true, uevrUtils.get_transform(), false)
