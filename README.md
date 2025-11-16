@@ -29,7 +29,7 @@ The library comes with several examples. The files that begin with "example_" wo
 - [Montages](docs/montage.md)
 - [Gestures](docs/gestures.md)
 - [Pawn](docs/pawn.md)
-- [UI (Dialogs/Menus/Game States)](docs/ui.md)
+- [UI (Dialogs/Menus/Cutscenes)](docs/ui.md)
 - [Developer Tools](docs/dev_tools.md)
 - [Flicker Fixer](docs/flicker_fixer.md)
 - [Debug Dump](docs/debug_dump.md)
