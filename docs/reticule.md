@@ -34,7 +34,8 @@ local reticule = require("libs/reticule")
 reticule.init()
 ```
 
-### Using the Manual Reticule Creation
+### Using Programmatic Reticule Creation
 
-Rename the file "example_reticule_simple.luax" as "example_reticule_simple.lua" or "example_reticule_advanced.luax" as "example_reticule_advanced.lua"
+Rename the file "example_reticule_simple.luax" as "example_reticule_simple.lua" or "example_reticule_advanced.luax" as "example_reticule_advanced.lua" to see examples of how to create reticules programmatically
+
 
