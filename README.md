@@ -28,6 +28,7 @@ The library comes with several examples. The files that begin with "example_" wo
 - [Interaction (Laser Pointer)](docs/interaction.md)
 - [Montages](docs/montage.md)
 - [Gestures](docs/gestures.md)
+- [Gunstock](docs/gunstock.md)
 - [Pawn](docs/pawn.md)
 - [UI (Dialogs/Menus/Cutscenes)](docs/ui.md)
 - [Developer Tools](docs/dev_tools.md)
