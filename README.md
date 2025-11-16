@@ -1,7 +1,7 @@
 # uevrlib
 
 ### Contributors
-The following have provided code, ideas and inspiration to this project: Pande4360, qwizdek, markmon, DJ, Mutar, CJ117, Ashok, Rusty Gere
+The following have provided code, ideas and inspiration to this project: Pande4360, qwizdek, markmon, DJ, Mutar, CJ117, Ashok, Rusty Gere and lobotomy
 
 ### How to use
 This is a LUA library designed to help UEVR mod developers perform common tasks. To use, place the libs folder and the example files in the scripts directory of your game's profile. For example, for Outer Worlds it would look like<br/>
