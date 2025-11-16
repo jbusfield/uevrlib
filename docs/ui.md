@@ -1,4 +1,4 @@
-## UI (Dialogs/Menus/Game States)
+## UI (Dialogs/Menus/Cutscenes)
 
 <br>
 Guide coming soon
