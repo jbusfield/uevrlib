@@ -25,8 +25,9 @@ the Grip Animation dropdown.
 <br><br><img width="694" height="699" alt="Screenshot 2025-11-16 125516" src="https://github.com/user-attachments/assets/bb6b4edf-4113-4670-9404-57eb561ed3d5" />
 <br><br>Switch to other weapons within the game to see more entries appear in the Config UI
 <br><br><img width="699" height="703" alt="Screenshot 2025-11-16 125758" src="https://github.com/user-attachments/assets/049663b9-20f2-42fe-923c-dc9052197a0b" />
-
-<br><br>The example implements the registerOnGripUpdateCallback function which controls which weapons get registered to the Attachment Wizard. Here is information about the function 
+<br><br>
+### Lua coding
+The example implements the registerOnGripUpdateCallback function which controls which weapons get registered to the Attachment Wizard. Here is information about the function 
 that is documented in libs/attachments.lua
 ```
 attachments.registerOnGripUpdateCallback(callback) - registers a callback function that handles automatic grip updates.
