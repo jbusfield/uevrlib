@@ -127,7 +127,6 @@ Usage
 local uevrUtils = require("libs/uevr_utils")
 local configui = require("libs/configui")
 local controllers = require("libs/controllers")
---local gunstock = require("libs/gunstock")
 
 local M = {}
 
@@ -825,6 +824,8 @@ end)
 
 function M.initAttachment(attachment, gripHand)
 	if attachment ~= nil then
+		attachment:SetVisibility(true, true)
+		attachment:SetHiddenInGame(false, true)
 		attachment:call("SetRenderInMainPass", true)
 		local location, rotation, scale = M.getAttachmentOffset(attachment)
 		local parentName, childName, id = getAttachmentNames(attachment)
