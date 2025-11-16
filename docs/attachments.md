@@ -86,3 +86,13 @@ When attaching to the raw controller the yaw is offset by 90 degrees for all wea
 attachments.init() 
 ```
 Setting default locations, rotations and scales in init is just a convenience. You can also just adjust the transforms in the Attachments Wizards manually each time a new one is added
+
+### Shipping
+When you configure your weapons, settings are persisted in the profile's data folder. You can therefore remove the 
+```
+uevrUtils.setDeveloperMode(true)
+attachments.setLogLevel(LogLevel.Debug)
+uevrUtils.setLogLevel(LogLevel.Debug)
+```
+lines where you are completely finished configuring your game.
+
