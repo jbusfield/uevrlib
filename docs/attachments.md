@@ -1,5 +1,5 @@
 ## Attachments (Weapons)
-Rename the file "example_attachments.luax" as "example_attachments.lua" if required and rename all other examples to ".luax"
+Rename the file "example_attachments.luax" as "example_attachments.lua" if required and rename all other examples to ".luax". Go to a point in the game where the character is actually holding a weapon or attachment in its hand. 
 Every game handles attachments (weapons) differently and so you as a modder will have to determine how to access the weapon meshes for your particular game. 
 The example_attachments.lua file contains examples of obtaining the meshes for various games such as Atomic Heart, Robocop and Outer Worlds.
 The Attachments Config Dev tab in the UEVR UI explains that you will have to create this function in order to use the attachments wizard.
