@@ -21,7 +21,7 @@ The library comes with several examples. The files that begin with "example_" wo
 ### Examples
 - [Controllers](docs/controllers.md)
 - [Hands](https://github.com/jbusfield/hands_tutorial_uevr)
-- [Attachments (Weapons)](https://github.com/jbusfield/attachments.md)
+- [Attachments (Weapons)](docs/attachments.md)
 - [Reticules](docs/reticule.md)
 - [Config UI](docs/configui.md)
 - [Developer Tools](docs/dev_tools.md)
