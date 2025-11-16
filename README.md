@@ -20,6 +20,7 @@ The library comes with several examples. The files that begin with "example_" wo
 
 ### Examples
 - [Controllers](docs/controllers.md)
+- [Hands](https://github.com/jbusfield/hands_tutorial_uevr)
 - [Reticules](docs/reticule.md)
 - [Config UI](docs/configui.md)
 - [Developer Tools](docs/dev_tools.md)
