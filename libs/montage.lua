@@ -68,7 +68,7 @@ local uevrUtils = require("libs/uevr_utils")
 local configui = require("libs/configui")
 local hands = require("libs/hands")
 local ui = require("libs/ui")
-local pawn = require("libs/pawn")
+local pawnModule = require("libs/pawn")
 
 local M = {}
 
@@ -356,9 +356,12 @@ local createDevMonitor = doOnce(function()
 			if parameters["montagelist"][montageName] == nil then
 				parameters["montagelist"][montageName] = {}
 				parameters["montagelist"][montageName]["label"] = montageName
+				parameters["montagelist"][montageName]["class_name"] = montage:get_full_name()
 				isParametersDirty = true
-
 				updateMontageList()
+			elseif parameters["montagelist"][montageName]["class_name"] == nil then
+				parameters["montagelist"][montageName]["class_name"] = montage:get_full_name()
+				isParametersDirty = true
 			end
 			--configui.setValue("lastMontagePlayed", montageName)
             M.addRecentMontage(montageName)  -- Track in recent history
@@ -496,6 +499,17 @@ function M.clearRecentMontages()
     recentMontages = {}
 end
 
+function M.playMontage(montageName)
+	if uevrUtils.getValid(pawn) ~= nil and parameters ~= nil and montageName ~= nil and montageName ~= "" and parameters["montagelist"][montageName] ~= nil then
+		local className = parameters["montagelist"][montageName]["class_name"]
+		if className ~= nil then
+			local montage = uevrUtils.find_required_object(className)
+			if montage ~= nil then
+				local result = pawn:PlayAnimMontage(montage, 1.0, uevrUtils.fname_from_string(""))
+			end
+		end
+	end
+end
 -- Returns recent montages as a newline-delimited string
 function M.getRecentMontagesAsString()
     return table.concat(recentMontages, "\n")
@@ -513,15 +527,15 @@ ui.registerIsInMotionSicknessCausingSceneCallback(function()
 	return montageState["motionSicknessCompensation"], montageState["motionSicknessCompensationPriority"]
 end)
 
-pawn.registerIsArmBonesHiddenCallback(function()
+pawnModule.registerIsArmBonesHiddenCallback(function()
 	return montageState["pawnArmBones"], montageState["pawnArmBonesPriority"]
 end)
 
-pawn.registerIsPawnBodyHiddenCallback(function()
+pawnModule.registerIsPawnBodyHiddenCallback(function()
 	return montageState["pawnBody"], montageState["pawnBodyPriority"]
 end)
 
-pawn.registerIsPawnArmsHiddenCallback(function()
+pawnModule.registerIsPawnArmsHiddenCallback(function()
 	return montageState["pawnArms"], montageState["pawnArmsPriority"]
 end)
 

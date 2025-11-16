@@ -106,6 +106,18 @@ Usage
                 grip_rifle = {label = "Rifle Grip"}
             })
 
+    attachments.isActiveAttachmentMelee(hand) - checks if the attachment gripped by the specified hand is marked as melee
+        example:
+            local isMelee = attachments.isActiveAttachmentMelee(Handed.Right)
+
+    attachments.isActiveAttachmentScoped(hand) - checks if the attachment gripped by the specified hand is marked as scoped
+        example:
+            local isScoped = attachments.isActiveAttachmentScoped(Handed.Right)
+
+    attachments.isActiveAttachmentTwoHanded(hand) - checks if the attachment gripped by the specified hand is marked as two-handed
+        example:
+            local isTwoHanded = attachments.isActiveAttachmentTwoHanded(Handed.Right)
+
     attachments.print(text, logLevel) - prints a debug/log message with the specified log level
         example:
             attachments.print("Attachment created", LogLevel.Info)
@@ -207,6 +219,9 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		local pos = m_attachmentOffsets[i]["location"]
 		local rot = m_attachmentOffsets[i]["rotation"]
 		local scale = m_attachmentOffsets[i]["scale"]
+		local isMelee = m_attachmentOffsets[i]["melee"]
+		local isTwoHanded = m_attachmentOffsets[i]["two_handed"]
+		local isScoped = m_attachmentOffsets[i]["scoped"]
 		local animation = m_attachmentOffsets[i]["animation"]
 		local selectedIndex = 1
 		for j = 1, #animationIDs do
@@ -239,6 +254,36 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 					}
 		)
 		table.insert(configDefinition[1]["layout"],
+            {
+                widgetType = "checkbox",
+                id =  "attachment_" .. name .. "_is_melee",
+                label = "Melee",
+                initialValue = isMelee
+            }
+		)
+		table.insert(configDefinition[1]["layout"],
+            { widgetType = "same_line" }
+		)
+		table.insert(configDefinition[1]["layout"],
+            {
+                widgetType = "checkbox",
+                id =  "attachment_" .. name .. "_is_two_handed",
+                label = "Two Handed",
+                initialValue = isTwoHanded
+            }
+		)
+		table.insert(configDefinition[1]["layout"],
+            { widgetType = "same_line" }
+		)
+		table.insert(configDefinition[1]["layout"],
+            {
+                widgetType = "checkbox",
+                id =  "attachment_" .. name .. "_is_scoped",
+                label = "Scoped",
+                initialValue = isScoped
+            }
+		)
+		table.insert(configDefinition[1]["layout"],
 					{
 						id = "attachment_" .. name .. "_grip_animation", label = "Grip Animation",
 						widgetType = "combo", selections = animationLabels, initialValue = selectedIndex
@@ -258,6 +303,15 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		end)
 		configui.onUpdate("attachment_" .. name .. "_scale", function(value)
 			M.updateAttachmentTransform(nil, nil, value, id)
+		end)
+		configui.onUpdate("attachment_" .. name .. "_is_melee", function(value)
+			M.updateAttachmentIsMelee(id, value)
+		end)
+		configui.onUpdate("attachment_" .. name .. "_is_two_handed", function(value)
+			M.updateAttachmentIsTwoHanded(id, value)
+		end)
+		configui.onUpdate("attachment_" .. name .. "_is_scoped", function(value)
+			M.updateAttachmentIsScoped(id, value)
 		end)
 		configui.onUpdate("attachment_" .. name .. "_grip_animation", function(value)
 			M.updateAttachmentAnimation(id, value)
@@ -622,6 +676,55 @@ function M.updateAttachmentAnimation(id, animationIndex)
 	isParametersDirty = true
 end
 
+local function updateAttachmentProperty(id, propertyName, value)
+	for i = 1, #attachmentOffsets do
+		local attachmentID = attachmentOffsets[i]["id"]
+		if id == attachmentID then
+			attachmentOffsets[i][propertyName] = value
+		end
+	end
+	parameters["attachmentOffsets"] = attachmentOffsets
+	isParametersDirty = true
+end
+
+function M.updateAttachmentIsScoped(id, isScoped)
+	updateAttachmentProperty(id, "scoped", isScoped)
+end
+
+function M.updateAttachmentIsTwoHanded(id, isTwoHanded)
+	updateAttachmentProperty(id, "two_handed", isTwoHanded)
+end
+
+function M.updateAttachmentIsMelee(id, isMelee)
+	updateAttachmentProperty(id, "melee", isMelee)
+end
+
+local function checkAttachmentProperty(attachment, property)
+	--print("checkAttachmentProperty called for property " .. property, attachment)
+	if uevrUtils.getValid(attachment) ~= nil then
+		local _, _, attachmentID = getAttachmentNames(attachment)
+		--print("Checking attachment property " .. property .. " for attachment ID " .. attachmentID)
+		for i = 1, #attachmentOffsets do
+			if attachmentOffsets[i]["id"] == attachmentID then
+				return attachmentOffsets[i][property] == true
+			end
+		end
+	end
+	return false
+end
+
+function M.isActiveAttachmentMelee(hand)
+	return checkAttachmentProperty(M.getCurrentGrippedAttachment(hand), "melee")
+end
+
+function M.isActiveAttachmentScoped(hand)
+	return checkAttachmentProperty( M.getCurrentGrippedAttachment(hand), "scoped")
+end
+
+function M.isActiveAttachmentTwoHanded(hand)
+	return checkAttachmentProperty(M.getCurrentGrippedAttachment(hand), "two_handed")
+end
+
 -- local function getNamedAttachmentFromMeshAttachmentList(parentName, childName)
 -- 	for meshName, meshData in pairs(meshAttachmentList) do
 -- 		for attachmentName, attachmentData in pairs(meshData) do
@@ -762,6 +865,7 @@ function M.setActiveAnimation(attachment, gripHand)
 end
 
 function M.getCurrentGrippedAttachment(gripHand)
+	if gripHand == nil then gripHand = Handed.Right end
 	if gripHand ~= nil then
 		for meshName, meshData in pairs(meshAttachmentList) do
 			for attachmentName, attachmentData in pairs(meshData) do
@@ -855,7 +959,7 @@ function M.attachToController(attachment, controllerID, detachFromParent)
 	-- 	end
 	-- 	M.print("Attaching " .. attachment:get_full_name() .. " to controller with ID " .. controllerID)
 	-- 	controllers.attachComponentToController(controllerID, attachment, nil, nil, nil, true)
-		
+
 	-- 	attachment:call("SetRenderInMainPass", true)
 	-- 	M.updateOffset(attachment)
 	-- 	M.setActiveAnimation(attachment, controllerID)
@@ -1055,7 +1159,7 @@ function M.registerOnGripUpdateCallback(callback)
 			else
 				M.attachToMesh(leftAttachment, leftMesh, leftSocketName, Handed.Left, detachFromParent, allowReattach)
 			end
-			
+
 			-- if rightMesh == nil and rightAttachment == nil then
 			-- 	--do nothing
 			-- elseif rightMesh == nil and rightAttachment ~= nil then
@@ -1095,6 +1199,10 @@ end
 
 function M.registerOnGripAnimationCallback(callbackFunc)
 	registerAttachmentCallback("attachment_grip_animation_changed", callbackFunc)
+end
+
+function M.registerAttachmentChangeCallback(callbackFunc)
+	uevrUtils.registerUEVRCallback("attachment_grip_changed", callbackFunc)
 end
 
 uevrUtils.registerPreLevelChangeCallback(function(level)

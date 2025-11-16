@@ -74,6 +74,22 @@ Usage
 			canFail()   -- does nothing
 			canFail()   -- does nothing
 
+	createDeferral(name, timeoutMs, callback) or uevrUtils.createDeferral(name, timeoutMs, callback) - creates a named deferral that will execute 
+		a callback function after a specified timeout. The deferral starts inactive and must be activated with updateDeferral().
+		example:
+			uevrUtils.createDeferral("reload_cooldown", 2000, function()
+				print("Reload cooldown finished - can reload again")
+			end)
+			
+	updateDeferral(name) or uevrUtils.updateDeferral(name) - activates a deferral, starting its countdown timer. If the deferral is already 
+		active, this resets the countdown to the full timeout duration.
+		example:
+			uevrUtils.updateDeferral("reload_cooldown")  -- starts or restarts the 2-second countdown
+			
+	destroyDeferral(name) or uevrUtils.destroyDeferral(name) - removes a deferral entirely, preventing it from executing its callback.
+		example:
+			uevrUtils.destroyDeferral("reload_cooldown")  -- cancels the deferral
+
 	uevrUtils.vector_2(x, y, reuseable) - returns a CoreUObject.Vector2D structure with the given params
 		example:
 			print("X value is",uevrUtils.vector_2(3, 4).X)
@@ -783,91 +799,91 @@ KeyName = {
 	MiddleMouseButton = "MiddleMouseButton",
 	ThumbMouseButton = "ThumbMouseButton",
 	ThumbMouseButton2 = "ThumbMouseButton2",
-	
+
 	-- Mouse axes
 	MouseX = "MouseX",
 	MouseY = "MouseY",
 	MouseScrollUp = "MouseScrollUp",
 	MouseScrollDown = "MouseScrollDown",
 	MouseWheelSpin = "MouseWheelSpin",
-	
+
 	-- Letters
 	A = "A", B = "B", C = "C", D = "D", E = "E", F = "F", G = "G", H = "H", I = "I", J = "J",
 	K = "K", L = "L", M = "M", N = "N", O = "O", P = "P", Q = "Q", R = "R", S = "S", T = "T",
 	U = "U", V = "V", W = "W", X = "X", Y = "Y", Z = "Z",
-	
+
 	-- Numbers (above alphabet)
 	Zero = "Zero", One = "One", Two = "Two", Three = "Three", Four = "Four",
 	Five = "Five", Six = "Six", Seven = "Seven", Eight = "Eight", Nine = "Nine",
-	
+
 	-- Arrow keys
 	Left = "Left", Up = "Up", Right = "Right", Down = "Down",
-	
+
 	-- NumPad
 	NumPadZero = "NumPadZero", NumPadOne = "NumPadOne", NumPadTwo = "NumPadTwo", NumPadThree = "NumPadThree",
 	NumPadFour = "NumPadFour", NumPadFive = "NumPadFive", NumPadSix = "NumPadSix", NumPadSeven = "NumPadSeven",
 	NumPadEight = "NumPadEight", NumPadNine = "NumPadNine",
-	
+
 	-- NumPad operators
 	Multiply = "Multiply", Add = "Add", Subtract = "Subtract", Decimal = "Decimal", Divide = "Divide",
-	
+
 	-- Control keys
 	BackSpace = "BackSpace", Tab = "Tab", Enter = "Enter", Pause = "Pause", NumLock = "NumLock",
 	ScrollLock = "ScrollLock", CapsLock = "CapsLock", Escape = "Escape", SpaceBar = "SpaceBar",
 	PageUp = "PageUp", PageDown = "PageDown", End = "End", Home = "Home", Insert = "Insert", Delete = "Delete",
-	
+
 	-- Function keys
 	F1 = "F1", F2 = "F2", F3 = "F3", F4 = "F4", F5 = "F5", F6 = "F6",
 	F7 = "F7", F8 = "F8", F9 = "F9", F10 = "F10", F11 = "F11", F12 = "F12",
-	
+
 	-- Modifier keys
 	LeftShift = "LeftShift", RightShift = "RightShift", LeftControl = "LeftControl", RightControl = "RightControl",
 	LeftAlt = "LeftAlt", RightAlt = "RightAlt", LeftCommand = "LeftCommand", RightCommand = "RightCommand",
-	
+
 	-- Symbols
 	Semicolon = "Semicolon", Equals = "Equals", Comma = "Comma", Underscore = "Underscore",
 	Period = "Period", Slash = "Slash", Tilde = "Tilde", LeftBracket = "LeftBracket",
 	Backslash = "Backslash", RightBracket = "RightBracket", Quote = "Quote",
-	
+
 	-- Gamepad analog sticks
 	Gamepad_LeftX = "Gamepad_LeftX", Gamepad_LeftY = "Gamepad_LeftY",
 	Gamepad_RightX = "Gamepad_RightX", Gamepad_RightY = "Gamepad_RightY",
-	
+
 	-- Gamepad triggers
 	Gamepad_LeftTriggerAxis = "Gamepad_LeftTriggerAxis", Gamepad_RightTriggerAxis = "Gamepad_RightTriggerAxis",
-	
+
 	-- Gamepad stick buttons
 	Gamepad_LeftThumbstick = "Gamepad_LeftThumbstick", Gamepad_RightThumbstick = "Gamepad_RightThumbstick",
-	
+
 	-- Gamepad special buttons
 	Gamepad_Special_Left = "Gamepad_Special_Left", Gamepad_Special_Right = "Gamepad_Special_Right",
-	
+
 	-- Gamepad face buttons
 	Gamepad_FaceButton_Bottom = "Gamepad_FaceButton_Bottom", Gamepad_FaceButton_Right = "Gamepad_FaceButton_Right",
 	Gamepad_FaceButton_Left = "Gamepad_FaceButton_Left", Gamepad_FaceButton_Top = "Gamepad_FaceButton_Top",
-	
+
 	-- Gamepad shoulder buttons
 	Gamepad_LeftShoulder = "Gamepad_LeftShoulder", Gamepad_RightShoulder = "Gamepad_RightShoulder",
 	Gamepad_LeftTrigger = "Gamepad_LeftTrigger", Gamepad_RightTrigger = "Gamepad_RightTrigger",
-	
+
 	-- Gamepad D-Pad
 	Gamepad_DPad_Up = "Gamepad_DPad_Up", Gamepad_DPad_Down = "Gamepad_DPad_Down",
 	Gamepad_DPad_Right = "Gamepad_DPad_Right", Gamepad_DPad_Left = "Gamepad_DPad_Left",
-	
+
 	-- Gamepad virtual stick directions
 	Gamepad_LeftStick_Up = "Gamepad_LeftStick_Up", Gamepad_LeftStick_Down = "Gamepad_LeftStick_Down",
 	Gamepad_LeftStick_Right = "Gamepad_LeftStick_Right", Gamepad_LeftStick_Left = "Gamepad_LeftStick_Left",
 	Gamepad_RightStick_Up = "Gamepad_RightStick_Up", Gamepad_RightStick_Down = "Gamepad_RightStick_Down",
 	Gamepad_RightStick_Right = "Gamepad_RightStick_Right", Gamepad_RightStick_Left = "Gamepad_RightStick_Left",
-	
+
 	-- Touch device motion
 	Tilt = "Tilt", RotationRate = "RotationRate", Gravity = "Gravity", Acceleration = "Acceleration",
-	
+
 	-- Touch device gestures
 	Gesture_SwipeLeftRight = "Gesture_SwipeLeftRight", Gesture_SwipeUpDown = "Gesture_SwipeUpDown",
 	Gesture_TwoFingerSwipeLeftRight = "Gesture_TwoFingerSwipeLeftRight", Gesture_TwoFingerSwipeUpDown = "Gesture_TwoFingerSwipeUpDown",
 	Gesture_Pinch = "Gesture_Pinch", Gesture_Flick = "Gesture_Flick",
-	
+
 	-- Special
 	PS4_Special = "PS4_Special"
 }
@@ -964,6 +980,92 @@ local function updateTimer(delta)
 				timerList[i]["func"]()
 			end
 			timerList[i]["countDown"] = timerList[i]["countDown"] + timerList[i]["period"]
+		end
+	end
+end
+
+-- Named deferral system with auto-reset functionality
+local namedDeferrals = {}
+
+local function validateDeferralName(name, funcName)
+	if not name or type(name) ~= "string" then
+		M.print(funcName .. ": invalid deferral name", LogLevel.Error)
+		return false
+	end
+	return true
+end
+
+local function getDeferral(name, funcName)
+	if not validateDeferralName(name, funcName) then return nil end
+
+	local deferral = namedDeferrals[name]
+	if not deferral then
+		M.print(funcName .. ": deferral '" .. name .. "' does not exist", LogLevel.Error)
+		return nil
+	end
+	return deferral
+end
+
+function M.createDeferral(name, timeoutMs, callback)
+	if not validateDeferralName(name, "createDeferral") then return false end
+	if not timeoutMs or type(timeoutMs) ~= "number" or timeoutMs <= 0 then
+		M.print("createDeferral: invalid timeout value", LogLevel.Error)
+		return false
+	end
+
+	namedDeferrals[name] = {
+		isLocked = false,  -- Deferral starts inactive
+		timeout = timeoutMs / 1000,  -- convert to seconds
+		countdown = timeoutMs / 1000,
+		callback = callback
+	}
+
+	M.print("Created deferral '" .. name .. "' with " .. timeoutMs .. "ms timeout", LogLevel.Debug)
+	return true
+end
+
+function M.updateDeferral(name)
+	local deferral = getDeferral(name, "updateDeferral")
+	if not deferral then return false end
+
+	-- Activate the deferral
+	deferral.isLocked = true
+	deferral.countdown = deferral.timeout  -- Reset countdown to full timeout
+
+	--M.print("Deferral '" .. name .. "' activated", LogLevel.Debug)
+	return true
+end
+
+function M.destroyDeferral(name)
+	if not validateDeferralName(name, "destroyDeferral") then return false end
+
+	if namedDeferrals[name] then
+		namedDeferrals[name] = nil
+		M.print("Deferral '" .. name .. "' destroyed", LogLevel.Debug)
+		return true
+	end
+
+	return false
+end
+
+local function updateDeferrals(delta)
+	for name, deferral in pairs(namedDeferrals) do
+		if deferral.isLocked then  -- Only update active deferrals
+			deferral.countdown = deferral.countdown - delta
+
+			if deferral.countdown <= 0 then
+				deferral.isLocked = false
+				deferral.countdown = 0
+
+				if deferral.callback then
+					local success, err = pcall(deferral.callback)
+					if not success then
+						M.print("Deferral '" .. name .. "' callback error: " .. tostring(err), LogLevel.Error)
+					end
+				end
+
+				--M.print("Deferral '" .. name .. "' expired", LogLevel.Debug)
+			end
 		end
 	end
 end
@@ -1393,6 +1495,7 @@ function M.initUEVR(UEVR, callbackFunc)
 			updateCurrentLevel()
 			updateDelay(delta)
 			updateTimer(delta)
+			updateDeferrals(delta)
 			updateLazyPoll(delta)
 			updateKeyPress()
 			updateLerp(delta)
@@ -2156,7 +2259,7 @@ end
 function M.find_required_object(name)
     local obj = uevr.api:find_uobject(name)
     if not obj then
-        error("Cannot find " .. name)
+        M.print("Cannot find " .. name)
         return nil
     end
 

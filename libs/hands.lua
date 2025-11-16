@@ -41,6 +41,12 @@ Usage
         example:
             hands.setAutoHandleInput(false)  -- Disable automatic input handling
     
+    hands.setAutoCreateHands(val) - enables/disables automatic creation of hands from configuration
+		Automatic hand creation is enabled by default. If disabled, hands will not be automatically created
+		from hands_parameters.json and you will need to call hands.createFromConfig() manually.
+        example:
+            hands.setAutoCreateHands(false)  -- Disable automatic hand creation
+    
 	hands.handleInput(state, attachment, hand, overrideTrigger) - processes controller input for single hand
 		You only need to call this if you are not using automatic input handling. Call either handleInput or handleInputForHands, not both
         examples:

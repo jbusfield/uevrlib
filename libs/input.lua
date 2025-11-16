@@ -528,7 +528,7 @@ local function getEyeOffsetDelta(pawn, pawnYaw)
 end
 
 local function getAimOffsetAdjustedRotation(rotation)
-	if aimRotationOffset.Pitch == 0 and aimRotationOffset.Yaw == 0 and aimRotationOffset.Roll == 0 then
+	if (aimRotationOffset.Pitch == nil or aimRotationOffset.Pitch == 0) and (aimRotationOffset.Yaw == nil or aimRotationOffset.Yaw == 0) and (aimRotationOffset.Roll == nil or aimRotationOffset.Roll == 0) then
 		return rotation
 	end
 	--Quat_MakeFromEuler expects Roll Pitch Yaw

@@ -282,7 +282,7 @@ local configDefinition = {
 					id = "left_hand_scale",
 					label = "Scale",
 					speed = 0.1,
-					range = {0, 3},
+					range = {0, 10},
 					initialValue = {1.0, 1.0, 1.0},
 					isHidden = true
 				},
@@ -323,7 +323,7 @@ local configDefinition = {
 					id = "right_hand_scale",
 					label = "Scale",
 					speed = 0.1,
-					range = {0, 3},
+					range = {0, 10},
 					initialValue = {1.0, 1.0, 1.0},
 					isHidden = true
 				},
