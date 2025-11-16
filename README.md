@@ -1,4 +1,4 @@
-# uevrlib
+# A lua based helper library for UEVR
 
 ### Contributors
 The following have provided code, ideas and inspiration to this project: Pande4360, qwizdek, markmon, DJ, Mutar, CJ117, Ashok, Rusty Gere and lobotomy
