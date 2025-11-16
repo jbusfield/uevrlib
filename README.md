@@ -21,6 +21,7 @@ The library comes with several examples. The files that begin with "example_" wo
 - [Reticules](docs/reticule.md)
 - [Flicker Fixer](docs/flicker_fixer.md)
 - [Debug Dump](docs/debug_dump.md)
+- [Controllers](docs/controllers.md)
 
 #### Example: Devtools
 Rename the file "example_devtools" as "example_devtools.lua" if required and rename all other examples to ".luax"<br/>
@@ -48,10 +49,4 @@ The file "example_config_1.lua" contains examples of many of the json defined wi
 
 <br/><br/><hr>
 
-#### Example: Controllers
-Rename the file "example_controllers" as "example_controllers.lua" if required and rename all other examples to ".luax"<br/>
-
-Attaching objects to VR controllers is one of the most common tasks in UEVR modding. The controllers example when run, will attach a cube to your left hand controller and a sphere to your right hand controller. If run in Outer Worlds it will also attach a HUD widget to your HMD. In other games you can specify you own widget for attachment.
-
-<br/><br/><hr>
 
