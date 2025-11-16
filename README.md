@@ -18,6 +18,8 @@ This is a LUA library designed to help UEVR mod developers perform common tasks.
 The library comes with several examples. The files that begin with "example_" would normally not be included in your shipping mod, only the lib folder and its contents are required. To test an example, rename the file from ".luax" to ".lua" and name the other examples files to ".luax"
 
 ### Examples
+- [Reticules](docs/reticule.md)
+
 #### Example: Devtools
 Rename the file "example_devtools" as "example_devtools.lua" if required and rename all other examples to ".luax"<br/>
 
