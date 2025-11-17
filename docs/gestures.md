@@ -46,10 +46,11 @@ gestures.registerSwipeLeftCallback(function()
 	print("Swipe Left detected")
     --do some game action
 end)
+```
 
 ### Using detectGestureWithState
 
-The `detectGestureWithState` function is used with gamepad input state for button-based gestures:
+The detectGestureWithState function is used with gamepad input state for button-based gestures:
 
 ```lua
 -- In XINPUT callback or game loop
