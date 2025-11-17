@@ -1027,6 +1027,7 @@ uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
                         updateLaserPointer(uevrUtils.vector(hitResult.TraceStart), projected)
                         updateMouse(projected)
                     end
+                    --TODO does this hit result need to be cleaned?
                     uevrUtils.executeUEVRCallbacks("on_interaction_hit", hitResult)
                     --executeCallbacks("on_hit", hitResult)
                 end
