@@ -47,7 +47,36 @@ Switch to other weapons within the game to see more entries appear in the Config
 <img width="699" height="703" alt="Screenshot 2025-11-16 125758" src="https://github.com/user-attachments/assets/049663b9-20f2-42fe-923c-dc9052197a0b" />
 <br><br>
 
-## Attachment Targets
+## Using the registerOnGripUpdateCallback Function
+Use of the registerOnGripUpdateCallback function that is used in the example files is documented in attachments.lua but here is the definition from that file
+```lua
+--[[
+    attachments.registerOnGripUpdateCallback(callback) - registers a callback function that handles automatic grip updates.
+		Your callback will be called periodically to request the item that is being gripped in the right or left hand as
+		well as the mesh or component being used for the right and left hands. If no item is currently being gripped then return nil.
+        If rightMesh or leftMesh are nil then the attachments will be directly attached to the raw controller instead of a component.
+		Return parameters are rightAttachment, rightMesh, rightSocketName, leftAttachment, leftMesh, leftSocketName, detachFromParent, allowReattach
+		rightAttachment - the object being held in the right hand (or nil if nothing is held)
+		rightMesh (optional) - the mesh or component to attach the right attachment to (or nil to attach to raw controller)
+		rightSocketName (optional) - the socket name on the right mesh to attach to (or nil for no socket)
+		leftAttachment (optional) - the object being held in the left hand (or nil if nothing is held)
+		leftMesh (optional) - the mesh or component to attach the left attachment to (or nil to attach to raw controller)
+		leftSocketName (optional) - the socket name on the left mesh to attach to (or nil for no socket)
+		detachFromParent (optional) - boolean value indicating whether to detach the attachment from its current parent before attaching. Defaults to true
+		allowReattach (optional) - boolean value indicating whether to allow reattaching the attachment to its previous parent when detaching from the current mesh/controller. Defaults to false
+			Note that when attaching to raw controller, allowReattach is passed to set_permanent() function of UEVR_UObjectHook so
+			if you dont want permananent attachment to controller (eg the object will be thrown), allowReattach should be false.
+		example:
+			attachments.registerOnGripUpdateCallback(function()
+				if uevrUtils.getValid(pawn) ~= nil and pawn.GetCurrentWeapon ~= nil then
+					local currentWeapon = pawn:GetCurrentWeapon()
+					if currentWeapon ~= nil and currentWeapon.RootComponent ~= nil then
+						return currentWeapon.RootComponent, hands.getHandComponent(Handed.Right), nil, nil, nil, nil, true
+					end
+				end
+			end)
+]]--
+```
 
 In the example file we are attaching directly to the raw controller with:
 
