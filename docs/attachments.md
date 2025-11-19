@@ -18,6 +18,9 @@ Once you have the callback function set up, any time you switch to a new attachm
 
 Now you can interactively update the Location, Rotation and Scale of the attachment. Checkboxes allow you to specify that a weapon is a Melee weapon, a Scoped Weapon and/or a Two Handed weapon.
 
+<img width="694" height="699" alt="Screenshot 2025-11-16 125516" src="https://github.com/user-attachments/assets/bb6b4edf-4113-4670-9404-57eb561ed3d5" />
+<br><br>
+
 ## Accessing Attachments Boolean States
 You can query the attachments module programmatically for that information at runtime using the following functions:
 
@@ -38,9 +41,6 @@ attachments.isActiveAttachmentTwoHanded(hand) - checks if the attachment gripped
 ## Hands Integration
 
 If you created Hands for your game using the Hands Creation Wizard, and you added different animation grips for different weapons, you will be able to select from the various grips you created there using the Grip Animation dropdown.
-
-<img width="694" height="699" alt="Screenshot 2025-11-16 125516" src="https://github.com/user-attachments/assets/bb6b4edf-4113-4670-9404-57eb561ed3d5" />
-<br><br>
 
 Switch to other weapons within the game to see more entries appear in the Config UI
 
