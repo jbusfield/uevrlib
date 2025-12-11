@@ -992,6 +992,34 @@ function M.load(panelID, fileName)
 	end
 end
 
+--convert userdata types to native lua types for json saving
+--this function exists in uevrUtils but since we dont include that here we need to redefine it
+function M.getNativeValue(val, useTable)
+	local returnValue = val
+	if type(val) == "userdata" then
+---@diagnostic disable-next-line: undefined-field
+		if val.x ~= nil and val.y ~= nil and val.z == nil and val.w == nil then
+			returnValue = getArrayFromVector2(val)
+			if useTable == true then
+				returnValue = {X=returnValue[1], Y=returnValue[2]}
+			end
+---@diagnostic disable-next-line: undefined-field
+		elseif val.x ~= nil and val.y ~= nil and val.z ~= nil and val.w == nil then
+			returnValue = getArrayFromVector3(val)
+			if useTable == true then
+				returnValue = {X=returnValue[1], Y=returnValue[2], Z=returnValue[3]}
+			end
+---@diagnostic disable-next-line: undefined-field
+		elseif val.x ~= nil and val.y ~= nil and val.z ~= nil and val.w ~= nil then
+			returnValue = getArrayFromVector4(val)
+			if useTable == true then
+				returnValue = {X=returnValue[1], Y=returnValue[2], Z=returnValue[3], W=returnValue[4]}
+			end
+		end
+	end
+	return returnValue
+end
+
 function M.save(panelID)
 	local panel = panelList[panelID]
 	if panel ~= nil then
@@ -1001,21 +1029,24 @@ function M.save(panelID)
 			for key, val in pairs(configValues[panelID]) do
 				--print("Saving ", key, val, type(val))
 				--things like vector3 need to be converted into a json friendly format
-				if type(val) == "userdata" then
-					--print(val.x,val.y,val.z,val.w)
----@diagnostic disable-next-line: undefined-field
-					if val.x ~= nil and val.y ~= nil and val.z == nil and val.w == nil then
-						saveConfig[key] = getArrayFromVector2(val)
----@diagnostic disable-next-line: undefined-field
-					elseif val.x ~= nil and val.y ~= nil and val.z ~= nil and val.w == nil then
-						saveConfig[key] = getArrayFromVector3(val)
----@diagnostic disable-next-line: undefined-field
-					elseif val.x ~= nil and val.y ~= nil and val.z ~= nil and val.w ~= nil then
-						saveConfig[key] = getArrayFromVector4(val)
-					end
-				else
-					saveConfig[key] = val
-				end
+				saveConfig[key] = M.getNativeValue(val)
+
+-- 				if type(val) == "userdata" then
+-- 					--print(val.x,val.y,val.z,val.w)
+-- ---@diagnostic disable-next-line: undefined-field
+-- 					if val.x ~= nil and val.y ~= nil and val.z == nil and val.w == nil then
+-- 						saveConfig[key] = getArrayFromVector2(val)
+-- ---@diagnostic disable-next-line: undefined-field
+-- 					elseif val.x ~= nil and val.y ~= nil and val.z ~= nil and val.w == nil then
+-- 						saveConfig[key] = getArrayFromVector3(val)
+-- ---@diagnostic disable-next-line: undefined-field
+-- 					elseif val.x ~= nil and val.y ~= nil and val.z ~= nil and val.w ~= nil then
+-- 						saveConfig[key] = getArrayFromVector4(val)
+-- 					end
+-- 				else
+-- 					saveConfig[key] = val
+-- 				end
+
 				-- local item = getDefinitionElement(panelID, key)
 				-- if item ~= nil then
 				-- 	if item.widgetType == "drag_float2" then

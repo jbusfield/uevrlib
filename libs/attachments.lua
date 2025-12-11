@@ -222,6 +222,7 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		local isTwoHanded = m_attachmentOffsets[i]["two_handed"]
 		local isScoped = m_attachmentOffsets[i]["scoped"]
 		local animation = m_attachmentOffsets[i]["animation"]
+		local anyChild = m_attachmentOffsets[i]["any_child"] and true or false
 		local selectedIndex = 1
 		for j = 1, #animationIDs do
 			if animation == animationIDs[j] then
@@ -289,6 +290,14 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 					}
 		)
 		table.insert(configDefinition[1]["layout"],
+            {
+                widgetType = "checkbox",
+                id =  "attachment_" .. name .. "_any_child",
+                label = "Use for all children",
+                initialValue = anyChild
+            }
+		)
+		table.insert(configDefinition[1]["layout"],
 				{
 					widgetType = "tree_pop"
 				}
@@ -303,14 +312,17 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		configui.onUpdate("attachment_" .. name .. "_scale", function(value)
 			M.updateAttachmentTransform(nil, nil, value, id)
 		end)
-		configui.onUpdate("attachment_" .. name .. "_is_melee", function(value)
+		configui.onCreateOrUpdate("attachment_" .. name .. "_is_melee", function(value)
 			M.updateAttachmentIsMelee(id, value)
 		end)
-		configui.onUpdate("attachment_" .. name .. "_is_two_handed", function(value)
+		configui.onCreateOrUpdate("attachment_" .. name .. "_is_two_handed", function(value)
 			M.updateAttachmentIsTwoHanded(id, value)
 		end)
-		configui.onUpdate("attachment_" .. name .. "_is_scoped", function(value)
+		configui.onCreateOrUpdate("attachment_" .. name .. "_is_scoped", function(value)
 			M.updateAttachmentIsScoped(id, value)
+		end)
+		configui.onCreateOrUpdate("attachment_" .. name .. "_any_child", function(value)
+			M.updateAttachmentUseAnyChild(id, value)
 		end)
 		configui.onUpdate("attachment_" .. name .. "_grip_animation", function(value)
 			M.updateAttachmentAnimation(id, value)
@@ -478,6 +490,18 @@ local function stripTrailingNumbers(str)
     return str:match("^(.-)%d*$")
 end
 
+local function getOverrideChildname(parentName)
+	--print("getOverrideChildname for parentName " .. parentName)
+	for i = 1, #attachmentOffsets do
+		if attachmentOffsets[i]["parent"] == parentName and attachmentOffsets[i]["any_child"] == true then
+			--print("Found any_child override for parent name " .. parentName)
+			return attachmentOffsets[i]["child"]
+		end
+	end
+	--print("No override child name found")
+	return ""
+end
+
 local function getAttachmentNames(attachment)
 	local attachmentParentName = uevrUtils.getShortName(attachment:get_outer())
 	local attachmentNameNoNumberSuffix = stripTrailingNumbers(attachmentParentName)
@@ -490,13 +514,15 @@ local function getAttachmentNames(attachment)
 		attachmentParentName = stripTrailingNumbers(attachmentParentName)
 	end
 
-	local attachmentChildName = ""
-	if attachment.StaticMesh ~= nil then
-		attachmentChildName = uevrUtils.getShortName(attachment.StaticMesh)
-	elseif attachment.SkeletalMesh ~= nil then
-		attachmentChildName = uevrUtils.getShortName(attachment.SkeletalMesh)
-	else
-		attachmentChildName = uevrUtils.getShortName(attachment)
+	local attachmentChildName = getOverrideChildname(attachmentParentName)
+	if attachmentChildName == "" then
+		if attachment.StaticMesh ~= nil then
+			attachmentChildName = uevrUtils.getShortName(attachment.StaticMesh)
+		elseif attachment.SkeletalMesh ~= nil then
+			attachmentChildName = uevrUtils.getShortName(attachment.SkeletalMesh)
+		else
+			attachmentChildName = uevrUtils.getShortName(attachment)
+		end
 	end
 	--print("getAttachmentNames",attachmentParentName, attachmentChildName)
 	return attachmentParentName, attachmentChildName, attachmentParentName .. "_" .. attachmentChildName
@@ -686,6 +712,10 @@ local function updateAttachmentProperty(id, propertyName, value)
 	isParametersDirty = true
 end
 
+function M.updateAttachmentUseAnyChild(id, anyChild)
+	updateAttachmentProperty(id, "any_child", anyChild)
+end
+
 function M.updateAttachmentIsScoped(id, isScoped)
 	updateAttachmentProperty(id, "scoped", isScoped)
 end
@@ -710,6 +740,15 @@ local function checkAttachmentProperty(attachment, property)
 		end
 	end
 	return false
+end
+
+function M.getActiveAttachmentID(hand)
+	local attachment = M.getCurrentGrippedAttachment(hand)
+	if uevrUtils.getValid(attachment) ~= nil then
+		local _, _, attachmentID = getAttachmentNames(attachment)
+		return attachmentID
+	end
+	return nil
 end
 
 function M.isActiveAttachmentMelee(hand)
@@ -822,6 +861,18 @@ uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, locatio
 	end
 end)
 
+local function updateSelectedColor(id, color)
+	--print("changing color", "attachment_" .. id)
+	for i = 1, #attachmentOffsets do
+		local parent = attachmentOffsets[i]["parent"]
+		local child = attachmentOffsets[i]["child"]
+		local m_id = attachmentOffsets[i]["id"]
+		if m_id == nil then m_id = parent .. "_" .. child end
+		configui.setColor("attachment_" .. m_id, "#FFFFFFFF")
+	end
+	configui.setColor("attachment_" .. id, color)
+end
+
 function M.initAttachment(attachment, gripHand)
 	if attachment ~= nil then
 		attachment:SetVisibility(true, true)
@@ -836,6 +887,8 @@ function M.initAttachment(attachment, gripHand)
 		end
 		M.updateAttachmentTransform(location, rotation, scale, id)
 		M.setActiveAnimation(attachment, gripHand)
+
+		updateSelectedColor(id, "#0088FFFF")
 	end
 end
 
@@ -1109,7 +1162,35 @@ function M.setStripParentNameNumericSuffix(value)
 	end
 end
 
+local function deepEqual(t1, t2)
+    if type(t1) ~= "table" or type(t2) ~= "table" then
+        return t1 == t2
+    end
+
+    -- check keys in t1
+    for k, v in pairs(t1) do
+        if not deepEqual(v, t2[k]) then
+            return false
+        end
+    end
+
+    -- check keys in t2 (to catch extras)
+    for k, v in pairs(t2) do
+        if not deepEqual(v, t1[k]) then
+            return false
+        end
+    end
+
+    return true
+end
+
+local currentAnimationIDList = {}
 function M.setAnimationIDs(animationIDList)
+	--dont rewrite if nothing has changed
+	if deepEqual(animationIDList, currentAnimationIDList) then
+		return
+	end
+	currentAnimationIDList = animationIDList
 	if animationIDList ~= nil then
 		animationLabels = getAnimationLabelsArray(animationIDList)
 		animationIDs = getAnimationIDsArray(animationIDList)
@@ -1121,7 +1202,8 @@ function M.setAnimationIDs(animationIDList)
 			local selectedID = attachmentOffsets[i]["animation"]
 			for j = 1, #animationIDs do
 				if selectedID == animationIDs[j] then
-					configui.setValue("attachment_" .. name .. "_grip_animation", j)
+					--dont think callback is needed here since we're just updating the configui to match existing settings
+					configui.setValue("attachment_" .. name .. "_grip_animation", j, true)
 				end
 			end
 		end

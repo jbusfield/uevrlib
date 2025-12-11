@@ -52,7 +52,7 @@ Usage
 			initLevel()   -- does nothing
 			-- game level changes
 			initLevel()   -- prints Level init again 
-			initGlobal.reset() -- even though this function was set as Once.EVER you can manually reset it
+			initGlobal:reset() -- even though this function was set as Once.EVER you can manually reset it
 			initGlobal()  -- prints Global init
 			
 			-- doOnce is also fault tolerant and can re-execute on failure. Just call error() on failure. 
@@ -704,6 +704,15 @@ Usage
 		function on_level_change(level, levelName)
 		end
 
+		-- function that gets called when the client restarts or changes pawns
+		-- When the playerController changes pawns (e.g. respawn, death, entering a controllable vehicle), this function is called.
+		-- In your code just add a callback like this:
+		-- function on_client_restart(newPawn)
+		-- 		uevrUtils.print("Pawn changed to " .. newPawn:get_full_name())
+		-- end
+		function on_client_restart(newPawn)
+		end
+
 		-- function that gets called when this library has finished initializing
 		function UEVRReady(instance)
 		end
@@ -1286,7 +1295,9 @@ local function hasUEVRCallbacks(callbackName)
 	end
 	return false
 end
-
+function M.hasUEVRCallbacks(callbackName)
+	return hasUEVRCallbacks(callbackName)
+end
 
 local function getCurrentLevel()
 	local world = M.get_world()
@@ -1528,6 +1539,13 @@ function M.initUEVR(UEVR, callbackFunc)
 		callbackFunc()
 	end
 
+	-- if on_uevr_ready ~= nil or hasUEVRCallbacks("on_uevr_ready") then --don't bother doing anything if nothing is listening
+	-- 	if on_uevr_ready ~= nil then
+	-- 		on_uevr_ready(uevr)
+	-- 	end
+	-- 	executeUEVRCallbacks("on_uevr_ready", uevr)
+	-- end
+
 	if UEVRReady ~= nil then UEVRReady(uevr) end
 end
 
@@ -1641,6 +1659,14 @@ end
 
 function M.getHandedness()
 	return handedness
+end
+
+function M.guid()
+    local template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'
+    return string.gsub(template, '[xy]', function (c)
+        local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
+        return string.format('%x', v)
+    end)
 end
 
 function vector_2(x, y, reuseable)
@@ -1874,6 +1900,13 @@ function M.quat(x, y, z, w, reuseable)
 	return quat
 end
 
+function M.rotateVector(vector, rotator)
+	return kismet_math_library:Quat_RotateVector(kismet_math_library:Quat_MakeFromEuler(M.vector(rotator.Roll, rotator.Pitch, rotator.Yaw)), vector)
+end
+
+function M.vectorDistance(vector1, vector2)
+	return kismet_math_library:Vector_Distance(vector1, vector2)
+end
 -- function M.sumRotators(...) --BreakRotator doesnt work in robocop UB
     -- local arg = {...}
 	-- local rollTotal,pitchTotal,yawTotal = 0,0,0
@@ -2441,6 +2474,78 @@ function M.splitStr(inputstr, sep)
    	return t
 end
 
+function M.getArrayFromVector2(vec)
+	if vec == nil then
+		return {0,0}
+	end
+	return {vec.x, vec.y}
+end
+
+function M.getArrayFromVector3(vec)
+	if vec == nil then
+		return {0,0,0}
+	end
+	return {vec.X, vec.Y, vec.Z}
+end
+
+function M.getArrayFromVector4(vec)
+	if vec == nil then
+		return {0, 0, 0, 0}
+	end
+	return {vec.X, vec.Y, vec.Z, vec.W}
+end
+
+--convert userdata types to native lua types for json saving
+function M.getNativeValue(val, useTable)
+	local returnValue = val
+	if type(val) == "userdata" then
+---@diagnostic disable-next-line: undefined-field
+		if val.x ~= nil and val.y ~= nil and val.z == nil and val.w == nil then
+			returnValue = M.getArrayFromVector2(val)
+			if useTable == true then
+				returnValue = {X=returnValue[1], Y=returnValue[2]}
+			end
+---@diagnostic disable-next-line: undefined-field
+		elseif val.x ~= nil and val.y ~= nil and val.z ~= nil and val.w == nil then
+			returnValue = M.getArrayFromVector3(val)
+			if useTable == true then
+				returnValue = {X=returnValue[1], Y=returnValue[2], Z=returnValue[3]}
+			end
+---@diagnostic disable-next-line: undefined-field
+		elseif val.x ~= nil and val.y ~= nil and val.z ~= nil and val.w ~= nil then
+			returnValue = M.getArrayFromVector4(val)
+			if useTable == true then
+				returnValue = {X=returnValue[1], Y=returnValue[2], Z=returnValue[3], W=returnValue[4]}
+			end
+		end
+	end
+	return returnValue
+end
+
+function M.tableToString(tbl, indent)
+	if not indent then indent = 0 end
+	local toprint = string.rep(" ", indent) .. "{\n"
+	indent = indent + 2 
+	for k, v in pairs(tbl) do
+		toprint = toprint .. string.rep(" ", indent)
+		if type(k) == "number" then
+			toprint = toprint .. "[" .. k .. "] = "
+		elseif type(k) == "string" then
+			toprint = toprint  .. k ..  " = "
+		end
+		if type(v) == "number" then
+			toprint = toprint .. v .. ",\n"
+		elseif type(v) == "string" then
+			toprint = toprint .. "\"" .. v .. "\",\n"
+		elseif type(v) == "table" then
+			toprint = toprint .. M.tableToString(v, indent + 2) .. ",\n"
+		else
+			toprint = toprint .. "\"" .. tostring(v) .. "\",\n"
+		end
+	end
+	toprint = toprint .. string.rep(" ", indent - 2) .. "}"
+	return toprint
+end
 
 function M.isButtonPressed(state, button)
     return state.Gamepad.wButtons & button ~= 0
@@ -2669,7 +2774,9 @@ function M.getAssetDataFromPath(pathStr)
 		fAssetData.AssetName = M.fname_from_string(arr2[2])
 		local packagePath = table.concat(arr, "/", 1, #arr - 1)
 		fAssetData.PackagePath = "/" .. packagePath
-		fAssetData.PackageName = "/" .. packagePath .. "/" .. arr2[1]
+		if arr2[1] ~= nil then
+			fAssetData.PackageName = "/" .. packagePath .. "/" .. arr2[1]
+		end
 	end
 	return fAssetData
 end
@@ -2795,24 +2902,26 @@ function M.destroyComponent(component, destroyOwner, destroyChildren)
 			end
 
 			M.print("[destroyComponent] Getting component owner for " ..  name)
-			local actor = component:GetOwner()
-			if actor ~= nil then
-				local actorName = actor:get_full_name()
-				M.print("[destroyComponent] Found component owner " .. actorName)
-				if actor.K2_DestroyComponent ~= nil then
-					actor:K2_DestroyComponent(component)
-					M.print("[destroyComponent] Destroyed component " .. name)
-				elseif component.K2_DestroyComponent ~= nil then
-					component:K2_DestroyComponent(component)
-					M.print("[destroyComponent] Destroyed component directly " .. name)
+			if component.GetOwner ~= nil then
+				local actor = component:GetOwner()
+				if actor ~= nil then
+					local actorName = actor:get_full_name()
+					M.print("[destroyComponent] Found component owner " .. actorName)
+					if actor.K2_DestroyComponent ~= nil then
+						actor:K2_DestroyComponent(component)
+						M.print("[destroyComponent] Destroyed component " .. name)
+					elseif component.K2_DestroyComponent ~= nil then
+						component:K2_DestroyComponent(component)
+						M.print("[destroyComponent] Destroyed component directly " .. name)
+					end
+					if destroyOwner == nil then destroyOwner = false end
+					if destroyOwner then
+						actor:K2_DestroyActor()
+						M.print("[destroyComponent] Destroyed component owner " .. actorName .. " for " .. name)
+					end
+				else
+					M.print("[destroyComponent] Component owner not found")
 				end
-				if destroyOwner == nil then destroyOwner = false end
-				if destroyOwner then
-					actor:K2_DestroyActor()
-					M.print("[destroyComponent] Destroyed component owner " .. actorName .. " for " .. name)
-				end
-			else
-				M.print("[destroyComponent] Component owner not found")
 			end
 		end)
 		if success == false then
@@ -3210,12 +3319,18 @@ function M.getLineTraceHitResult(originPosition, originDirection, collisionChann
 		local endLocation = originPosition + (originDirection * maxTraceDistance)
 		local ignore_actors = ignoreActors or {}
 		if traceComplex == nil then traceComplex = false end
-		if minHitDistance == nil then minHitDistance = 10 end
+		--if minHitDistance == nil then minHitDistance = 10 end
 		if collisionChannel == nil then collisionChannel = 0 end
 		local world = M.get_world()
 		if world ~= nil then
 			local hit = kismet_system_library:LineTraceSingle(world, originPosition, endLocation, collisionChannel, traceComplex, ignore_actors, 0, reusable_hit_result, true, zero_color, zero_color, 1.0)
-			if hit and reusable_hit_result.Distance > minHitDistance then
+			local exceedsMinDistance = true
+			if minHitDistance ~= nil then
+				local distance = M.vectorDistance(originPosition, M.vector(reusable_hit_result.Location))
+				exceedsMinDistance = distance >= minHitDistance
+			end
+			--print(collisionChannel, traceComplex, maxTraceDistance, hit, reusable_hit_result.Distance, minHitDistance,reusable_hit_result.Location.X, reusable_hit_result.Location.Y, reusable_hit_result.Location.Z)
+			if hit and exceedsMinDistance then --reusable_hit_result.Distance > minHitDistance then
 				if includeFullDetails == true then
 					return M.getCleanHitResult(reusable_hit_result)
 				end
@@ -3230,8 +3345,11 @@ end
 function M.getTargetLocation(originPosition, originDirection, collisionChannel, ignoreActors, traceComplex, minHitDistance, maxTraceDistance)
 	local hitResult = M.getLineTraceHitResult(originPosition, originDirection, collisionChannel, traceComplex, ignoreActors, minHitDistance, maxTraceDistance)
 	if hitResult ~= nil then
+		--M.executeUEVRCallbacks("on_interaction_hit", M.getCleanHitResult(hitResult))
 		return M.vector(hitResult.Location)
 	end
+	
+
 	-- if originPosition ~= nil and originDirection ~= nil then
 	-- 	local endLocation = originPosition + (originDirection * 8192.0)
 	-- 	local ignore_actors = ignoreActors or {}
@@ -3551,5 +3669,32 @@ end
 
 
 M.initUEVR(uevr)
+
+-- When the playerController changes pawns (e.g. respawn, death, entering a controllable vehicle), this function is called.
+-- We hook it here to notify any listeners providing an easy way for developers to react to pawn changes.
+-- In your code just add a callback like this:
+-- function on_client_restart(newPawn)
+-- 	uevrUtils.print("Pawn changed to " .. newPawn:get_full_name())
+-- end
+hook_function("Class /Script/Engine.PlayerController", "ClientRestart", true, nil,
+	function(fn, obj, locals, result)
+		if on_client_restart ~= nil or hasUEVRCallbacks("on_client_restart") then --don't bother doing anything if nothing is listening
+			if on_client_restart ~= nil then
+				on_client_restart(locals.NewPawn)
+			end
+			executeUEVRCallbacks("on_client_restart", locals.NewPawn)
+		end
+
+	-- print("ClientRestart called", locals, result, locals.NewPawn:get_class():get_full_name(), obj:get_class():get_full_name() )
+	-- if locals.NewPawn ~= nil and locals.NewPawn:get_class():get_full_name() == "BlueprintGeneratedClass /Game/Core/Player/BP_PlayerCharacter.BP_PlayerCharacter_C" then
+	-- 	pawn = locals.NewPawn
+	-- end
+	-- if locals.NewPawn ~= nil and locals.NewPawn:get_class():get_full_name() == "BlueprintGeneratedClass /Game/Development/Vehicles/BP_MoskvichDrivable.BP_MoskvichDrivable_C" then
+	-- 	print("Player in vehicle")
+	-- 	--isInCar = true
+	-- end
+	end
+, true)
+
 
 return M

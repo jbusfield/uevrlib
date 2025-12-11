@@ -283,6 +283,13 @@ local configDefinition = {
 					isHidden = true,
 					label = "Selected item not found. Press Refresh and try again."
 				},
+				{
+					widgetType = "checkbox",
+					id = "uevr_dev_widget_loop_toggle",
+					label = "Toggle all widgets on/off",
+					initialValue = false
+				},
+
 			{
 				widgetType = "tree_pop"
 			},
@@ -550,6 +557,17 @@ function M.displayMaterials(searchText)
 	configui.setSelections("uevr_dev_material_list", materialNames)
 end
 
+local function toggleWidgets(value)
+	local className = "Class /Script/UMG.Widget"
+	if configui.getValue("uevr_dev_widget_user_only") == true then className = "Class /Script/UMG.UserWidget" end
+	local widgets = uevrUtils.find_all_instances(className, false)
+	if widgets ~= nil then
+		for name, widget in pairs(widgets) do
+			widget:SetVisibility(value and 1 or 0)
+		end
+	end
+end
+
 function M.displayWidgets(searchText)
 --	print("Searching for widgets ", searchText)
 	if searchText == nil then searchText = "" end
@@ -634,6 +652,11 @@ end)
 configui.onUpdate("uevr_dev_mesh_relativescale", function(value)
 	setCurrentComponentScale(configui.getValue("uevr_dev_mesh_relativescale"))
 end)
+
+configui.onUpdate("uevr_dev_widget_loop_toggle", function(value)
+	toggleWidgets(value)
+end)
+
 
 configui.onUpdate("uevr_dev_mesh_refresh_button", function(value)
 	M.displayStaticMeshes(configui.getValue("uevr_dev_mesh_filter"))

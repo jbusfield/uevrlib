@@ -220,6 +220,21 @@ local function resetMotionControllers()
 	end
 end
 
+local createAutoCreationMonitor = doOnce(function()
+    uevrUtils.setInterval(1000, function()
+        if M.controllerExists(Handed.Left, false) == false then
+            M.createController(Handed.Left)
+        end
+        if M.controllerExists(Handed.Right, false) == false then
+            M.createController(Handed.Right)
+        end
+    end)
+end, Once.EVER)
+
+function M.autoMonitorHands()
+	createAutoCreationMonitor()
+end
+
 function M.onLevelChange()
 	resetMotionControllers()
     M.resetControllers()
@@ -451,7 +466,6 @@ uevrUtils.registerLevelChangeCallback(function(level)
 	M.createController(1)
 	M.createController(2)
 end)
-
 
 return M
 

@@ -356,20 +356,21 @@ function M.createFromConfig(configuration, profileName, animationName)
 				-- animDef.poses = poses
 			end
 
-			attachments.setAnimationIDs(configuration["attachments"])
-
 			M.create(components, profile, animations)
 
-			--going to need to call fixMeshFOV on lazy poll
-			for name, components in pairs(handComponents) do
-				--print(name, profileName, components[0], components[1])
-				local fovFixParam = configuration["profiles"][profileName][name]["FOV"]
-				if fovFixParam ~= nil and fovFixParam ~= "" then
-					uevrUtils.fixMeshFOV(components[Handed.Left], fovFixParam, 0.0, true, true, false)
-					uevrUtils.fixMeshFOV(components[Handed.Right], fovFixParam, 0.0, true, true, false)
-					registerFOVFix(profile)
+			--if M.exists() then
+				attachments.setAnimationIDs(configuration["attachments"])
+				--going to need to call fixMeshFOV on lazy poll
+				for name, components in pairs(handComponents) do
+					--print(name, profileName, components[0], components[1])
+					local fovFixParam = configuration["profiles"][profileName][name]["FOV"]
+					if fovFixParam ~= nil and fovFixParam ~= "" then
+						uevrUtils.fixMeshFOV(components[Handed.Left], fovFixParam, 0.0, true, true, false)
+						uevrUtils.fixMeshFOV(components[Handed.Right], fovFixParam, 0.0, true, true, false)
+						registerFOVFix(profile)
+					end
 				end
-			end
+			--end
 
 		end
 	else

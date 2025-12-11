@@ -896,7 +896,7 @@ configui.onCreateOrUpdate("fixSpatialAudio", function(value)
 end)
 
 configui.onCreateOrUpdate("uevr_handedness", function(value)
-	uevrUtils.setHandedness(value)
+	uevrUtils.setHandedness(value-1)
 end)
 
 uevrUtils.registerPreLevelChangeCallback(function(level)
@@ -930,7 +930,7 @@ uevrUtils.registerUEVRCallback("attachment_grip_rotation_change", function(leftR
 end)
 
 uevrUtils.registerHandednessChangeCallback(function(handed)
-	configui.setValue("uevr_handedness", handed, true)
+	configui.setValue("uevr_handedness", handed + 1, true)
 end)
 
 return M

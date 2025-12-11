@@ -169,6 +169,7 @@ local interactionRotationOffset = uevrUtils.rotator(0,0,0)
 local callbacks = {}
 
 local meshTraceChannel = 0
+local meshIgnorePawn = 0
 local meshInteractionDistance = 8000
 local meshEnableHitTesting = true
 
@@ -189,6 +190,9 @@ local laserColor = "#0000FFFF"
 local widgetInteractionComponent = nil
 local laserComponent = nil
 local trackerComponent = nil
+
+local widgetPrefix = "uevr_interaction_"
+
 
 local currentLogLevel = LogLevel.Error
 function M.setLogLevel(val)
@@ -268,6 +272,13 @@ local developerWidgets = spliceableInlineArray{
                 range = {0, 100},
                 initialValue = meshTraceChannel
             },
+            {
+                widgetType = "checkbox",
+                id = widgetPrefix .. "meshIgnorePawn",
+                label = "Ignore Pawn",
+                initialValue = meshIgnorePawn
+            },
+
         { widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },	
 	    { widgetType = "begin_group", id = "widget_interaction", isHidden = false }, { widgetType = "new_line" }, { widgetType = "indent", width = 5 }, { widgetType = "text", label = "Widget Interaction" }, { widgetType = "begin_rect", },
             {
@@ -607,6 +618,11 @@ function M.setMeshTraceChannel(val)
     configui.setValue("meshTraceChannel", val, true)
 end
 
+function M.setMeshIgnorePawn(val)
+    meshIgnorePawn = val
+    configui.setValue("meshIgnorePawn", val, true)
+end
+
 function M.setMeshEnableHitTesting(val)
     meshEnableHitTesting = val
     configui.setValue("meshEnableHitTesting", val, true)
@@ -665,6 +681,10 @@ end)
 
 configui.onCreateOrUpdate("meshTraceChannel", function(value)
 	M.setMeshTraceChannel(value)
+end)
+
+configui.onCreateOrUpdate("meshIgnorePawn", function(value)
+	M.setMeshIgnorePawn(value)
 end)
 
 configui.onCreateOrUpdate("meshInteractionDistance", function(value)
@@ -902,7 +922,7 @@ local function lineTrace()
  	local endLocation = originPosition + (originDirection * meshInteractionDistance)
 	
     if meshEnableHitTesting == true then
-        local ignore_actors = {}
+        local ignore_actors = meshIgnorePawn and {pawn} or {}
         local hitResult = uevrUtils.getLineTraceHitResult(originPosition, originDirection, meshTraceChannel, true, ignore_actors, 0, meshInteractionDistance, true)
         if hitResult ~= nil then
             endLocation = {X=hitResult.Location.X, Y=hitResult.Location.Y, Z=hitResult.Location.Z}
@@ -1000,13 +1020,16 @@ uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
         updateLaserPointer(startLocation, endLocation)
         updateMouse(endLocation)
     elseif interactionType == M.InteractionType.Widget or interactionType == M.InteractionType.MeshAndWidget then
-        --if you dont do this repeatedly it doesnt stay set
-        widgetInteractionComponent.VirtualUserIndex = virtualUserIndex
-        widgetInteractionComponent.PointerIndex = pointerIndex
-        widgetInteractionComponent.TraceChannel = widgetTraceChannel
-        widgetInteractionComponent.InteractionDistance = widgetInteractionDistance
-        widgetInteractionComponent.InteractionSource = interactionSource
-        widgetInteractionComponent.bEnableHitTesting = interactionType == (M.InteractionType.Widget or interactionType == M.InteractionType.MeshAndWidget) and widgetEnableHitTesting
+		--sometimes an error is thrown "property VirtualUserIndex is not found"t
+        pcall(function()
+            --if you dont do this repeatedly it doesnt stay set
+            widgetInteractionComponent.VirtualUserIndex = virtualUserIndex
+            widgetInteractionComponent.PointerIndex = pointerIndex
+            widgetInteractionComponent.TraceChannel = widgetTraceChannel
+            widgetInteractionComponent.InteractionDistance = widgetInteractionDistance
+            widgetInteractionComponent.InteractionSource = interactionSource
+            widgetInteractionComponent.bEnableHitTesting = interactionType == (M.InteractionType.Widget or interactionType == M.InteractionType.MeshAndWidget) and widgetEnableHitTesting
+		end)
 
         local isHovering = widgetInteractionComponent.HoveredWidgetComponent ~= nil
         --print("isHovering", isHovering, widgetInteractionComponent.HoveredWidgetComponent)
