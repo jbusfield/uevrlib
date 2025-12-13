@@ -122,6 +122,11 @@ Usage
         example:
             attachments.print("Attachment created", LogLevel.Info)
 
+    attachments.allowChildVisibilityHandling(value) - sets whether attachments will control the visibility of their child components
+        value - boolean, true to allow child visibility handling, false to disable
+        example:
+            attachments.allowChildVisibilityHandling(true)
+
 ]]--
 
 local uevrUtils = require("libs/uevr_utils")
@@ -158,6 +163,7 @@ local activeGripAnimations = {}
 --local attachmentCallbacks = {}
 
 local stripParentNameNumericSuffix = false
+local allowChildVisibilityHandling = true --attachments will set the visibility of child components based on this flag
 
 local currentLogLevel = LogLevel.Error
 function M.setLogLevel(val)
@@ -223,6 +229,7 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		local isScoped = m_attachmentOffsets[i]["scoped"]
 		local animation = m_attachmentOffsets[i]["animation"]
 		local anyChild = m_attachmentOffsets[i]["any_child"] and true or false
+		local anyParent = m_attachmentOffsets[i]["any_parent"] and true or false
 		local selectedIndex = 1
 		for j = 1, #animationIDs do
 			if animation == animationIDs[j] then
@@ -298,6 +305,17 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
             }
 		)
 		table.insert(configDefinition[1]["layout"],
+            { widgetType = "same_line" }
+		)
+		table.insert(configDefinition[1]["layout"],
+            {
+                widgetType = "checkbox",
+                id =  "attachment_" .. name .. "_any_parent",
+                label = "Use for all parents",
+                initialValue = anyParent
+            }
+		)
+		table.insert(configDefinition[1]["layout"],
 				{
 					widgetType = "tree_pop"
 				}
@@ -323,6 +341,9 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		end)
 		configui.onCreateOrUpdate("attachment_" .. name .. "_any_child", function(value)
 			M.updateAttachmentUseAnyChild(id, value)
+		end)
+		configui.onCreateOrUpdate("attachment_" .. name .. "_any_parent", function(value)
+			M.updateAttachmentUseAnyParent(id, value)
 		end)
 		configui.onUpdate("attachment_" .. name .. "_grip_animation", function(value)
 			M.updateAttachmentAnimation(id, value)
@@ -502,6 +523,18 @@ local function getOverrideChildname(parentName)
 	return ""
 end
 
+local function getOverrideParentname(childName)
+	--print("getOverrideParentname for childName " .. childName)
+	for i = 1, #attachmentOffsets do
+		if attachmentOffsets[i]["child"] == childName and attachmentOffsets[i]["any_parent"] == true then
+			--print("Found any_parent override for child name " .. childName)
+			return attachmentOffsets[i]["parent"]
+		end
+	end
+	--print("No override parent name found")
+	return ""
+end
+
 local function getAttachmentNames(attachment)
 	local attachmentParentName = uevrUtils.getShortName(attachment:get_outer())
 	local attachmentNameNoNumberSuffix = stripTrailingNumbers(attachmentParentName)
@@ -524,6 +557,13 @@ local function getAttachmentNames(attachment)
 			attachmentChildName = uevrUtils.getShortName(attachment)
 		end
 	end
+		
+	
+	local attachmentParentName_Alt = getOverrideParentname(attachmentChildName)
+	if attachmentParentName_Alt ~= "" then
+		attachmentParentName = attachmentParentName_Alt
+	end
+
 	--print("getAttachmentNames",attachmentParentName, attachmentChildName)
 	return attachmentParentName, attachmentChildName, attachmentParentName .. "_" .. attachmentChildName
 end
@@ -716,6 +756,10 @@ function M.updateAttachmentUseAnyChild(id, anyChild)
 	updateAttachmentProperty(id, "any_child", anyChild)
 end
 
+function M.updateAttachmentUseAnyParent(id, anyParent)
+	updateAttachmentProperty(id, "any_parent", anyParent)
+end
+
 function M.updateAttachmentIsScoped(id, isScoped)
 	updateAttachmentProperty(id, "scoped", isScoped)
 end
@@ -873,10 +917,14 @@ local function updateSelectedColor(id, color)
 	configui.setColor("attachment_" .. id, color)
 end
 
+function M.allowChildVisibilityHandling(value)
+	allowChildVisibilityHandling = value
+end
+
 function M.initAttachment(attachment, gripHand)
 	if attachment ~= nil then
-		attachment:SetVisibility(true, true)
-		attachment:SetHiddenInGame(false, true)
+		attachment:SetVisibility(true, allowChildVisibilityHandling)
+		attachment:SetHiddenInGame(false, allowChildVisibilityHandling)
 		attachment:call("SetRenderInMainPass", true)
 		local location, rotation, scale = M.getAttachmentOffset(attachment)
 		local parentName, childName, id = getAttachmentNames(attachment)

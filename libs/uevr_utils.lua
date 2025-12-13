@@ -2325,7 +2325,7 @@ end
 
 function M.find_all_instances(className, includeDefault)
 	local class =  M.get_class(className)
-	if class ~= nil and class.get_first_object_matching ~= nil then
+	if class ~= nil and class.get_objects_matching ~= nil then
 		return class:get_objects_matching(includeDefault)
 	end
 	return nil
@@ -3146,8 +3146,10 @@ end
 function M.createWidgetComponent(widget, options)
 	local component = nil
 	local widgetAlignment = nil
+	local className = nil
 	if widget ~= nil and (type(widget) == "string" or widget:is_a(M.get_class("Class /Script/UMG.Widget"))) then
 		if type(widget) == "string" then
+			className = widget
 			widget = M.getActiveWidgetByClass(widget)
 		end
 		if M.getValid(widget) ~= nil then
@@ -3171,6 +3173,8 @@ function M.createWidgetComponent(widget, options)
 				M.print("WidgetComponent creation failed")
 			end
 		else
+			--Temporary hack for Unreal Engine 5.5+ returning invalid classes for a few seconds after level change
+			if className ~= nil then classCache[className] = nil end
 			M.print("WidgetComponent not created because widget could not be created")
 		end
 	else
