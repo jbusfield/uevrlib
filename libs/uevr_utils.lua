@@ -975,10 +975,20 @@ end
 
 local timerList = {}
 function setInterval(msec, func)
-	table.insert(timerList, {period = msec/1000, countDown = msec/1000, func = func})
+	local id = M.guid()
+	table.insert(timerList, {id = id,period = msec/1000, countDown = msec/1000, func = func})
+	return id
 end
 function M.setInterval(msec, func)
-	setInterval(msec, func)
+	return setInterval(msec, func)
+end
+function M.clearInterval(id)
+	for i = #timerList, 1, -1 do
+		if timerList[i].id == id then
+			table.remove(timerList, i)
+			break
+		end
+	end
 end
 
 local function updateTimer(delta)
