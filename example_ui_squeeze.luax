@@ -9,5 +9,5 @@ ui.init()
 -- if widget ~= nil then
 	-- uevrUtils.setWidgetLayout(widget, {.5, .5}, {.5, .5})
 -- else
-	-- prinnt("widget not found")
+	-- print("widget not found")
 -- end
