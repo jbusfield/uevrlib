@@ -227,7 +227,7 @@ local function updateDecoupledYaw(state, rotationHand)
 		end
 
 		if paramManager:get("useSnapTurn") then
-			local snapAngle = paramManager:get("snapAngle")
+			local snapAngle = paramManager:get("snapAngle") or 45
 			if thumbRX > snapTurnDeadZone and rxState == 0 then
 				yawChange = snapAngle
 				rxState=1
@@ -531,18 +531,20 @@ uevr.params.sdk.callbacks.on_early_calculate_stereo_view_offset(function(device,
 
 			local forwardVector = {X=0,Y=0,Z=0}
 			local rootOffset = paramManager:get("rootOffset")
-			if rootOffset.X ~= 0 and rootOffset.Y ~= 0 then
-				temp_vec3f:set(rootOffset.X, rootOffset.Y, rootOffset.Z) -- the vector representing the offset adjustment
-				temp_vec3:set(0, 0, 1) --the axis to rotate around
-				forwardVector = kismet_math_library:RotateAngleAxis(temp_vec3f, pawnRot.Yaw - bodyRotationOffset, temp_vec3)
-			end
+			if rootOffset ~= nil then
+				if rootOffset.X ~= 0 and rootOffset.Y ~= 0 then
+					temp_vec3f:set(rootOffset.X, rootOffset.Y, rootOffset.Z) -- the vector representing the offset adjustment
+					temp_vec3:set(0, 0, 1) --the axis to rotate around
+					forwardVector = kismet_math_library:RotateAngleAxis(temp_vec3f, pawnRot.Yaw - bodyRotationOffset, temp_vec3)
+				end
 
-			position.x = pawnPos.x + forwardVector.X
-			position.y = pawnPos.y + forwardVector.Y
-			position.z = pawnPos.z + rootOffset.Z + capsuleHeight + paramManager:get("headOffset").Z
-			rotation.Pitch = 0--pawnRot.Pitch 
-			rotation.Yaw = pawnRot.Yaw - bodyRotationOffset
-			rotation.Roll = 0--pawnRot.Roll 	
+				position.x = pawnPos.x + forwardVector.X
+				position.y = pawnPos.y + forwardVector.Y
+				position.z = pawnPos.z + rootOffset.Z + capsuleHeight + paramManager:get("headOffset").Z
+				rotation.Pitch = 0--pawnRot.Pitch 
+				rotation.Yaw = pawnRot.Yaw - bodyRotationOffset
+				rotation.Roll = 0--pawnRot.Roll 	
+			end
 		end
 	end
 

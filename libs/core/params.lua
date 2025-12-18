@@ -37,13 +37,34 @@ end
 
 -- Sets a parameter value and marks as dirty for autosave
 function M:set(key, value, persist)
-    self.parameters[key] = value
+    if type(key) == "table" then
+        local field = self.parameters
+        for i = 1, #key-1 do
+            local k = key[i]
+            if type(field[k]) ~= "table" then
+                field[k] = {}   -- auto-create missing table
+            end
+            field = field[k]
+        end
+        field[key[#key]] = value
+    else
+        self.parameters[key] = value
+    end
     self.isDirty = persist == nil and false or persist
 end
 
 -- Gets a parameter value by key
 function M:get(key)
-    return self.parameters[key]
+    if type(key) == "table" then
+        local field = self.parameters
+        for i = 1, #key do
+            field = field[key[i]]
+            if field == nil then return nil end
+        end
+        return field
+    else
+        return self.parameters[key]
+    end
 end
 
 function M:getAll()
