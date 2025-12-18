@@ -104,6 +104,8 @@ local viewportWidgetList = {}
 local viewportWidgetIDList = {}
 local uiState = {viewLocked = nil, screen2D = nil, decouplePitch = nil, inputEnabled = nil, handsEnabled = nil}
 
+local widgetPrefix = "uevr_ui_"
+
 local stateConfigWidget = {
     {stateKey = "viewLocked", valueKey = "lockedUIWhenActive"},
     {stateKey = "screen2D", valueKey = "screen2DWhenActive"},
@@ -152,12 +154,12 @@ uevrUtils.enableSnapTurn(false)
 
 local helpText = "This module allows you to configure how the system behaves when the game state changes or UI overlays such as dialogs and menus are active. You can set whether the view is locked when a widget is active, whether 2D mode is enabled, whether pitch is decoupled, whether input is enabled, and whether hands are shown. Settings are applied based on priority, so if multiple widgets are active, the one with the highest priority for a given setting takes precedence. For example, if one active widget sets 'Screen 2D' to 'Enable' with priority 5, and another active widget sets it to 'Disable' with priority 10, the screen will not be 2D because the second widget has a higher priority."
 local configWidgets = spliceableInlineArray{
-	{
-		widgetType = "tree_node",
-		id = "uevr_ui",
-		initialOpen = true,
-		label = "UI Configuration"
-	},
+	-- {
+	-- 	widgetType = "tree_node",
+	-- 	id = "uevr_ui",
+	-- 	initialOpen = true,
+	-- 	label = "UI Configuration"
+	-- },
         {
             widgetType = "checkbox",
             id = "headLockedUI",
@@ -186,9 +188,9 @@ local configWidgets = spliceableInlineArray{
             label = "Reduce Motion Sickness in Cutscenes",
             initialValue = reduceMotionSickness
         },
-	{
-		widgetType = "tree_pop"
-	},
+	-- {
+	-- 	widgetType = "tree_pop"
+	-- },
 }
 
 local developerWidgets = spliceableInlineArray{
@@ -465,10 +467,32 @@ local developerWidgets = spliceableInlineArray{
             { widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },
             { widgetType = "unindent", width = 20 },
 		    { widgetType = "new_line" },
+            { widgetType = "indent", width = 20 },
+	        { widgetType = "begin_group", id = "viewport_widget_settings", isHidden = false }, { widgetType = "indent", width = 5 }, { widgetType = "text", label = "Settings" }, { widgetType = "begin_rect", },
+                {
+                    widgetType = "drag_float2",
+                    id = widgetPrefix .. "widget_scale_2d",
+                    label = "Scale 2D",
+                    speed = .01,
+                    range = {0.01, 1},
+                    initialValue = {1, 1}
+                },
+                {
+                    widgetType = "drag_float2",
+                    id = widgetPrefix .. "widget_alignment_2d",
+                    label = "Alignment 2D",
+                    speed = .01,
+                    range = {-1, 1},
+                    initialValue = {0, 0}
+                },
+            { widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },
+            { widgetType = "unindent", width = 20 },
+		    { widgetType = "new_line" },
         {
             widgetType = "end_group",
         },
-        { widgetType = "indent", width = 10 },
+		{ widgetType = "new_line" },
+        { widgetType = "indent", width = 1 },
 		{ widgetType = "text", label = "Current Active Widgets"},
         {
             widgetType = "input_text_multiline",
@@ -477,7 +501,7 @@ local developerWidgets = spliceableInlineArray{
             initialValue = "",
             size = {440, 180} -- optional, will default to full size without it
         },
-        { widgetType = "unindent", width = 10 },
+        { widgetType = "unindent", width = 1 },
 		-- {
 		-- 	widgetType = "input_text",
 		-- 	id = "lastWidgetPlayed",
@@ -599,6 +623,15 @@ uevrUtils.registerUEVRCallback("is_hands_hidden", function()
 	return uiState["handsEnabled"] ~= nil and (not uiState["handsEnabled"]) or nil, uiState["handsEnabledPriority"]
 end)
 
+local function getCurrentSelectedWidgetClass()
+    local index = configui.getValue("knownViewportWidgetList")
+    if index ~= nil and index ~= 1 then
+        return viewportWidgetIDList[index]
+    end
+    return ""
+end
+
+
 local function showViewportWidgetEditFields()
     local index = configui.getValue("knownViewportWidgetList")
     if index == nil or index == 1 then
@@ -621,6 +654,9 @@ local function showViewportWidgetEditFields()
                 if data[priorityKey] == nil or data[priorityKey] == "" then data[priorityKey] = "0" end
                 configui.setValue(priorityKey, data[priorityKey], true)
             end
+
+            configui.setValue(widgetPrefix .. "widget_scale_2d", parameters["widgetlist"][id]["scale"] or {1,1}, true)
+            configui.setValue(widgetPrefix .. "widget_alignment_2d", parameters["widgetlist"][id]["alignment"] or {0,0}, true)
         end
     end
 end
@@ -649,18 +685,21 @@ local function showGameStateEditFields()
 end
 
 local function updateCurrentViewportWidgetFields()
-    local index = configui.getValue("knownViewportWidgetList")
-    if index ~= nil and index ~= 1 then
-        local id = viewportWidgetIDList[index]
+    -- local index = configui.getValue("knownViewportWidgetList")
+    -- if index ~= nil and index ~= 1 then
+    --     local id = viewportWidgetIDList[index]
+        local id = getCurrentSelectedWidgetClass()
         if id ~= "" and  parameters ~= nil and parameters["widgetlist"] ~= nil and parameters["widgetlist"][id] ~= nil then
             for _, config in ipairs(stateConfigWidget) do
                 local valueKey = config.valueKey
                 parameters["widgetlist"][id][valueKey] = configui.getValue(valueKey)
                 parameters["widgetlist"][id][valueKey .. "Priority"] = configui.getValue(valueKey .. "Priority")
             end
+            parameters["widgetlist"][id]["scale"] = uevrUtils.getNativeValue(configui.getValue(widgetPrefix .. "widget_scale_2d"))
+            parameters["widgetlist"][id]["alignment"] = uevrUtils.getNativeValue(configui.getValue(widgetPrefix .. "widget_alignment_2d"))
             isParametersDirty = true
         end
-    end
+    -- end
 end
 
 local function updateViewportWidgetList()
@@ -738,6 +777,7 @@ local function updateWidgetChangeCallbacks()
     end
 end
 
+
 local function updateUIState()
     currentViewportWidgetsStr = ""
     if parameters ~= nil and parameters["widgetlist"] ~= nil then
@@ -764,6 +804,7 @@ local function updateUIState()
                         updateStateIfHigherPriority(data, config.stateKey, config.valueKey)
                     end
                     newWidgetViewportState[data["label"]] = true
+                    uevrUtils.setWidgetLayout(widget, data["scale"], data["alignment"])
                     --updateCurrentWidgetChangeCallbackState(data["label"], true)
                 end
             -- else
@@ -984,6 +1025,75 @@ end)
 configui.onCreateOrUpdate("headLockedUISize", function(value)
     M.setHeadLockedUISize(value)
 end)
+
+local function getCurrentSelectedWidget()
+    local id = getCurrentSelectedWidgetClass()
+    print("ID is " .. id)
+    if id ~= "" then
+        return uevrUtils.find_first_of(id, false)
+    end
+end
+
+--local WidgetLayoutLibrary = nil
+local function updateWidgetLayout()
+    updateCurrentViewportWidgetFields()
+    local widget = getCurrentSelectedWidget()
+    if widget ~= nil then
+        uevrUtils.setWidgetLayout(widget, configui.getValue(widgetPrefix .. "widget_scale_2d"), configui.getValue(widgetPrefix .. "widget_alignment_2d"))
+
+    --     if WidgetLayoutLibrary == nil then
+    --         WidgetLayoutLibrary = uevrUtils.find_default_instance("Class /Script/UMG.WidgetLayoutLibrary")
+    --     end
+    --     local desiredSize = widget:GetDesiredSize()
+	-- 	local viewportAlignment = widget:GetAlignmentInViewport()
+    --     local anchors = widget:GetAnchorsInViewport()
+
+    --     -- local sx = {}
+    --     -- local sy = {}
+    --     --local viewportSize = uevr.api:get_player_controller(0):GetViewportSize(sx,sy)
+
+    --     local scale = uevrUtils.vector2D(configui.getValue(widgetPrefix .. "widget_scale_2d"))
+    --     local alignment = uevrUtils.vector2D(configui.getValue(widgetPrefix .. "widget_alignment_2d"))
+
+    --     local viewportSize = WidgetLayoutLibrary:GetViewportSize(uevrUtils.get_world())
+    --     local viewportScale = WidgetLayoutLibrary:GetViewportScale(uevrUtils.get_world())
+
+    --     print("size", desiredSize.X, desiredSize.Y)
+	-- 	print("alignment in viewport",viewportAlignment.X, viewportAlignment.Y)
+    --     print("scale", scale.X, scale.Y)
+    --     print("alignment", alignment.X, alignment.Y)
+    --     --print("viewport size", sx.SizeX, sy.SizeY)
+    --     print("viewport size", viewportSize.X, viewportSize.Y)
+    --     print("viewport scale", viewportScale)
+    --     print("anchors min", anchors.Minimum.X, anchors.Minimum.Y)
+    --     print("anchors max", anchors.Maximum.X, anchors.Maximum.Y)
+
+    --     --local newSizeX = desiredSize.X * scale.X
+    --     --local newSizeY = desiredSize.Y * scale.Y
+    --     local newSizeX = viewportSize.X * scale.X / viewportScale
+    --     local newSizeY = viewportSize.Y * scale.Y / viewportScale
+    --     print("new size", newSizeX, newSizeY)
+    --     --local newAlignment = uevrUtils.vector2D(scale.X - 1 , scale.Y - 1)
+    --     local newAlignmentX = scale.X - 1
+    --     local newAlignmentY = scale.Y - 1
+    --     print("new alignment", newAlignmentX, newAlignmentY)
+    --    -- widget:SetAlignmentInViewport(uevrUtils.vector2D(newAlignmentX, newAlignmentY))
+    --     widget:SetAlignmentInViewport(uevrUtils.vector2D(-alignment.X, -alignment.Y))
+    --     widget:SetDesiredSizeInViewport(uevrUtils.vector2D(newSizeX, newSizeY))
+
+    
+    end
+
+end
+
+configui.onUpdate(widgetPrefix .. "widget_scale_2d", function(value)
+    updateWidgetLayout()
+end)
+
+configui.onUpdate(widgetPrefix .. "widget_alignment_2d", function(value)
+    updateWidgetLayout()
+end)
+
 
 function M.getViewportWidgetState()
     return uiState

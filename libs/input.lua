@@ -13,33 +13,6 @@ M.AimMethod = inputEnums.AimMethod
 M.PawnPositionMode = inputEnums.PawnPositionMode
 M.PawnRotationMode = inputEnums.PawnRotationMode
 
--- M.AimMethod =
--- {
---     UEVR = 1,
---     HEAD = 2,
---     RIGHT_CONTROLLER = 3,
---     LEFT_CONTROLLER = 4,
---     RIGHT_WEAPON = 5,
---     LEFT_WEAPON = 6
--- }
-
--- M.PawnRotationMode =
--- {
---     NONE = 1,
---     RIGHT_CONTROLLER = 2,
---     LEFT_CONTROLLER = 3,
--- 	LOCKED = 4,
---     SIMPLE = 5,
---     ADVANCED = 6,
--- }
-
--- M.PawnPositionMode =
--- {
---     NONE = 1,
---     FOLLOWS = 2,
---     ANIMATED = 3
--- }
-
 local parametersFileName = "input_parameters"
 local parameters = {
     isDisabledOverride = false,
@@ -73,27 +46,7 @@ local snapTurnDeadZone = 8000
 local aimRotationOffset = uevrUtils.rotator(0,0,0)
 local weaponRotation = nil -- externally set for WEAPON aim method
 
--- local rootOffset = uevrUtils.vector(0,0,0)
--- ---@cast rootOffset -nil
--- local headOffset = uevrUtils.vector(0,0,0)
--- ---@cast headOffset -nil
--- local isDisabledOverride = false
--- local aimMethod = M.AimMethod.UEVR
--- local useSnapTurn = false
--- local smoothTurnSpeed = 50
--- local snapAngle = 30
--- local pawnPositionAnimationScale = 0.2
--- local pawnPositionSweepMovement = true
--- local eyeOffset = 0
--- local pawnPositionMode = M.PawnPositionMode.FOLLOWS
--- local pawnRotationMode = M.PawnRotationMode.RIGHT_CONTROLLER
--- local adjustForAnimation = false
--- local adjustForEyeOffset = false
--- local fixSpatialAudio = true
-
 local currentHeadRotator = uevrUtils.rotator(0,0,0)
--- local headBoneName = ""
--- local rootBoneName = ""
 
 local inputConfigDev = nil
 
@@ -147,7 +100,7 @@ end
 
 function M.setDisabled(val)
 	print("Input Disabled:", val)
-	saveParameter("isDisabledOverride", val, true)
+	saveParameter("isDisabledOverride", val)
 	if val then
 		--this ensures the camera gets reset to the current pawn orientation when input is re-enabled
 		decoupledYaw = nil
@@ -184,65 +137,65 @@ local function doFixSpatialAudio()
 end
 
 function M.setAimMethod(val)
-	saveParameter("aimMethod", val, true)
+	saveParameter("aimMethod", val)
 end
 
 function M.setUseSnapTurn(val)
-	saveParameter("useSnapTurn", val, true)
+	saveParameter("useSnapTurn", val)
 end
 
 function M.setSmoothTurnSpeed(val)
-	saveParameter("smoothTurnSpeed", val, true)
+	saveParameter("smoothTurnSpeed", val)
 end
 
 function M.setSnapAngle(val)
-	saveParameter("snapAngle", val, true)
+	saveParameter("snapAngle", val)
 end
 
 function M.setPawnRotationMode(val)
-	saveParameter("pawnRotationMode", val, true)
+	saveParameter("pawnRotationMode", val)
 end
 
 function M.setPawnPositionMode(val)
-	saveParameter("pawnPositionMode", val, true)
+	saveParameter("pawnPositionMode", val)
 end
 
 function M.setPawnPositionAnimationScale(val)
-	saveParameter("pawnPositionAnimationScale", val, true)
+	saveParameter("pawnPositionAnimationScale", val)
 end
 
 function M.setAdjustForAnimation(val)
-	saveParameter("adjustForAnimation", val, true)
+	saveParameter("adjustForAnimation", val)
 end
 
 function M.setAdjustForEyeOffset(val)
-	saveParameter("adjustForEyeOffset", val, true)
+	saveParameter("adjustForEyeOffset", val)
 end
 
 function M.setEyeOffset(val)
-	saveParameter("eyeOffset", val, true)
+	saveParameter("eyeOffset", val)
 end
 
 function M.setFixSpatialAudio(val)
-	saveParameter("fixSpatialAudio", val, true)
+	saveParameter("fixSpatialAudio", val)
 	doFixSpatialAudio()
 end
 
 function M.setPawnPositionSweepMovement(val)
-	saveParameter("pawnPositionSweepMovement", val, true)
+	saveParameter("pawnPositionSweepMovement", val)
 end
 
 function M.setHeadOffset(val)
 	local v = uevrUtils.vector(val)
 	if v ~= nil then
-		saveParameter("headOffset", {X=v.X,Y=v.Y,Z=v.Z}, true)
+		saveParameter("headOffset", {X=v.X,Y=v.Y,Z=v.Z})
 	end
 end
 
 function M.setRootOffset(val)
 	local v = uevrUtils.vector(val)
 	if v ~= nil then
-		saveParameter("rootOffset", {X=v.X,Y=v.Y,Z=v.Z}, true)
+		saveParameter("rootOffset", {X=v.X,Y=v.Y,Z=v.Z})
 	end
 end
 
@@ -496,11 +449,10 @@ local function updateAim()
 		rotation = controllers.getControllerRotation(controllerID)
 		--only use aim offset adjust if aimMethod is left or right controller
 		if aimMethod == M.AimMethod.LEFT_CONTROLLER or aimMethod == M.AimMethod.RIGHT_CONTROLLER then
-			rotation = getAimOffsetAdjustedRotation(rotation)
+			rotation = getAimOffsetAdjustedRotation(rotation) --things like gunstock may adjust the rotation
 		end
 	end
-	--local forwardVector = controllers.getControllerDirection(controllerID)
-	--print(pawn,pawn.Controller,rotation)
+
 	if uevrUtils.getValid(pawn) ~= nil and pawn.Controller ~= nil and pawn.Controller.SetControlRotation ~= nil and rotation ~= nil then
 		--disassociates the rotation of the pawn from the rotation set by pawn.Controller:SetControlRotation()
 		pawn.bUseControllerRotationPitch = false
@@ -514,6 +466,7 @@ local function updateAim()
 		
 		--Pitch is actually the only part of the rotation that is used here in games like Robocop
 		--Yaw is controlled by Movement Orientation for those games
+		-- Use ClientSetRotation(rotation, false) in multiplayer games?
 		pawn.Controller:SetControlRotation(rotation) --because the previous booleans were set, aiming with the hand or head doesnt affect the rotation of the pawn
 	end
 end
