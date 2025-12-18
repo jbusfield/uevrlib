@@ -1,0 +1,13 @@
+local uevrUtils = require('libs/uevr_utils')
+local ui = require('libs/ui')
+
+uevrUtils.setDeveloperMode(true)
+ui.init()
+
+-- --If you know the class of the widget you want to adjust then you can call the uevrUtils function directly
+-- local widget = uevrUtils.find_first_of("WidgetBlueprintGeneratedClass /Game/UI/HUD/HUD_BP.HUD_BP_C", false) --The works in Outer Worlds
+-- if widget ~= nil then
+	-- uevrUtils.setWidgetLayout(widget, {.5, .5}, {.5, .5})
+-- else
+	-- prinnt("widget not found")
+-- end
