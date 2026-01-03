@@ -39,6 +39,7 @@ local isDisabled = false
 local rootComponent = nil
 local decoupledYaw = nil
 local bodyRotationOffset = 0
+local bodyMesh = nil
 
 local rxState = 0
 local snapTurnDeadZone = 8000
@@ -49,6 +50,7 @@ local weaponRotation = nil -- externally set for WEAPON aim method
 local currentHeadRotator = uevrUtils.rotator(0,0,0)
 
 local inputConfigDev = nil
+local inputConfig = nil
 
 --this module is designed to work with these UEVR settings 
 uevrUtils.set_decoupled_pitch(true)
@@ -68,12 +70,24 @@ end
 local paramManager = paramModule.new(parametersFileName, parameters, true)
 paramManager:load()
 
-local function saveParameter(key, value, persist)
+local function saveParameter(key, value, persist, noCallbacks)
+	--print("Saving Input Parameter:", key, value, persist)
 	paramManager:set(key, value, persist)
-	if inputConfigDev ~= nil then
-		inputConfigDev.updateUI(key, value)
+	if not (noCallbacks == true) then
+		uevrUtils.executeUEVRCallbacks("on_input_config_param_change", key, value, persist)
+	end
+	if key == "aimMethod" and value ~= M.AimMethod.UEVR then
+		controllers.createController(0)
+		controllers.createController(1)
+		controllers.createController(2)
 	end
 end
+
+local createConfigMonitor = doOnce(function()
+	uevrUtils.registerUEVRCallback("on_input_config_param_change", function(key, value, persist)
+		saveParameter(key, value, persist, true)
+	end)
+end, Once.EVER)
 
 function M.init(isDeveloperMode, logLevel)
     if logLevel ~= nil then
@@ -86,16 +100,27 @@ function M.init(isDeveloperMode, logLevel)
     if isDeveloperMode then
         inputConfigDev = require("libs/config/input_config_dev")
         inputConfigDev.init(paramManager:getAll())
-		inputConfigDev.registerParameterChangedCallback(function(key, value)
-			saveParameter(key, value, true)
-			if key == "aimMethod" and value ~= M.AimMethod.UEVR then
-				controllers.createController(0)
-				controllers.createController(1)
-				controllers.createController(2)
-			end
-		end)
+		createConfigMonitor()
     else
     end
+end
+
+function M.getConfigurationWidgets(options)
+	if inputConfig == nil then
+		inputConfig = require("libs/config/input_config")
+	end
+	createConfigMonitor()
+	inputConfig.init(paramManager:getAll())
+    return inputConfig.getConfigurationWidgets(options)
+end
+
+function M.showConfiguration(saveFileName, options)
+	if inputConfig == nil then
+		inputConfig = require("libs/config/ui_config")
+	end
+	createConfigMonitor()
+	inputConfig.init(paramManager:getAll())
+	inputConfig.showConfiguration(saveFileName, options)
 end
 
 function M.setDisabled(val)
@@ -264,6 +289,13 @@ local function initDecoupledYaw()
 	end
 end
 
+local function getBodyMesh()
+	if bodyMesh == nil then
+		bodyMesh = pawnModule.getBodyMesh()
+	end
+	return bodyMesh
+end
+
 -- When a pawn runs, the animation can move the mesh ahead of the pawn, allowing you to
 -- see down the neck hole if you are looking down. This function calculates an offset by which a pawn's
 -- mesh can be moved to keep the neck in its proper place with respect to the pawn. Concept courtesy of Pande4360
@@ -271,7 +303,7 @@ local function getAnimationHeadDelta(pawn, pawnYaw)
 	local headBoneName = paramManager:get("headBoneName")
 	local rootBoneName = paramManager:get("rootBoneName")
 	if headBoneName ~= "" and rootBoneName ~= "" and paramManager:get("adjustForAnimation") == true then
-		local mesh = pawnModule.getBodyMesh()
+		local mesh = getBodyMesh()
 		if mesh ~= nil then
 			local baseRotationOffsetRotatorYaw = 0
 			if pawn.BaseRotationOffset ~= nil then
@@ -411,7 +443,7 @@ end
 
 local function updateMeshRelativePosition()
 	if rootComponent ~= nil and decoupledYaw ~= nil then
-		local mesh = pawnModule.getBodyMesh()
+		local mesh = getBodyMesh()
 		if mesh ~= nil then
 			pcall(function()
 				--the next line can fail even when checking for rootComprootComponent.K2_GetComponentRotation ~= nil so wrap in pcall
@@ -608,6 +640,7 @@ end)
 uevrUtils.registerPreLevelChangeCallback(function(level)
 	decoupledYaw = nil
 	bodyRotationOffset = 0
+	bodyMesh = nil
 end)
 
 function M.resetView()
@@ -628,6 +661,13 @@ end)
 
 uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, newLocation, newRotation)
 	M.setAimRotationOffset(newRotation)
+end)
+
+uevrUtils.registerUEVRCallback("on_pawn_param_change", function(name, value)
+	--if the pawn body mesh changes, clear the cached bodyMesh variable so a new one can be obtained on the next tick
+	if name == "bodyMeshName" then
+		bodyMesh = nil
+	end
 end)
 
 uevrUtils.registerUEVRCallback("attachment_grip_rotation_change", function(leftRotation, rightRotation)

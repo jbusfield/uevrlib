@@ -84,6 +84,7 @@ local reduceMotionSickness = false
 local isInMotionSicknessCausingScene = false
 
 local currentWidgetViewportState = {}
+local currentCustomViewportWidgets = {}
 
 local uiState = {viewLocked = nil, screen2D = nil, decouplePitch = nil, inputEnabled = nil, handsEnabled = nil}
 
@@ -273,8 +274,14 @@ local function updateUIState()
         ---@diagnostic disable-next-line: undefined-field
         WidgetBlueprintLibrary:GetAllWidgetsOfClass(uevrUtils.get_world(), foundWidgets, widgetClass, true)
         --print("Found widgets: " .. #foundWidgets)
+
+        --append currentCustomViewportWidgets to foundWidgets
+        for _, widget in ipairs(currentCustomViewportWidgets) do
+            table.insert(foundWidgets, widget)
+        end
+        
         for index, widget in pairs(foundWidgets) do
-            if widget:IsInViewport() then --check not really needed since GetAllWidgetsOfClass with the last param true should only return viewport widgets
+            --if widget:IsInViewport() then --check not really needed since GetAllWidgetsOfClass with the last param true should only return viewport widgets.also currentCustomViewportWidgets might not be in viewport
                 --get the widget data from the configurations
                 local id = widget:get_class():get_full_name()
                 local data = widgetList[id]
@@ -291,13 +298,13 @@ local function updateUIState()
                 end
             -- else
             --     print ("Widget " .. id .. " not in viewport")
-            end
+            --end
         end
         updateWidgetChangeCallbacks()
     end
     setCurrentViewportWidgetsStr(currentViewportWidgetsStr)
 
-    local currentGameStateText = "Current Game State: "
+    local currentGameStateText = "Current Game Statex: "
     local isInCutscene = uevrUtils.isInCutscene()
     local isPaused = uevrUtils.isGamePaused()
     local isCharacterHidden = uevrUtils.getValid(pawn,{ "Controller", "Character", "bHidden"}) or false
@@ -402,6 +409,24 @@ local createConfigMonitor = doOnce(function()
 		end)
 	end
 end, Once.EVER)
+
+function M.addViewportWidget(widget)
+    if uiConfigDev == nil then return end
+    uiConfigDev.registerViewportWidget(widget:get_class():get_full_name(), uevrUtils.getShortName(widget:get_class()))
+    --add uniquely to currentCustomViewportWidgets array
+    local index = uevrUtils.indexOf(currentCustomViewportWidgets, widget)
+    if index == nil then
+        table.insert(currentCustomViewportWidgets, widget)
+    end
+end
+
+function M.removeViewportWidget(widget)
+    --remove from currentCustomViewportWidgets array
+    local index = uevrUtils.indexOf(currentCustomViewportWidgets, widget)
+    if index ~= nil then
+        table.remove(currentCustomViewportWidgets, index)
+    end
+end
 
 function M.getConfigurationWidgets(options)
 	if uiConfig == nil then

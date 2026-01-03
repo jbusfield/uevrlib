@@ -353,12 +353,21 @@ function M.createFromConfig(configuration, profileName, animationName)
 		if profile ~= nil then
 			local components = {}
 			for key, mesh in pairs(profile) do
-				--key = "Arms"
 				local meshPropertyName = mesh["Mesh"]
 				if meshPropertyName ~= "" then
-					local component = uevrUtils.getObjectFromDescriptor(meshPropertyName) -- "Pawn.Mesh(Arm).Glove")
-					if component ~= nil then
-						components[key] = component
+					if meshPropertyName == "Custom" then
+						if getCustomHandComponent ~= nil then
+							local component = getCustomHandComponent(key)
+							if component ~= nil then
+								components[key] = component
+							end
+						end
+					else
+						local component = uevrUtils.getObjectFromDescriptor(meshPropertyName, true) -- "Pawn.Mesh(Arm).Glove")
+						print(component,meshPropertyName)
+						if component ~= nil then
+							components[key] = component
+						end
 					end
 				end
 			end
@@ -461,6 +470,11 @@ function M.createComponent(skeletalMeshComponent, name, hand, definition)
 		--not using an existing actor as owner. Mesh affects the hands opacity so its not appropriate
 		component = animation.createPoseableComponent(skeletalMeshComponent, nil, definition ~= nil and definition["UseDefaultPose"] == true)
 		if component ~= nil then
+			--this works but still need to reset all parent bones transforms to zero on each tick
+			-- if skeletalMeshComponent:is_a(uevrUtils.get_class("Class /Script/Engine.PoseableMeshComponent")) then
+			-- 	component:SetLeaderPoseComponent(skeletalMeshComponent, true)
+			-- end
+
 			--fixes flickering but > 1 causes a perfomance hit with dynamic shadows according to unreal doc
 			--a better way to do this should be found
 			component.BoundsScale = 16.0
@@ -542,7 +556,7 @@ function M.updateAnimationFromMesh(hand, mesh, componentName)
 			if definition ~= nil then
 				local jointName = definition["Name"]
 				if jointName ~= nil and jointName ~= "" then
-					local success, response = pcall(function()		
+					local success, response = pcall(function()
 						component:CopyPoseFromSkeletalComponent(mesh)
 						--component:SetLeaderPoseComponent(mesh, true)
 						local location = getValidVector(definition, "Location", {0,0,0})

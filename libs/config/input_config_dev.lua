@@ -139,13 +139,13 @@ local function getConfigWidgets()
 			widgetType = "tree_node",
 			id = widgetPrefix .. "movement_tree",
 			initialOpen = true,
-			label = "Movement Orientation"
+			label = "Body Orientation"
 		},
 				{
 					widgetType = "combo",
 					id = widgetPrefix .. "pawnRotationMode",
 					label = "Type",
-					selections = {"Game", "Right Controller", "Left Controller", "Head/HMD", "Follows Body (Simple)", "Follows Body (Advanced)"},
+					selections = {"Game", "Right Controller", "Left Controller", "Locked Head/HMD", "Follows Head (Simple)", "Follows Head (Advanced)"},
 					initialValue = configDefaults["pawnRotationMode"]
 				},
 				expandArray(bodyYaw.getConfigurationWidgets),
@@ -194,7 +194,7 @@ local function getConfigWidgets()
 				label = "Head Offset",
 				speed = .1,
 				range = {-200, 200},
-				initialValue = {configDefaults["headOffset"].X, configDefaults["headOffset"].Y, configDefaults["headOffset"].Z}
+				initialValue = {configDefaults["headOffset"] and configDefaults["headOffset"].X or 0, configDefaults["headOffset"] and configDefaults["headOffset"].Y or 0, configDefaults["headOffset"] and configDefaults["headOffset"].Z or 0}
 			},
 			{
 				widgetType = "checkbox",
@@ -240,7 +240,7 @@ local function getConfigWidgets()
     }
 end
 local function updateSetting(key, value)
-    uevrUtils.executeUEVRCallbacks("on_input_config_param_change", key, value)
+    uevrUtils.executeUEVRCallbacks("on_input_config_param_change", key, value, true)
 end
 
 local function setCurrentHeadBone(value)
@@ -260,7 +260,7 @@ local function setBoneNames()
 	local mesh = pawnModule.getBodyMesh()
 	if mesh ~= nil then
 		boneList = uevrUtils.getBoneNames(mesh)
-		if boneList ~= nil and #boneList > 0 then 
+		if boneList ~= nil and #boneList > 0 then
 			configui.setSelections(widgetPrefix .. "headBones", boneList)
 		end
 	end
@@ -272,7 +272,7 @@ end
 
 local function updateUIState(key)
     local exKey = widgetPrefix .. key
-    if key == "aimMethod" then 
+    if key == "aimMethod" then
         configui.hideWidget(widgetPrefix .. "advanced_input_group", configui.getValue(exKey) == M.AimMethod.UEVR)
         configui.hideWidget(widgetPrefix .. "advanced_aim_group", configui.getValue(exKey) == M.AimMethod.UEVR)
     elseif key == "useSnapTurn" then
@@ -284,7 +284,7 @@ local function updateUIState(key)
     elseif key == "pawnPositionMode" then
         configui.hideWidget(widgetPrefix .. "pawnPositionAnimationScale", configui.getValue(exKey) ~= M.PawnPositionMode.ANIMATED)
         configui.hideWidget(widgetPrefix .. "pawnPositionSweepMovement", configui.getValue(exKey) ~= M.PawnPositionMode.FOLLOWS)
-    elseif key == "adjustForAnimation" then 
+    elseif key == "adjustForAnimation" then
         configui.hideWidget(widgetPrefix .. "headBones", not configui.getValue(exKey))
     elseif key == "adjustForEyeOffset" then
         configui.hideWidget(widgetPrefix .. "eyeOffset", not configui.getValue(exKey))
@@ -296,11 +296,14 @@ configui.onCreateOrUpdate(widgetPrefix .. "isDisabledOverride", function(value)
 end)
 
 configui.onUpdate(widgetPrefix .. "headOffset", function(value)
-    updateSetting("headOffset", {X=value[1],Y=value[2],Z=value[3]})
+	local arr = uevrUtils.getNativeValue(value)
+    updateSetting("headOffset", {X=arr[1],Y=arr[2],Z=arr[3]})
 end)
 
 configui.onUpdate(widgetPrefix .. "rootOffset", function(value)
-    updateSetting("rootOffset", {X=value[1],Y=value[2],Z=value[3]})
+    --updateSetting("rootOffset", {X=value[1],Y=value[2],Z=value[3]})
+	local arr = uevrUtils.getNativeValue(value)
+    updateSetting("rootOffset", {X=arr[1],Y=arr[2],Z=arr[3]})
 end)
 
 configui.onUpdate(widgetPrefix .. "headBones", function(value)
@@ -423,13 +426,28 @@ function M.init(parameters)--paramManager)
     end
 end
 
-function M.updateUI(key, value)
-	configui.setValue(widgetPrefix .. key, value, true)
-end
+uevrUtils.registerUEVRCallback("on_input_config_param_change", function(key, value)
+	-- print("Type of value:", value, type(value))
+	-- if type(value) == "table" then
+	-- 	if next(value) == nil then
+	-- 		print("The table is empty")
+	-- 	else
+	-- 		print("The table has entries")
+	-- 	end
+	-- 	for k,v in pairs(value) do
+	-- 		print("  ", k, v)
+	-- 	end
+	-- print(value.X, value.Y, value.Z)
+	-- print(value[0], value[1], value[2])
+	-- end
 
-function M.registerParameterChangedCallback(callback)
-    uevrUtils.registerUEVRCallback("on_input_config_param_change", callback)
-end
+    configui.setValue(widgetPrefix .. key, value, true)
+    updateUIState(key)
+end)
+
+-- function M.registerParameterChangedCallback(callback)
+--     uevrUtils.registerUEVRCallback("on_input_config_param_change", callback)
+-- end
 
 -- uevrUtils.registerHandednessChangeCallback(function(handed)
 -- 	configui.setValue(widgetPrefix .. "handedness", handed + 1, true)

@@ -275,6 +275,28 @@ Usage
 		example:
 			local fname = uevrUtils.fname_from_string("Mesh")
 			
+	uevrUtils.tagFromString(name) - creates an FGameplayTag from a string tag name
+		example:
+			local tag = uevrUtils.tagFromString("Equipment.Weapon.Melee")
+			local weapon = pawn:GetEquippedActorFromSlot(tag)
+			
+	uevrUtils.stringFromTag(tag) - converts an FGameplayTag to its string representation
+		example:
+			local tagString = uevrUtils.stringFromTag(tag)
+			print("Tag is:", tagString)  -- prints "Equipment.Weapon.Melee"
+			
+	uevrUtils.indexOf(array, value) - finds the index of a value in an array, returns nil if not found
+		example:
+			local weapons = {"sword", "bow", "staff"}
+			local index = uevrUtils.indexOf(weapons, "bow")  -- returns 2
+			local notFound = uevrUtils.indexOf(weapons, "axe")  -- returns nil
+			
+	uevrUtils.deepCopyTable(orig) - creates a deep copy of a table, recursively copying nested tables
+		example:
+			local original = { a = 1, b = { c = 2, d = 3 } }
+			local copy = uevrUtils.deepCopyTable(original)
+			copy.b.c = 99  -- original.b.c remains 2
+			
 	uevrUtils.color_from_rgba(r,g,b,a,reuseable) or color_from_rgba(r,g,b,a,reuseable) - returns a CoreUObject.LinearColor struct with the given params in the range of 0.0 to 1.0
 		If reuseable is true a cached struct is returned. This is faster but if you need two instances for the same function call this would not work
 		example:
@@ -2127,6 +2149,16 @@ function M.isInCutscene()
 	return isInCutscene
 end
 
+function M.tagFromString(name)
+	local tag = M.get_reuseable_struct_object("ScriptStruct /Script/GameplayTags.GameplayTag")
+    tag.TagName = M.fname_from_string(name)
+	return tag
+end
+
+function M.stringFromTag(tag)
+	return tag and tag.TagName and tag.TagName:to_string() or ""
+end
+
 function M.get_world()
 	if game_engine ~= nil then
 		local viewport = game_engine.GameViewport
@@ -2477,6 +2509,27 @@ function M.intToHexString(num)
 	return string.format("#%02X%02X%02X%02X", r, g, b, a)
 end
 
+function M.indexOf(array, value)
+    -- Iterate through the array using ipairs
+    for i, v in ipairs(array) do
+        if v == value then
+            return i -- Return the index immediately when the value is found
+        end
+    end
+    return nil -- Return nil if the value is not found after checking all elements
+end
+
+function M.deepCopyTable(orig)
+    local copy = {}
+    for k, v in pairs(orig) do
+        if type(v) == "table" then
+            copy[k] = M.deepCopyTable(v)  -- Recurse for nested tables
+        else
+            copy[k] = v
+        end
+    end
+    return copy
+end
 
 function M.splitStr(inputstr, sep)
    	if sep == nil then
@@ -2834,6 +2887,7 @@ function M.getChildComponent(parent, name)
 			for i, child in ipairs(children) do
 				if  string.find(child:get_full_name(), name) then
 					childComponent = child
+					break
 				end
 			end
 		end
@@ -2966,7 +3020,7 @@ function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, options)
 	if showDebug == true then M.print("Creating PoseableMeshComponent from " .. skeletalMeshComponent:get_full_name()) end
 	local poseableComponent = nil
 	if skeletalMeshComponent ~= nil then
-		if skeletalMeshComponent:is_a(M.get_class("Class /Script/Engine.SkeletalMeshComponent")) then
+		if skeletalMeshComponent:is_a(M.get_class("Class /Script/Engine.SkeletalMeshComponent")) or skeletalMeshComponent:is_a(M.get_class("Class /Script/Engine.PoseableMeshComponent")) then
 			poseableComponent = M.create_component_of_class("Class /Script/Engine.PoseableMeshComponent", options.manualAttachment, options.relativeTransform, options.deferredFinish, options.parent, options.tag)
 			--poseableComponent:SetCollisionEnabled(0, false)
 			if poseableComponent ~= nil then
@@ -2987,7 +3041,7 @@ function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, options)
 					-- of the source skeletalmeshcomponent and apply them to the poseablemeshcomponent
 					-- For example if your source is gripping a gun then the copy will also be gripping
 					-- If you do not want this and just want the default skeleton then set options.useDefaultPose to true
-					if options.useDefaultPose ~= true then
+					if options.useDefaultPose ~= true and skeletalMeshComponent:is_a(M.get_class("Class /Script/Engine.SkeletalMeshComponent")) then
 						poseableComponent:CopyPoseFromSkeletalComponent(skeletalMeshComponent)
 						if showDebug == true then M.print("Pose copied") end
 					end
@@ -3454,6 +3508,7 @@ function M.wrapTextOnWordBoundary(text, maxCharsPerLine)
 end
 
 function M.parseHierarchyString(str)
+	--print("[parseHierarchyString] Parsing hierarchy string: " .. tostring(str))
 	if str == nil then str = "" end
     local tokens = {}
     for token in str:gmatch("[^%.]+") do
@@ -3464,9 +3519,12 @@ function M.parseHierarchyString(str)
     local current = nil
 
     for _, token in ipairs(tokens) do
-        local parent, child = token:match("^(%w+)%((%w+)%)$")
+        --local parent, child = token:match("^(%w+)%((%w+)%)$")
+		local parent, child = token:match("^%s*([^%(]+)%s*%(%s*([^%)]+)%s*%)%s*$") --better handling of names with non-word characters
         local node
-
+-- print(string.len(token))
+-- print(#token)
+-- print("[parseHierarchyString] Token: %" .. token .. "% Parent: " .. tostring(parent) .. " Child: " .. tostring(child))
         if parent and child then
             node = { name = parent, child = { name = child } }
         else
@@ -3511,7 +3569,7 @@ function M.getObjectFromHierarchy(node, object, showDebug)
 				if showDebug == true then M.print("[getObjectFromHierarchy] Object not found " .. node.name) end
 				return object
 			end
-			if showDebug == true then M.print("[getObjectFromHierarchy] " .. object:get_full_name()) end
+			if showDebug == true then M.print("[getObjectFromHierarchy] Object found: " .. object:get_full_name()) end
 		end
 		if node.child then
 			if showDebug == true then M.print("[getObjectFromHierarchy] Attached child " .. node.child.name) end
