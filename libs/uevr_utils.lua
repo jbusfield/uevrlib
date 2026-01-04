@@ -534,6 +534,22 @@ Usage
 	uevrUtils.getObjectFromDescriptor(descriptor, showDebug) - gets object using hierarchy descriptor string
 		example:
 			local glove = uevrUtils.getObjectFromDescriptor("Pawn.Mesh(Arm).Glove", false)
+
+	uevrUtils.getPropertiesOfClass(object, className, excludeInherited) - returns a list of property names (strings) on the object that match 
+		the specified className. If excludeInherited is true, only checks the object's immediate class, not parent classes.
+		example:
+			local meshProps = uevrUtils.getPropertiesOfClass(pawn, "Class /Script/Engine.SkeletalMeshComponent", false)
+			-- Returns: {"Mesh", "FirstPersonMesh", "WeaponMesh"}
+			local immediateOnly = uevrUtils.getPropertiesOfClass(pawn, "Class /Script/Engine.SkeletalMeshComponent", true)
+			-- Returns only properties defined on pawn's class, not inherited ones
+			
+	uevrUtils.getObjectPropertyDescriptors(object, objName, className, includeChildren) - returns a list of property descriptor strings for all properties 
+		of the specified className found on the object. If includeChildren is true, also includes attached children of the same class type.
+		example:
+			local meshProperties = uevrUtils.getObjectPropertyDescriptors(pawn, "Pawn", "Class /Script/Engine.SkeletalMeshComponent", false)
+			-- Returns: {"Pawn.Mesh", "Pawn.FirstPersonMesh"}
+			local withChildren = uevrUtils.getObjectPropertyDescriptors(pawn, "Pawn", "Class /Script/Engine.SkeletalMeshComponent", true)
+			-- Returns: {"Pawn.Mesh", "Pawn.Mesh(ChildMesh_123)", "Pawn.FirstPersonMesh"}
 			
 	uevrUtils.getControllerIndex(controllerID) - gets VR controller index (0=left, 1=right, 2=HMD)
 		example:
@@ -2925,16 +2941,18 @@ function M.getPropertiesOfClass(object, className, excludeInherited)
 	return propertiesList
 end
 
-function M.getPropertyPathDescriptorsOfClass(object, objectName, className, includeChildren)
-	local meshList = {}
+--example get all camera properties of the pawn
+--local cameraList = uevrUtils.getObjectPropertyDescriptors(pawn, "Pawn", "Class /Script/Engine.CameraComponent", true)
+function M.getObjectPropertyDescriptors(object, objName, className, includeChildren)
+	local propertyList = {}
 	if M.getValid(object) ~= nil then
-		meshList = M.getPropertiesOfClass(object, className)
-		for index, name in ipairs(meshList) do
-			meshList[index] = objectName .. "." .. meshList[index]
+		propertyList = M.getPropertiesOfClass(object, className)
+		for index, name in ipairs(propertyList) do
+			propertyList[index] = objName .. "." ..propertyList[index]
 		end
 
-		if includeChildren == true then
-			for _, prop in ipairs(meshList) do
+		if includeChildren then
+			for _, prop in ipairs(propertyList) do
 				local parent = M.getObjectFromDescriptor(prop)
 				if parent ~= nil then
 					local children = parent.AttachChildren
@@ -2943,7 +2961,7 @@ function M.getPropertyPathDescriptorsOfClass(object, objectName, className, incl
 							if child:is_a(M.get_class(className)) then
 								local prefix, shortName = M.splitOnLastPeriod(child:get_full_name())
 								if shortName ~= nil then
-									table.insert(meshList, prop .. "(" .. shortName .. ")")
+									table.insert(propertyList, prop .. "(" .. shortName .. ")")
 								end
 							end
 						end
@@ -2952,7 +2970,7 @@ function M.getPropertyPathDescriptorsOfClass(object, objectName, className, incl
 			end
 		end
 	end
-	return meshList
+    return propertyList
 end
 
 function M.destroyComponent(component, destroyOwner, destroyChildren)

@@ -16,6 +16,7 @@ M.PawnPositionMode = inputEnums.PawnPositionMode
 M.PawnRotationMode = inputEnums.PawnRotationMode
 
 local boneList = {}
+local pawnCameraList = {}
 
 --local configIDs = {"isDisabledOverride", "aimMethod", "fixSpatialAudio", "rootOffset", "useSnapTurn", "snapAngle", "smoothTurnSpeed", "pawnRotationMode", "pawnPositionMode", "pawnPositionSweepMovement", "pawnPositionAnimationScale", "headOffset", "adjustForAnimation", "adjustForEyeOffset", "eyeOffset"}
 -- local configDefaults = {
@@ -34,6 +35,7 @@ local boneList = {}
 --     adjustForAnimation = false,
 --     adjustForEyeOffset = false,
 --     eyeOffset = 0
+--     pawnControlRotationCamera = ""
 -- }
 local configDefaults = {}
 
@@ -79,6 +81,13 @@ local function getConfigWidgets()
             id = widgetPrefix .. "advanced_aim_group",
             isHidden = false
         },
+			{
+				widgetType = "combo",
+				id = widgetPrefix .. "pawnControlRotationCameraList",
+				label = "Pawn Control Rotation Camera",
+				selections = {"None"},
+				initialValue = 1
+			},
             {
                 widgetType = "checkbox",
                 id = widgetPrefix .. "fixSpatialAudio",
@@ -291,6 +300,28 @@ local function updateUIState(key)
     end
 end
 
+local function setPawnCameraList(currentCameraName)
+	print("Setting pawn camera list")
+    pawnCameraList = uevrUtils.getObjectPropertyDescriptors(pawn, "Pawn", "Class /Script/Engine.CameraComponent", true)
+	print("Found " .. #pawnCameraList .. " cameras")
+	table.insert(pawnCameraList, 1, "None")
+	for i, name in ipairs(pawnCameraList) do
+		print("Camera " .. i .. ": " .. name)
+	end
+
+	local listName = "pawnControlRotationCameraList"
+	print("Updating camera list UI", widgetPrefix .. listName)
+	configui.setSelections(widgetPrefix .. listName, pawnCameraList)
+	local selectedIndex = 1
+	for i = 1, #pawnCameraList do
+		if pawnCameraList[i] == currentCameraName then
+			selectedIndex = i
+			break
+		end
+	end
+	configui.setValue(widgetPrefix .. listName, selectedIndex)
+end
+
 configui.onCreateOrUpdate(widgetPrefix .. "isDisabledOverride", function(value)
     updateSetting("isDisabledOverride", value)
 end)
@@ -388,6 +419,13 @@ configui.onUpdate(widgetPrefix .. "fixSpatialAudio", function(value)
 	updateSetting("fixSpatialAudio", value)
 end)
 
+configui.onUpdate(widgetPrefix .. "pawnControlRotationCameraList", function(value)
+	--get the camera name from the selection
+	local cameraName = pawnCameraList[value]
+	updateSetting("pawnControlRotationCamera", cameraName)
+end)
+
+
 -- configui.onUpdate(widgetPrefix .. "handedness", function(value)
 -- 	uevrUtils.setHandedness(value-1)
 -- end)
@@ -413,36 +451,33 @@ function M.showConfiguration(saveFileName, options)
 	configui.create(configDefinition)
 end
 
+local function setUIValue(key, value)
+	if key == "pawnControlRotationCamera" then
+		--select from the list
+		--configui.setValue(widgetPrefix .. "pawnControlRotationCameraList", 1, true)
+	else
+		configui.setValue(widgetPrefix .. key, value, true)
+	end
+	updateUIState(key)
+end
+
+local function updateUI(params)
+	for key, value in pairs(params) do
+		setUIValue(key, value)
+	end
+end
+
 function M.init(parameters)--paramManager)
     --M.loadParameters(parametersFileName)
     configDefaults = parameters
     M.showConfiguration(configFileName)
-    for key, value in pairs(parameters) do
-        print(key,value)
-        --if key ~= "rootOffset" and key ~= "headOffset" then
-            configui.setValue(widgetPrefix .. key, value, true)
-            updateUIState(key)
-        --end
-    end
+	setPawnCameraList(parameters["pawnControlRotationCamera"])
+
+	updateUI(parameters)
 end
 
 uevrUtils.registerUEVRCallback("on_input_config_param_change", function(key, value)
-	-- print("Type of value:", value, type(value))
-	-- if type(value) == "table" then
-	-- 	if next(value) == nil then
-	-- 		print("The table is empty")
-	-- 	else
-	-- 		print("The table has entries")
-	-- 	end
-	-- 	for k,v in pairs(value) do
-	-- 		print("  ", k, v)
-	-- 	end
-	-- print(value.X, value.Y, value.Z)
-	-- print(value[0], value[1], value[2])
-	-- end
-
-    configui.setValue(widgetPrefix .. key, value, true)
-    updateUIState(key)
+	setUIValue(key, value)
 end)
 
 -- function M.registerParameterChangedCallback(callback)

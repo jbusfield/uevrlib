@@ -31,7 +31,8 @@ local parameters = {
     adjustForEyeOffset = false,
     eyeOffset = 0,
 	headBoneName = "",
-	rootBoneName = ""
+	rootBoneName = "",
+	pawnControlRotationCamera = ""
 }
 
 local isDisabled = false
@@ -70,11 +71,50 @@ end
 local paramManager = paramModule.new(parametersFileName, parameters, true)
 paramManager:load()
 
+local cameraComponent = {
+	initialized = false,
+	component = nil,
+	originalState = nil,
+	init = function(self)
+        local pawnControlRotationCamera = paramManager:get("pawnControlRotationCamera")
+        if pawnControlRotationCamera ~= nil then
+            if pawnControlRotationCamera ~= "" and pawnControlRotationCamera ~= "None" then
+                self.component = uevrUtils.getObjectFromDescriptor(pawnControlRotationCamera)
+                if self.component ~= nil then
+                    self.originalState = self.component.bUsePawnControlRotation
+                end
+            end
+            self.initialized = true
+        end
+    end,
+	setUsePawnControlRotation = function(self, val)
+		if self.initialized == false then
+			self:init()
+		end
+		if self.component ~= nil then
+			self.component.bUsePawnControlRotation = val
+		end
+	end,
+	reset = function(self)
+		if self.initialized == true then
+			if self.component ~= nil and self.originalState ~= nil then
+				self.component.bUsePawnControlRotation = self.originalState
+			end
+		end
+		self.initialized = false
+		self.component = nil
+		self.originalState = nil
+	end
+}
+
 local function saveParameter(key, value, persist, noCallbacks)
 	--print("Saving Input Parameter:", key, value, persist)
 	paramManager:set(key, value, persist)
 	if not (noCallbacks == true) then
 		uevrUtils.executeUEVRCallbacks("on_input_config_param_change", key, value, persist)
+	end
+	if key == "pawnControlRotationCamera" then
+		cameraComponent:reset()
 	end
 	if key == "aimMethod" and value ~= M.AimMethod.UEVR then
 		controllers.createController(0)
@@ -160,6 +200,8 @@ local function doFixSpatialAudio()
 		end
 	end
 end
+
+
 
 function M.setAimMethod(val)
 	saveParameter("aimMethod", val)
@@ -500,6 +542,9 @@ local function updateAim()
 		--Yaw is controlled by Movement Orientation for those games
 		-- Use ClientSetRotation(rotation, false) in multiplayer games?
 		pawn.Controller:SetControlRotation(rotation) --because the previous booleans were set, aiming with the hand or head doesnt affect the rotation of the pawn
+			
+		cameraComponent:setUsePawnControlRotation(true)
+
 	end
 end
 
@@ -641,6 +686,7 @@ uevrUtils.registerPreLevelChangeCallback(function(level)
 	decoupledYaw = nil
 	bodyRotationOffset = 0
 	bodyMesh = nil
+	cameraComponent:reset()
 end)
 
 function M.resetView()

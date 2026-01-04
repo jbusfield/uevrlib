@@ -277,9 +277,13 @@ local function updateUIState()
 
         --append currentCustomViewportWidgets to foundWidgets
         for _, widget in ipairs(currentCustomViewportWidgets) do
-            table.insert(foundWidgets, widget)
+            if uevrUtils.getValid(widget) ~= nil then
+                table.insert(foundWidgets, widget)
+            else
+                M.removeViewportWidget(widget)
+            end
         end
-        
+
         for index, widget in pairs(foundWidgets) do
             --if widget:IsInViewport() then --check not really needed since GetAllWidgetsOfClass with the last param true should only return viewport widgets.also currentCustomViewportWidgets might not be in viewport
                 --get the widget data from the configurations
