@@ -318,7 +318,7 @@ end
 
 local function setPawnMeshList()
 	M.print("Setting pawn mesh list", LogLevel.Debug)
-	pawnMeshList = uevrUtils.getPropertyPathDescriptorsOfClass(pawn, "Pawn", "Class /Script/Engine.SkeletalMeshComponent", includeChildrenInMeshList)
+	pawnMeshList = uevrUtils.getObjectPropertyDescriptors(pawn, "Pawn", "Class /Script/Engine.SkeletalMeshComponent", includeChildrenInMeshList)
 	M.print("Found " .. #pawnMeshList .. " meshes", LogLevel.Debug)
 	updateMeshUI(pawnMeshList, "pawnBodyMeshList", "selectedPawnBodyMesh", bodyMeshName)
 	updateMeshUI(pawnMeshList, "pawnArmsMeshList", "selectedPawnArmsMesh", armsMeshName)

@@ -537,14 +537,13 @@ local function updateAim()
 			pawn.CharacterMovement.bOrientRotationToMovement = false
 			pawn.CharacterMovement.bUseControllerDesiredRotation = false
 		end
-		
+
 		--Pitch is actually the only part of the rotation that is used here in games like Robocop
-		--Yaw is controlled by Movement Orientation for those games
+		--Yaw is controlled by Movement Orientation for those games (may not be true now with cameraComponent:setUsePawnControlRotation(true))
 		-- Use ClientSetRotation(rotation, false) in multiplayer games?
 		pawn.Controller:SetControlRotation(rotation) --because the previous booleans were set, aiming with the hand or head doesnt affect the rotation of the pawn
-			
-		cameraComponent:setUsePawnControlRotation(true)
 
+		cameraComponent:setUsePawnControlRotation(true)
 	end
 end
 
