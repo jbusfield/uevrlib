@@ -234,7 +234,7 @@ end
 
 local function setPawnMeshList()
 	M.print("Setting pawn mesh list", LogLevel.Debug)
-	pawnMeshList = uevrUtils.getPropertyPathDescriptorsOfClass(pawn, "Pawn", "Class /Script/Engine.SkeletalMeshComponent", includeChildrenInMeshList)
+	pawnMeshList = uevrUtils.getObjectPropertyDescriptors(pawn, "Pawn", "Class /Script/Engine.SkeletalMeshComponent", includeChildrenInMeshList)
 	M.print("Found " .. #pawnMeshList .. " meshes", LogLevel.Debug)
 	updateMeshUI(pawnMeshList, "pawnBodyMeshList", "selectedPawnBodyMesh", configDefaults["bodyMeshName"])
 	updateMeshUI(pawnMeshList, "pawnArmsMeshList", "selectedPawnArmsMesh", configDefaults["armsMeshName"])
@@ -371,10 +371,10 @@ end
 function M.init(m_paramManager)
     configDefaults = m_paramManager and m_paramManager:getAll() or {}
 	paramManager = m_paramManager
-	setPawnMeshList()
-	setBoneNames()
     createDevMonitor()
     M.showConfiguration(configFileName)
+	setPawnMeshList()
+	setBoneNames()
 
 	paramManager:initProfileHandler(widgetPrefix, function(profileParams)
 		if updateUI(profileParams) then

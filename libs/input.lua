@@ -113,7 +113,7 @@ local function saveParameter(key, value, persist, noCallbacks)
 	if not (noCallbacks == true) then
 		uevrUtils.executeUEVRCallbacks("on_input_config_param_change", key, value, persist)
 	end
-	if key == "pawnControlRotationCamera" then
+	if key == "pawnControlRotationCamera" or key == "aimMethod" then
 		cameraComponent:reset()
 	end
 	if key == "aimMethod" and value ~= M.AimMethod.UEVR then
