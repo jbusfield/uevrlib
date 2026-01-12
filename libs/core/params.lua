@@ -14,7 +14,7 @@ function M.new(fileName, defaultParams, autoSave)
     self.autoSaveInterval = nil
     self.widgetPrefix = ""
     self.profileIDs = {}
-    self.profileChangeCallback = nil
+    self.profileChangeCallbackList = {}
     if autoSave then
         self:autoSaveInit()
     end
@@ -81,6 +81,8 @@ end
 function M:convertToProfile()
     local activeProfile = self:get({"_profileState", "currentEditingProfile"})
     if activeProfile == nil then -- if the profile doesnt exist, set to default
+        local existingParams = uevrUtils.deepCopyTable(self.parameters)
+
         self:set({"_profileState", "currentEditingProfile"}, "default", true)
         activeProfile = "default"
         local activeLabel = self:get({"_profileLabels", activeProfile})
@@ -88,12 +90,11 @@ function M:convertToProfile()
             self:set({"_profileLabels", activeProfile}, "Default", true)
         end
 
-        for key, value in pairs(self.parameters) do
-            if key ~= "_profileState" and key ~= "_profileLabels" then
-                self:set({activeProfile, key}, value, true)
-                self:set(key, nil, true)
-            end
+        for key, value in pairs(existingParams) do
+            self:set({activeProfile, key}, value, false)
+            self:set(key, nil, false)
         end
+        self.isDirty = true
     end
 end
 
@@ -115,10 +116,13 @@ function M:setActiveProfile(profileId)
         M:createProfile(profileId, profileId == "default" and "Default" or "New Profile")
     end
     self:set({"_profileState", "currentEditingProfile"}, profileId, true)
-    
-    if self.profileChangeCallback then
-        self.profileChangeCallback(self:getAllActiveProfileParams())
+
+    for index, func in ipairs(self.profileChangeCallbackList) do
+        func(self:getAllActiveProfileParams())
     end
+    -- if self.profileChangeCallback then
+    --     self.profileChangeCallback(self:getAllActiveProfileParams())
+    -- end
 
     self:updateProfileUI(true)
 
@@ -250,8 +254,25 @@ function M.getProfilePostConfigurationWidgets(widgetPrefix)
     }
 end
 
-function M:setupProfileUpdateHandlers(widgetPrefix, profileChangeCallback)
-    self.profileChangeCallback = profileChangeCallback
+function M:registerProfileChangeCallback(profileChangeCallback)
+    if type(profileChangeCallback) ~= "function" then
+        print("[params] Invalid profile change callback registration")
+        return
+    end
+    local exists = false
+    for index, func in ipairs(self.profileChangeCallbackList) do
+        if func == profileChangeCallback then
+            exists = true
+            break
+        end
+    end
+    if not exists then
+        table.insert(self.profileChangeCallbackList, profileChangeCallback)
+    end
+end
+
+function M:setupProfileUpdateHandlers(widgetPrefix)
+
     configui.onUpdate(widgetPrefix .. "active_profile", function(value)
             self:setActiveProfile(self.profileIDs[value])
     end)
@@ -306,11 +327,12 @@ end
 
 function M:initProfileHandler(widgetPrefix, profileChangeCallback)
     self.widgetPrefix = widgetPrefix or ""
-	self:setupProfileUpdateHandlers(widgetPrefix, profileChangeCallback)
+    self:registerProfileChangeCallback(profileChangeCallback)
+	self:setupProfileUpdateHandlers(widgetPrefix)
 	self:updateProfileUI()
 
-    if profileChangeCallback then
-	    profileChangeCallback(self:getAllActiveProfileParams())
+    for index, func in ipairs(self.profileChangeCallbackList) do
+        func(self:getAllActiveProfileParams())
     end
 end
 

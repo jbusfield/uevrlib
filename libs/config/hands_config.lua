@@ -1313,7 +1313,7 @@ local function updateBoneRotationUI()
 		hand = Handed.Right
 		fingerIndexOffset = 5
 	end
-	local component = hands.getHandComponent(hand)
+	local component = hands.getHandComponent(hand, selectedMeshName)
 	if component ~= nil then
 		local fingerIndex = getFingerIndexForCurrentAnimationType() + fingerIndexOffset --configui.getValue("animation_finger") + fingerIndexOffset
 		local jointIndex = configui.getValue("animation_joint")
@@ -1418,7 +1418,7 @@ local function updateAnimationsDefinition(handIndex, typeIndex, stateIndex)
 	if handIndex == 1 or handIndex == 3 then
 		local handStr = "left"
 		local typeStr = handStr .. "_" .. typeText[typeIndex] .. attachmentExt
-		local component = hands.getHandComponent(Handed.Left)
+		local component = hands.getHandComponent(Handed.Left, selectedMeshName)
 		if component ~= nil then
 			if animationPositions[typeStr] == nil then animationPositions[typeStr] = {} end
 			--animationPositions[typeStr][stateText[stateIndex]] = animation.getBoneTransforms(component, getRelevantBonesForAnimationType(Handed.Left, typeIndex) , true, false, false)
@@ -1429,7 +1429,7 @@ local function updateAnimationsDefinition(handIndex, typeIndex, stateIndex)
 	if handIndex == 2 or handIndex == 3 then
 		local handStr = "right"
 		local typeStr = handStr .. "_" .. typeText[typeIndex] .. attachmentExt
-		local component = hands.getHandComponent(Handed.Right)
+		local component = hands.getHandComponent(Handed.Right, selectedMeshName)
 		if component ~= nil then
 			if animationPositions[typeStr] == nil then animationPositions[typeStr] = {} end
 			--animationPositions[typeStr][stateText[stateIndex]] = animation.getBoneTransforms(component, getRelevantBonesForAnimationType(Handed.Right, typeIndex) , true, false, false)
@@ -1505,7 +1505,7 @@ local function updateHands()
 
 			local fovParam = configui.getValue("fov_param_name")
 			if fovParam ~= nil and fovParam ~= "" then
-				uevrUtils.fixMeshFOV(hands.getHandComponent(Handed.Right), fovParam, 0.0, true, true, false)
+				uevrUtils.fixMeshFOV(hands.getHandComponent(Handed.Right, selectedMeshName), fovParam, 0.0, true, true, false)
 			end
 		end
 		handsWereCreated = true
@@ -1523,7 +1523,7 @@ local function captureAnimationFromMesh()
 			end
 			for hand = Handed.Left, Handed.Right do
 				if configui.getValue("animation_hand") == (hand + 1) or configui.getValue("animation_hand") == 3 then
-					local component = hands.getHandComponent(hand)
+					local component = hands.getHandComponent(hand, selectedMeshName)
 					if component ~= nil then
 						local minBoneIndex = (hand == Handed.Left and 1 or 6)
 						local maxBoneIndex = (hand == Handed.Left and 5 or 10)
@@ -1594,13 +1594,13 @@ end
 
 local function copyHandAnimation()
 	if configui.getValue("animation_hand") == 1 or configui.getValue("animation_hand") == 3 then
-		local component = hands.getHandComponent(Handed.Left)
+		local component = hands.getHandComponent(Handed.Left, selectedMeshName)
 		if component ~= nil then
 			copyRotators["hand"] = Handed.Left
 			copyRotators["rotators"] = getHandRotatorsArray(component, 1, 5)
 		end
 	else
-		local component = hands.getHandComponent(Handed.Right)
+		local component = hands.getHandComponent(Handed.Right, selectedMeshName)
 		if component ~= nil then
 			copyRotators["hand"] = Handed.Right
 			copyRotators["rotators"] = getHandRotatorsArray(component, 6, 10)
@@ -1619,7 +1619,7 @@ local function pasteHandAnimation()
 			mirrorYaw = false
 			mirrorRoll = false
 		end
-		local component = hands.getHandComponent(Handed.Left)
+		local component = hands.getHandComponent(Handed.Left, selectedMeshName)
 		if component ~= nil then
 			animation.doAnimate(convertHandRotatorsArrayToTable(component, 1, 5, copyRotators["rotators"]), component, mirrorPitch, mirrorYaw, mirrorRoll)
 		end
@@ -1630,7 +1630,7 @@ local function pasteHandAnimation()
 			mirrorYaw = false
 			mirrorRoll = false
 		end
-		local component = hands.getHandComponent(Handed.Right)
+		local component = hands.getHandComponent(Handed.Right, selectedMeshName)
 		if component ~= nil then
 			animation.doAnimate(convertHandRotatorsArrayToTable(component,6, 10, copyRotators["rotators"]), component, mirrorPitch, mirrorYaw, mirrorRoll)
 		end
@@ -1642,14 +1642,14 @@ end
 
 local function copyFingerAnimation()
 	if configui.getValue("animation_hand") == 1 or configui.getValue("animation_hand") == 3 then
-		local component = hands.getHandComponent(Handed.Left)
+		local component = hands.getHandComponent(Handed.Left, selectedMeshName)
 		if component ~= nil then
 			local fingerIndex = getFingerIndexForCurrentAnimationType() --configui.getValue("animation_finger")
 			copyFingerRotators["hand"] = Handed.Left
 			copyFingerRotators["rotators"] = getHandRotatorsArray(component, fingerIndex, fingerIndex)
 		end
 	else
-		local component = hands.getHandComponent(Handed.Right)
+		local component = hands.getHandComponent(Handed.Right, selectedMeshName)
 		if component ~= nil then
 			local fingerIndex = getFingerIndexForCurrentAnimationType() + 5 --configui.getValue("animation_finger") + 5
 			copyFingerRotators["hand"] = Handed.Right
@@ -1669,7 +1669,7 @@ local function pasteFingerAnimation()
 			mirrorYaw = false
 			mirrorRoll = false
 		end
-		local component = hands.getHandComponent(Handed.Left)
+		local component = hands.getHandComponent(Handed.Left, selectedMeshName)
 		if component ~= nil then
 			local fingerIndex = getFingerIndexForCurrentAnimationType() --configui.getValue("animation_finger")
 			animation.doAnimate(convertHandRotatorsArrayToTable(component, fingerIndex, fingerIndex, copyFingerRotators["rotators"]), component, mirrorPitch, mirrorYaw, mirrorRoll)
@@ -1681,7 +1681,7 @@ local function pasteFingerAnimation()
 			mirrorYaw = false
 			mirrorRoll = false
 		end
-		local component = hands.getHandComponent(Handed.Right)
+		local component = hands.getHandComponent(Handed.Right, selectedMeshName)
 		if component ~= nil then
 			local fingerIndex = getFingerIndexForCurrentAnimationType() + 5 --configui.getValue("animation_finger") + 5
 			animation.doAnimate(convertHandRotatorsArrayToTable(component, fingerIndex, fingerIndex, copyFingerRotators["rotators"]), component, mirrorPitch, mirrorYaw, mirrorRoll)
@@ -1701,9 +1701,9 @@ local function saveInitialTransform()
 		for hand = Handed.Left, Handed.Right do
 			local index = configui.getValue(hand == Handed.Left and "left_cutoff_bone" or "right_cutoff_bone")
 			local cutoffBone = bones["names"][index]
-			local handedCutoffChildBoneNames = animation.getDescendantBones(hands.getHandComponent(hand), cutoffBone, false)
+			local handedCutoffChildBoneNames = animation.getDescendantBones(hands.getHandComponent(hand, selectedMeshName), cutoffBone, false)
 			for index, cutoffChildBoneName in ipairs(handedCutoffChildBoneNames) do
-				local rotation, location, scale = animation.getBoneSpaceLocalTransform(hands.getHandComponent(hand), uevrUtils.fname_from_string(cutoffChildBoneName))
+				local rotation, location, scale = animation.getBoneSpaceLocalTransform(hands.getHandComponent(hand, selectedMeshName), uevrUtils.fname_from_string(cutoffChildBoneName))
 				if rotation ~= nil and location ~= nil then
 					configuration["profiles"][selectedProfileName][selectedMeshName]["InitialTransform"][hand == Handed.Left and "left_hand" or "right_hand"][cutoffChildBoneName] = {rotation = {rotation.Pitch, rotation.Yaw, rotation.Roll}, location = {location.X, location.Y, location.Z}}
 				end
@@ -1718,7 +1718,7 @@ local function loadInitialTransform()
 		local initialTransform = configuration["profiles"][selectedProfileName][selectedMeshName]["InitialTransform"]
 		if initialTransform ~= nil then
 			for hand = Handed.Left, Handed.Right do
-				animation.initializeBones(hands.getHandComponent(hand), initialTransform[hand == Handed.Left and "left_hand" or "right_hand"])
+				animation.initializeBones(hands.getHandComponent(hand, selectedMeshName), initialTransform[hand == Handed.Left and "left_hand" or "right_hand"])
 			end
 		end
 	end
@@ -1738,7 +1738,7 @@ local function updateCutoffChildBoneTransformsUI()
 	local index = configui.getValue("cutoff_children_bone_picker")
 	if #cutoffChildBoneNames >= index and cutoffChildBoneNames[index] ~= "None" then
 		local cutoffChildBone = cutoffChildBoneNames[index]
-		local rotation, location, scale = animation.getBoneSpaceLocalTransform(hands.getHandComponent(configui.getValue("cutoff_children_hand_picker") - 1), uevrUtils.fname_from_string(cutoffChildBone))
+		local rotation, location, scale = animation.getBoneSpaceLocalTransform(hands.getHandComponent(configui.getValue("cutoff_children_hand_picker") - 1, selectedMeshName), uevrUtils.fname_from_string(cutoffChildBone))
 		if rotation ~= nil then
 			configui.setValue("cutoff_children_rotation", {rotation.Pitch,rotation.Yaw,rotation.Roll})
 		end
@@ -1765,7 +1765,7 @@ local function zeroCurrentCutoffChildBoneRotations()
 	local index = configui.getValue("cutoff_children_bone_picker")
 	if #cutoffChildBoneNames >= index and cutoffChildBoneNames[index] ~= "None" then
 		local cutoffChildBone = cutoffChildBoneNames[index]
-		animation.setBoneSpaceLocalRotator(hands.getHandComponent(configui.getValue("cutoff_children_hand_picker") - 1), uevrUtils.fname_from_string(cutoffChildBone), uevrUtils.rotator(0,0,0))
+		animation.setBoneSpaceLocalRotator(hands.getHandComponent(configui.getValue("cutoff_children_hand_picker") - 1, selectedMeshName), uevrUtils.fname_from_string(cutoffChildBone), uevrUtils.rotator(0,0,0))
 	end
 	updateCutoffChildBoneTransformsUI()
 end
@@ -1776,8 +1776,8 @@ local function updateCutoffChildBoneTransforms()
 		local cutoffChildBone = cutoffChildBoneNames[index]
 		local rotation = configui.getValue("cutoff_children_rotation")
 		local location = configui.getValue("cutoff_children_location")
-		animation.setBoneSpaceLocalRotator(hands.getHandComponent(configui.getValue("cutoff_children_hand_picker") - 1), uevrUtils.fname_from_string(cutoffChildBone), rotation)
-		animation.setBoneSpaceLocalLocation(hands.getHandComponent(configui.getValue("cutoff_children_hand_picker") - 1), uevrUtils.fname_from_string(cutoffChildBone), location)
+		animation.setBoneSpaceLocalRotator(hands.getHandComponent(configui.getValue("cutoff_children_hand_picker") - 1, selectedMeshName), uevrUtils.fname_from_string(cutoffChildBone), rotation)
+		animation.setBoneSpaceLocalLocation(hands.getHandComponent(configui.getValue("cutoff_children_hand_picker") - 1, selectedMeshName), uevrUtils.fname_from_string(cutoffChildBone), location)
 	end
 end
 
@@ -1785,7 +1785,7 @@ local function updateCutoffChildBonePicker()
 	local handed = configui.getValue("cutoff_children_hand_picker") - 1
 	local index = configui.getValue(handed == Handed.Left and "left_cutoff_bone" or "right_cutoff_bone")
 	local cutoffBone = bones["names"][index]
-	cutoffChildBoneNames = animation.getDescendantBones(hands.getHandComponent(handed), cutoffBone, false)
+	cutoffChildBoneNames = animation.getDescendantBones(hands.getHandComponent(handed, selectedMeshName), cutoffBone, false)
 	configui.setSelections("cutoff_children_bone_picker", cutoffChildBoneNames)
 
 	configui.hideWidget("cutoff_children_rotation", #cutoffChildBoneNames < 2 )
@@ -1812,7 +1812,7 @@ end
 local function createDefaultAnimations()
 	local typeText = {"grip", "trigger", "thumb", "grip_weapon", "trigger_weapon"}
 	for handIndex = 1, 2 do
-		local component = hands.getHandComponent(handIndex - 1)
+		local component = hands.getHandComponent(handIndex - 1, selectedMeshName)
 		for typeIndex = 1, #typeText do
 			local handStr = handIndex == 1 and "left" or "right"
 			if component ~= nil and animationPositions[handStr .. "_" .. typeText[typeIndex]] == nil or animationPositions[handStr .. "_" .. typeText[typeIndex]]["on"] == nil then
@@ -1830,7 +1830,7 @@ local function updateHandAnimationType(handed, animType)
 	local stateText = {"on", "off"}
 	local handStr = handed == Handed.Left and "left" or "right"
 	local typeStr = handStr .. "_" .. typeText[animType] .. getAttachmentExtension(animType)
-	local component = hands.getHandComponent(handed)
+	local component = hands.getHandComponent(handed, selectedMeshName)
 	if component ~= nil and animationPositions[typeStr] ~= nil then
 		local currentAnimation = animationPositions[typeStr][stateText[configui.getValue("animation_state")]]
 		animation.doAnimate(currentAnimation, component)
@@ -1884,7 +1884,7 @@ local function revertFingerAnimation()
 	--load existing animation from animations
 	if configui.getValue("animation_hand") == 1 or configui.getValue("animation_hand") == 3 then
 		local fingerIndex = getFingerIndexForCurrentAnimationType() --configui.getValue("animation_finger")
-		local component = hands.getHandComponent(Handed.Left)
+		local component = hands.getHandComponent(Handed.Left, selectedMeshName)
 		if component ~= nil then
 			local boneList = {}
 			for j= 1, 3 do
@@ -1896,7 +1896,7 @@ local function revertFingerAnimation()
 	end
 	if configui.getValue("animation_hand") == 2 or configui.getValue("animation_hand") == 3 then
 		local fingerIndex = getFingerIndexForCurrentAnimationType() + 5 --configui.getValue("animation_finger") + 5
-		local component = hands.getHandComponent(Handed.Right)
+		local component = hands.getHandComponent(Handed.Right, selectedMeshName)
 		if component ~= nil then
 			local boneList = {}
 			for j= 1, 3 do
@@ -1914,13 +1914,13 @@ end
 local function revertHandAnimation()
 	--load existing animation from animations
 	if configui.getValue("animation_hand") == 1 or configui.getValue("animation_hand") == 3 then
-		local component = hands.getHandComponent(Handed.Left)
+		local component = hands.getHandComponent(Handed.Left, selectedMeshName)
 		if component ~= nil then
 			animation.doAnimate(defaultAnimationRotators["left_hand"], component)
 		end
 	end
 	if configui.getValue("animation_hand") == 2 or configui.getValue("animation_hand") == 3 then
-		local component = hands.getHandComponent(Handed.Right)
+		local component = hands.getHandComponent(Handed.Right, selectedMeshName)
 		if component ~= nil then
 			animation.doAnimate(defaultAnimationRotators["right_hand"], component)
 		end
@@ -1933,7 +1933,7 @@ end
 
 local function setFingerAngles(angleID, angle)
 	if configui.getValue("animation_hand") == 1 or configui.getValue("animation_hand") == 3 then
-		local component = hands.getHandComponent(Handed.Left)
+		local component = hands.getHandComponent(Handed.Left, selectedMeshName)
 		if component ~= nil then
 			local fingerIndex = getFingerIndexForCurrentAnimationType() --configui.getValue("animation_finger")
 			local boneIndex = configui.getValue(handBones[configui.getValue("animation_joint")][fingerIndex])
@@ -1941,7 +1941,7 @@ local function setFingerAngles(angleID, angle)
 		end
 	end
 	if configui.getValue("animation_hand") == 2 or configui.getValue("animation_hand") == 3 then
-		local component = hands.getHandComponent(Handed.Right)
+		local component = hands.getHandComponent(Handed.Right, selectedMeshName)
 		if component ~= nil then
 			local fingerIndex = getFingerIndexForCurrentAnimationType() + 5 --configui.getValue("animation_finger") + 5
 			if configui.getValue("animation_hand") == 3 then
@@ -2215,6 +2215,9 @@ configui.onUpdate("test_button", function(value)
 	if not isTesting then
 		updateHandAnimation()
 	end
+
+	hands.disableAnimations(not isTesting)
+
 end)
 
 
@@ -2223,22 +2226,30 @@ configui.onUpdate("mesh_rotation", function(value)
 end)
 
 configui.onUpdate("exit_button_config", function(value)
-	hands.destroyHands()
+	delay(500, function ()
+		hands.destroyHands()
+	end)
 	updateSteps(-(currentStep-1))
 end)
 
 configui.onUpdate("exit_button_config_2", function(value)
-	hands.destroyHands()
+	delay(500, function ()
+		hands.destroyHands()
+	end)
 	updateSteps(-(currentStep-1))
 end)
 
 configui.onUpdate("exit_button", function(value)
-	hands.destroyHands()
+	delay(500, function ()
+		hands.destroyHands()
+	end)
 	updateSteps(-(currentStep-1))
 end)
 
 configui.onUpdate("done_button", function(value)
-	hands.destroyHands()
+	delay(500, function ()
+		hands.destroyHands()
+	end)
 	updateSteps(-(currentStep-1))
 end)
 
@@ -2664,7 +2675,7 @@ end
 local function getDefaultRotatorsForAnimations()
 	--first get the current state of the hands as the default, then override that with InitialTransform if that exists
 	for hand = Handed.Left, Handed.Right do
-		local component = hands.getHandComponent(hand)
+		local component = hands.getHandComponent(hand, selectedMeshName)
 		local minBoneIndex = (hand == Handed.Left and 1 or 6)
 		local maxBoneIndex = (hand == Handed.Left and 5 or 10)
 		local handStr = (hand == Handed.Left and "left_hand" or "right_hand")
@@ -2705,8 +2716,10 @@ local function getDefaultRotatorsForAnimations()
 
 end
 
-function M.updateCurrentStep(previousStep, currentStep)
+function M.updateCurrentStep(previousStep, m_currentStep)
+	currentStep = m_currentStep
 print("Current Step",currentStep)
+	hands.disableAnimations(true)
 	if currentStep == 1 then
 		loadProfileNames()
 		configui.hideWidget("next_button", false)
@@ -2715,6 +2728,7 @@ print("Current Step",currentStep)
 			hands.createFromConfig(configuration, selectedProfileName, selectedAnimationName)
 		end
 		hands.resetAutoCreate()
+		hands.disableAnimations(false)
 	end
 	if currentStep == 2 then
 		hands.destroyHands()

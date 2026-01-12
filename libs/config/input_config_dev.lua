@@ -18,6 +18,9 @@ M.PawnRotationMode = inputEnums.PawnRotationMode
 local boneList = {}
 local pawnCameraList = {}
 
+local paramManager = nil
+
+
 --local configIDs = {"isDisabledOverride", "aimMethod", "fixSpatialAudio", "rootOffset", "useSnapTurn", "snapAngle", "smoothTurnSpeed", "pawnRotationMode", "pawnPositionMode", "pawnPositionSweepMovement", "pawnPositionAnimationScale", "headOffset", "adjustForAnimation", "adjustForEyeOffset", "eyeOffset"}
 -- local configDefaults = {
 --     isDisabledOverride = false,
@@ -39,7 +42,8 @@ local pawnCameraList = {}
 -- }
 local configDefaults = {}
 
-local function getConfigWidgets()
+local helpText = "This module provides advanced input configuration options for developers. Adjust settings such as aim method, turning behavior, body orientation, and roomscale movement to fine-tune the VR experience."
+local function getConfigWidgets(m_paramManager)
     return spliceableInlineArray {
 	{
 		widgetType = "checkbox",
@@ -63,6 +67,7 @@ local function getConfigWidgets()
 	-- {
 	-- 	widgetType = "tree_pop"
 	-- },
+	expandArray(m_paramManager.getProfilePreConfigurationWidgets, widgetPrefix),
 	{
 		widgetType = "tree_node",
 		id = widgetPrefix .. "aim_method_tree",
@@ -238,6 +243,24 @@ local function getConfigWidgets()
 	{
 		widgetType = "end_group",
 	},
+	{ widgetType = "new_line" },
+	expandArray(m_paramManager.getProfilePostConfigurationWidgets, widgetPrefix),
+	{ widgetType = "new_line" },
+	{
+		widgetType = "tree_node",
+		id = widgetPrefix .. "help_tree",
+		initialOpen = true,
+		label = "Help"
+	},
+		{
+			widgetType = "text",
+			id = widgetPrefix .. "help",
+			label = helpText,
+			wrapped = true
+		},
+	{
+		widgetType = "tree_pop"
+	},
 	-- {
 		-- widgetType = "slider_float",
 		-- id = "neckOffset",
@@ -300,18 +323,7 @@ local function updateUIState(key)
     end
 end
 
-local function setPawnCameraList(currentCameraName)
-	print("Setting pawn camera list")
-    pawnCameraList = uevrUtils.getObjectPropertyDescriptors(pawn, "Pawn", "Class /Script/Engine.CameraComponent", true)
-	print("Found " .. #pawnCameraList .. " cameras")
-	table.insert(pawnCameraList, 1, "None")
-	for i, name in ipairs(pawnCameraList) do
-		print("Camera " .. i .. ": " .. name)
-	end
-
-	local listName = "pawnControlRotationCameraList"
-	print("Updating camera list UI", widgetPrefix .. listName)
-	configui.setSelections(widgetPrefix .. listName, pawnCameraList)
+local function setSelectedPawnCamera(currentCameraName, noCallbacks)
 	local selectedIndex = 1
 	for i = 1, #pawnCameraList do
 		if pawnCameraList[i] == currentCameraName then
@@ -319,7 +331,31 @@ local function setPawnCameraList(currentCameraName)
 			break
 		end
 	end
-	configui.setValue(widgetPrefix .. listName, selectedIndex)
+	configui.setValue(widgetPrefix .. "pawnControlRotationCameraList", selectedIndex, noCallbacks)
+end
+
+
+local function setPawnCameraList(currentCameraName, noCallbacks)
+	--print("Setting pawn camera list")
+    pawnCameraList = uevrUtils.getObjectPropertyDescriptors(pawn, "Pawn", "Class /Script/Engine.CameraComponent", true)
+	--print("Found " .. #pawnCameraList .. " cameras")
+	table.insert(pawnCameraList, 1, "None")
+	-- for i, name in ipairs(pawnCameraList) do
+	-- 	print("Camera " .. i .. ": " .. name)
+	-- end
+
+	local listName = "pawnControlRotationCameraList"
+	--print("Updating camera list UI", widgetPrefix .. listName)
+	configui.setSelections(widgetPrefix .. listName, pawnCameraList)
+	-- local selectedIndex = 1
+	-- for i = 1, #pawnCameraList do
+	-- 	if pawnCameraList[i] == currentCameraName then
+	-- 		selectedIndex = i
+	-- 		break
+	-- 	end
+	-- end
+	-- configui.setValue(widgetPrefix .. listName, selectedIndex, noCallbacks)
+	setSelectedPawnCamera(currentCameraName, noCallbacks)
 end
 
 configui.onCreateOrUpdate(widgetPrefix .. "isDisabledOverride", function(value)
@@ -435,7 +471,7 @@ uevrUtils.registerLevelChangeCallback(function(level)
 end)
 
 function M.getConfigurationWidgets(options)
-	return configui.applyOptionsToConfigWidgets(getConfigWidgets(), options)
+	return configui.applyOptionsToConfigWidgets(getConfigWidgets(paramManager), options)
 end
 
 function M.showConfiguration(saveFileName, options)
@@ -454,6 +490,8 @@ end
 local function setUIValue(key, value)
 	if key == "pawnControlRotationCamera" then
 		--select from the list
+		--setPawnCameraList(value, true)
+		setSelectedPawnCamera(value, true)
 		--configui.setValue(widgetPrefix .. "pawnControlRotationCameraList", 1, true)
 	else
 		configui.setValue(widgetPrefix .. key, value, true)
@@ -467,13 +505,18 @@ local function updateUI(params)
 	end
 end
 
-function M.init(parameters)--paramManager)
+function M.init(m_paramManager)
     --M.loadParameters(parametersFileName)
-    configDefaults = parameters
+    configDefaults = m_paramManager and m_paramManager:getAllActiveProfileParams() or {}
+	paramManager = m_paramManager
     M.showConfiguration(configFileName)
-	setPawnCameraList(parameters["pawnControlRotationCamera"])
 
-	updateUI(parameters)
+	paramManager:initProfileHandler(widgetPrefix, function(profileParams)
+		updateUI(profileParams)
+		setPawnCameraList(profileParams["pawnControlRotationCamera"])
+	end)
+
+	--updateUI(parameters)
 end
 
 uevrUtils.registerUEVRCallback("on_input_config_param_change", function(key, value)

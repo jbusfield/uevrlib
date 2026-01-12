@@ -201,7 +201,7 @@ local function setBoneNames()
 	local mesh = getArmsMesh()
 	if mesh ~= nil then
 		boneList = uevrUtils.getBoneNames(mesh)
-		if #boneList == 0 then error() end
+		if #boneList == 0 then return end
 		configui.setSelections(widgetPrefix .. "pawnUpperArmLeft", boneList)
 		configui.setSelections(widgetPrefix .. "pawnUpperArmRight", boneList)
 	end
@@ -239,6 +239,16 @@ local function setPawnMeshList()
 	updateMeshUI(pawnMeshList, "pawnBodyMeshList", "selectedPawnBodyMesh", configDefaults["bodyMeshName"])
 	updateMeshUI(pawnMeshList, "pawnArmsMeshList", "selectedPawnArmsMesh", configDefaults["armsMeshName"])
 	updateMeshUI(pawnMeshList, "pawnArmsAnimationMeshList", "selectedPawnArmsAnimationMesh", configDefaults["armsAnimationMeshName"])
+end
+
+--if the pawn isnt ready then keep checking until it is
+local function loadPawnProperties()
+	if uevrUtils.getValid(pawn) == nil then
+		delay(1000, loadPawnProperties)
+		return
+	end
+	setPawnMeshList()
+	setBoneNames()
 end
 
 
@@ -316,8 +326,7 @@ end)
 
 local createDevMonitor = doOnce(function()
 	uevrUtils.registerLevelChangeCallback(function(level)
-		setPawnMeshList()
-		setBoneNames()
+		loadPawnProperties()
 	end)
 end, Once.EVER)
 
@@ -373,8 +382,7 @@ function M.init(m_paramManager)
 	paramManager = m_paramManager
     createDevMonitor()
     M.showConfiguration(configFileName)
-	setPawnMeshList()
-	setBoneNames()
+	loadPawnProperties()
 
 	paramManager:initProfileHandler(widgetPrefix, function(profileParams)
 		if updateUI(profileParams) then

@@ -67,7 +67,7 @@ configui.onUpdate(widgetPrefix .. "smoothTurnSpeed", function(value)
 end)
 
 configui.onCreate(widgetPrefix .. "useSnapTurn", function(value)
-    print("Creating useSnapTurn widget")
+    --print("Creating useSnapTurn widget")
     configui.setValue(widgetPrefix .. "useSnapTurn", configDefaults["useSnapTurn"], true)
     updateUIState("useSnapTurn")
 end)
@@ -81,9 +81,16 @@ configui.onCreate(widgetPrefix .. "smoothTurnSpeed", function(value)
 end)
 
 
-function M.init(parameters)
-    configDefaults = parameters
-    -- M.showConfiguration(configFileName)
+function M.init(m_paramManager)
+    configDefaults = m_paramManager and m_paramManager:getAllActiveProfileParams() or {}
+
+	m_paramManager:registerProfileChangeCallback(function(profileParams)
+        for key, value in pairs(profileParams) do
+            configui.setValue(widgetPrefix .. key, value, true)
+            updateUIState(key)
+        end
+	end)
+     -- M.showConfiguration(configFileName)
     -- for key, value in pairs(parameters) do
     --     updateUIState(key)
     --     configui.setValue(widgetPrefix .. key, value, true)

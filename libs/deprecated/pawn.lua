@@ -285,7 +285,7 @@ local function setBoneNames()
 	local mesh = M.getArmsMesh()
 	if mesh ~= nil then
 		boneList = uevrUtils.getBoneNames(mesh)
-		if #boneList == 0 then error() end
+		if #boneList == 0 then return end
 		configui.setSelections("pawnUpperArmLeft", boneList)
 		configui.setSelections("pawnUpperArmRight", boneList)
 	end

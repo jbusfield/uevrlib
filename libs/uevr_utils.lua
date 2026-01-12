@@ -380,6 +380,10 @@ Usage
 			if uevrUtils.isGamePaused() then
 				print("Game is paused")
 			end
+
+	uevrUtils.pauseGame(value) - pause or unpause the game
+		example:
+			uevrUtils.pauseGame(true)  -- pauses the game
 			
 	uevrUtils.isFadeHardLocked() - returns whether the camera fade is currently hard locked
 		example:
@@ -1389,12 +1393,12 @@ local function updateGamePaused()
 			m_isPaused = Statics:IsGamePaused(world)
 		end
 		if isPaused ~= m_isPaused then
+			isPaused = m_isPaused
 			if on_game_paused ~= nil then
-				on_game_paused(m_isPaused)
+				on_game_paused(isPaused)
 			end
-			executeUEVRCallbacks("on_game_paused", m_isPaused)
+			executeUEVRCallbacks("on_game_paused", isPaused)
 		end
-		isPaused = m_isPaused
 	end
 end
 
@@ -1402,13 +1406,13 @@ local function updateCharacterHidden()
 	if on_character_hidden ~= nil or hasUEVRCallbacks("on_character_hidden") then --don't bother doing anything if nothing is listening
 		local m_isHidden = M.getValid(pawn, {"Controller", "Character", "bHidden"}) or false
 		if isCharacterHidden ~= m_isHidden then
-			if on_character_hidden ~= nil then
-				on_character_hidden(m_isHidden)
-			end
-			executeUEVRCallbacks("on_character_hidden", m_isHidden)
-		end
 ---@diagnostic disable-next-line: cast-local-type
-		isCharacterHidden = m_isHidden
+			isCharacterHidden = m_isHidden
+			if on_character_hidden ~= nil then
+				on_character_hidden(isCharacterHidden)
+			end
+			executeUEVRCallbacks("on_character_hidden", isCharacterHidden)
+		end
 	end
 end
 
@@ -1420,25 +1424,24 @@ local function updateCutscene()
 				local cameraManager = playerController.PlayerCameraManager
 				if cameraManager ~= nil then
 					local target = cameraManager.ViewTarget.Target
---print(target:get_class():get_full_name())
 					local m_isInCutscene = false
 					if target ~= nil then
 						if target:is_a(M.get_class("Class /Script/CinematicCamera.CineCameraActor")) then
 							m_isInCutscene = true
-							--print("In Cinematic")
 						elseif target.ActiveCamera ~= nil and target.ActiveCamera.Camera ~= nil and target.ActiveCamera.Camera:is_a(M.get_class("Class /Script/CinematicCamera.CineCameraComponent")) then
 							m_isInCutscene = true
-							--print("In Cinematic")
+						elseif target.CameraComponent ~= nil and target.CameraComponent:is_a(M.get_class("Class /Script/CinematicCamera.CineCameraComponent")) then
+							m_isInCutscene = true
 						end
 					end
 
 					if isInCutscene ~= m_isInCutscene then
+						isInCutscene = m_isInCutscene
 						if on_cutscene_change ~= nil then
-							on_cutscene_change(m_isInCutscene)
+							on_cutscene_change(isInCutscene)
 						end
-						executeUEVRCallbacks("on_cutscene_change", m_isInCutscene)
+						executeUEVRCallbacks("on_cutscene_change", isInCutscene)
 					end
-					isInCutscene = m_isInCutscene
 				end
 			end
 		end
@@ -1451,13 +1454,13 @@ local function updateMontage()
 		if M.getValid(pawn) ~= nil and pawn.GetCurrentMontage ~= nil then
 			local montage = pawn:GetCurrentMontage()
 			if currentMontage ~= montage then
-				local montageName = montage and M.getShortName(montage) or ""
+				currentMontage = montage
+				local montageName = currentMontage and M.getShortName(currentMontage) or ""
 				if on_montage_change ~= nil then
-					on_montage_change(montage, montageName)
+					on_montage_change(currentMontage, montageName)
 				end
-				executeUEVRCallbacks("on_montage_change", montage, montageName)
+				executeUEVRCallbacks("on_montage_change", currentMontage, montageName)
 			end
-			currentMontage = montage
 		end
 	end
 end
@@ -1468,12 +1471,12 @@ local function updateUEVRUIState()
 	if on_uevr_ui_change ~= nil or hasUEVRCallbacks("on_uevr_ui_change") then --don't bother doing anything if nothing is listening
 		local uiDrawn = uevr.params.functions.is_drawing_ui()
 		if currentUEVRDrawn ~= uiDrawn then
+			currentUEVRDrawn = uiDrawn
 			if on_uevr_ui_change ~= nil then
-				on_uevr_ui_change(uiDrawn)
+				on_uevr_ui_change(currentUEVRDrawn)
 			end
-			executeUEVRCallbacks("on_uevr_ui_change", uiDrawn)
+			executeUEVRCallbacks("on_uevr_ui_change", currentUEVRDrawn)
 		end
-		currentUEVRDrawn = uiDrawn
 	end
 end
 
@@ -1552,12 +1555,12 @@ function M.initUEVR(UEVR, callbackFunc)
 			executeUEVRCallbacks("postCalculateStereoView", device, view_index, world_to_meters, position, rotation, is_double)
 		end)
 		if success == false then
-			M.print("[on_pre_engine_tick] " .. response, LogLevel.Error)
+			M.print("[on_post_calculate_stereo_view_offset] " .. response, LogLevel.Error)
 		end
 	end)
 
 	uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
-		local success, response = pcall(function()
+		--local success, response = pcall(function()
 			pawn = uevr.api:get_local_pawn(0)
 			updateCurrentLevel()
 			updateDelay(delta)
@@ -1577,10 +1580,10 @@ function M.initUEVR(UEVR, callbackFunc)
 			end
 
 			executeUEVRCallbacks("preEngineTick", engine, delta)
-		end)
-		if success == false then
-			M.print("[on_pre_engine_tick] " .. response, LogLevel.Error)
-		end
+		-- end)
+		-- if success == false then
+		-- 	M.print("[on_pre_engine_tick] " .. response, LogLevel.Error)
+		-- end
 	end)
 
 	uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
@@ -2157,8 +2160,23 @@ function M.get_struct_object(structClassName, reuseable)
 	return nil
 end
 
+function M.pauseGame(value)
+	Statics:SetGamePaused(M.get_world(), value)
+end
+
 function M.isGamePaused()
 	return isPaused
+end
+
+function M.getMatchState()
+	local world = M.get_world()
+	if world ~= nil then
+		local gameState = world.GameState
+		if gameState ~= nil and gameState.MatchState ~= nil then
+			return gameState.MatchState:to_string()
+		end
+	end
+	return ""
 end
 
 function M.isInCutscene()
@@ -2367,8 +2385,17 @@ end
 
 --uses caching
 function M.get_class(name, clearCache)
+	if name == nil then return nil end
 	if clearCache or classCache[name] == nil then
-		classCache[name] = uevr.api:find_uobject(name)
+		local ok, result = pcall(function()
+			return uevr.api:find_uobject(name)
+		end)
+		if not ok then
+			print("[uevr_utils] Error finding class in get_class handled properly", name, result)
+			return nil
+		end
+		classCache[name] = result
+		--classCache[name] = uevr.api:find_uobject(name)
 	end
     return classCache[name]
 end
@@ -2788,6 +2815,10 @@ end
 function M.set_decoupled_pitch(state)
 	--print("Setting decoupled pitch to " ,state)
 	uevr.params.vr.set_mod_value("VR_DecoupledPitch", state and "true" or "false")
+end
+
+function M.set_rendering_method(value)
+	uevr.params.vr.set_mod_value("VR_RenderingMethod", value)
 end
 
 function M.get_decoupled_pitch()
@@ -3242,6 +3273,18 @@ function M.createWidgetComponent(widget, options)
 			className = widget
 			widget = M.getActiveWidgetByClass(widget)
 		end
+		-- if type(widget) == "string" then
+		-- 	className = widget
+		-- 	local ok, result = pcall(function()
+		-- 		return M.getActiveWidgetByClass(widget)
+		-- 	end)
+		-- 	widget = result
+		-- 	if not ok then
+		-- 		print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Error in createWidgetComponent: ", className, type(className))
+		-- 		widget = nil
+		-- 	end
+		-- end
+
 		if M.getValid(widget) ~= nil then
 			widgetAlignment = widget:GetAlignmentInViewport()
 			component = M.create_component_of_class("Class /Script/UMG.WidgetComponent", options.manualAttachment, options.relativeTransform, options.deferredFinish, options.parent, options.tag)
@@ -3682,9 +3725,10 @@ function hook_function(class_name, function_name, native, prefn, postfn, dbgout)
 	if(dbgout) then M.print("[hook_function] " .. class_name .. "   " .. function_name) end
     local result = false
     local class_obj = uevr.api:find_uobject(class_name)
+	local class_fn = nil
     if(class_obj ~= nil) then
         if dbgout then M.print("[hook_function] Found class obj for " .. class_name) end
-        local class_fn = class_obj:find_function(function_name)
+        class_fn = class_obj:find_function(function_name)
         if(class_fn ~= nil) then
             if dbgout then M.print("[hook_function] Found function " .. function_name .. " for " .. class_name) end
             if (native == true) then
@@ -3698,7 +3742,7 @@ function hook_function(class_name, function_name, native, prefn, postfn, dbgout)
         end
     end
     if dbgout then M.print("---") end
-    return result
+    return result, class_fn
 end
 
 -------------------------------------------------------------------------------

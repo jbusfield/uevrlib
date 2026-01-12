@@ -378,6 +378,7 @@ function M.setCurrentProfileByLabel(profileLabel)
 end
 
 uevrUtils.setInterval(100, function()
+	if uevrUtils.getValid(pawn) == nil then return end
 	local isHidden, priority = executeIsArmBonesHiddenCallback()
 	if isHidden == nil then isHidden = getParameter("hidePawnArmsBones") end
 	if pawnState.hideArmsBones ~= isHidden then

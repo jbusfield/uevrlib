@@ -142,6 +142,8 @@ local autoHandleInput = true
 local autoCreateHands = true
 local autoCreateConfigName = nil
 local autoCreateAnimationName = nil
+local wereHidden = nil
+
 
 local handComponents = {}
 local handDefinitions = {}
@@ -150,6 +152,7 @@ local offset={X=0, Y=0, Z=0, Pitch=0, Yaw=0, Roll=0}
 local inputHandlerAnimID = {} --list of animID only used for the default input handler
 local handsConfig = nil -- the configuration tool for creating hands in game
 local holdingAttachment = {}
+local disableAnimations = false --used during hand configuration to prevent loaded animation from interfering
 
 --externally controlled animations
 local armsAnimationMeshes = {}
@@ -262,6 +265,7 @@ function M.reset()
 	armsAnimationMeshes[Handed.Left] = {animating=false, mesh=nil, componentName=nil}
 	armsAnimationMeshes[Handed.Right] = {animating=false, mesh=nil, componentName=nil}
 	defaultAnimationMesh = nil
+	wereHidden = nil
 end
 
 function M.exists()
@@ -391,12 +395,12 @@ function M.createFromConfig(configuration, profileName, animationName)
 			--if M.exists() then
 				attachments.setAnimationIDs(configuration["attachments"])
 				--going to need to call fixMeshFOV on lazy poll
-				for name, components in pairs(handComponents) do
-					--print(name, profileName, components[0], components[1])
+				for name, handComponent in pairs(handComponents) do
+					--print(name, profileName, handComponent[0], handComponent[1])
 					local fovFixParam = configuration["profiles"][profileName][name]["FOV"]
 					if fovFixParam ~= nil and fovFixParam ~= "" then
-						uevrUtils.fixMeshFOV(components[Handed.Left], fovFixParam, 0.0, true, true, false)
-						uevrUtils.fixMeshFOV(components[Handed.Right], fovFixParam, 0.0, true, true, false)
+						uevrUtils.fixMeshFOV(handComponent[Handed.Left], fovFixParam, 0.0, true, true, false)
+						uevrUtils.fixMeshFOV(handComponent[Handed.Right], fovFixParam, 0.0, true, true, false)
 						registerFOVFix(profile)
 					end
 				end
@@ -610,6 +614,10 @@ function M.handleInput(state, attachment, hand, overrideTrigger, allowAutoHandle
 	if allowAutoHandle ~= true then
 		autoHandleInput = false --if something else is calling this then dont auto handle input
 	end
+	if disableAnimations then
+		--print("Animations are disabled, skipping handleInput")
+		return true
+	end
 
 	local isHoldingAttachment, attachmentExtension = getAttachmentStateAndExtension(attachment)
 
@@ -652,9 +660,17 @@ function M.handleInput(state, attachment, hand, overrideTrigger, allowAutoHandle
 	end
 end
 
+function M.disableAnimations(value)
+	disableAnimations = value
+end
+
 function M.handleInputForHands(state, rightAttachment, leftAttachment, overrideTrigger, allowAutoHandle)
 	if allowAutoHandle ~= true then
 		autoHandleInput = false --if something else is calling this then dont auto handle input
+	end
+	if disableAnimations then
+		--print("Animations are disabled, skipping handleInputForHands")
+		return true
 	end
 
 	if overrideTrigger == nil then overrideTrigger = false end
@@ -1098,12 +1114,12 @@ function M.debug(skeletalMeshComponent, hand, rightTargetJoint, disableVisualiza
 	end
 end
 
-local isHiddenLast = nil
-uevrUtils.setInterval(100, function()
+uevrUtils.setInterval(200, function()
 	if M.exists() then
 		local isHidden, priority = executeIsHiddenCallback()
-		if isHidden ~= isHiddenLast then
-			isHiddenLast = isHidden
+		--print("Hand visibility check: isHidden=" .. tostring(isHidden) .. ", last=" .. tostring(wereHidden))
+		if isHidden ~= wereHidden then
+			wereHidden = isHidden
 			M.hideHands(isHidden or false)
 		end
 	end
@@ -1140,7 +1156,6 @@ end)
 uevrUtils.registerPreLevelChangeCallback(function(level)
 	M.print("Pre-Level changed in hands")
 	M.reset()
-	isHiddenLast = false
 	autoHandleInput = true
 	isLeftAnimatingLast = nil
 	isRightAnimatingLast = nil
