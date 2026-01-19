@@ -1051,6 +1051,49 @@ local function updateTimer(delta)
 	end
 end
 
+M.profiler = {
+    enabled = false,
+    counts = {},
+    totalTimes = {},
+    
+    toggle = function(self, enable)
+        self.enabled = enable
+        if not enable then
+            self.counts = {}
+            self.totalTimes = {}
+        end
+    end,
+    
+    wrap = function(self, funcName, func)
+        return function(...)
+            if not self.enabled then
+                return func(...)
+            end
+            
+            local startTime = os.clock()
+            local results = {func(...)}
+            local elapsed = (os.clock() - startTime) * 1000
+            
+            self.counts[funcName] = (self.counts[funcName] or 0) + 1
+            self.totalTimes[funcName] = (self.totalTimes[funcName] or 0) + elapsed
+            
+            return table.unpack(results)
+        end
+    end,
+    
+    report = function(self)
+        if not self.enabled then return end
+        print("\n=== Profiling Report ===")
+        for name, count in pairs(self.counts) do
+            local total = self.totalTimes[name]
+            local avg = total / count
+            print(string.format("%s: %d calls, %.3f ms total, %.3f ms avg", 
+                name, count, total, avg))
+        end
+        print("========================\n")
+    end
+}
+
 -- Named deferral system with auto-reset functionality
 local namedDeferrals = {}
 
@@ -1869,6 +1912,7 @@ function M.rotator(...)
 	end
 	return rotator
 end
+M.rotator = M.profiler:wrap("rotator", M.rotator)
 
 function M.vector2D(...)
     local arg = {...}
@@ -2134,6 +2178,9 @@ function M.getUEVRParam_int(paramName, default)
 	return result
 end
 
+function M.setUEVRParam_int(paramName, value)
+	uevr.params.vr.set_mod_value(paramName, value)
+end
 
 function M.PositiveIntegerMask(text)
     return text:gsub("[^%-%d]", "")
@@ -2309,6 +2356,7 @@ function M.getValid(object, properties)
 		return nil
 	end
 end
+M.getValid = M.profiler:wrap("getValid", M.getValid)
 
 function M.destroy_actor(actor)
 	if actor ~= nil then

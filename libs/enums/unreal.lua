@@ -31,3 +31,9 @@ ERendererStencilMask =
 	ERSM_MAX                                 = 10,
 }
 
+ETriState = 
+{
+	DEFAULT									= 1,
+	TRUE                                    = 2,
+	FALSE                                   = 3,
+}
