@@ -300,7 +300,7 @@ local function updateUIState()
 
         for index, widget in pairs(foundWidgets) do
             --if widget:IsInViewport() then --check not really needed since GetAllWidgetsOfClass with the last param true should only return viewport widgets.also currentCustomViewportWidgets might not be in viewport
-            if requireWidgetOpenState == false or widget:GetOpenState() == 0 then
+            if requireWidgetOpenState == false or (widget.GetOpenState ~= nil and widget:GetOpenState() == 0) then
                 --get the widget data from the configurations
                 local id = widget:get_class():get_full_name()
                 --print(id, widget:IsInteractable(), widget:IsVisible(), widget:HasUserFocus(), widget:GetVisibility(), widget:GetIsEnabled(), widget:GetIsVisible(), widget:GetOpenState())

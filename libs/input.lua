@@ -6,6 +6,7 @@ local bodyYaw = require("libs/body_yaw")
 local pawnModule = require("libs/pawn")
 local inputEnums = require("libs/enums/input")
 local paramModule = require("libs/core/params")
+local attachments = require("libs/attachments")
 
 local M = {}
 
@@ -96,12 +97,14 @@ local function getAimOffsetAdjustedRotation(rotation)
 	if (aimRotationOffset.Pitch == nil or aimRotationOffset.Pitch == 0) and (aimRotationOffset.Yaw == nil or aimRotationOffset.Yaw == 0) and (aimRotationOffset.Roll == nil or aimRotationOffset.Roll == 0) then
 		return rotation
 	end
-	--Quat_MakeFromEuler expects Roll Pitch Yaw
-	local quat1 = kismet_math_library:Quat_MakeFromEuler(uevrUtils.vector(aimRotationOffset.Roll, aimRotationOffset.Pitch, aimRotationOffset.Yaw))
-	local quat2 = kismet_math_library:Quat_MakeFromEuler(uevrUtils.vector(rotation.Roll, rotation.Pitch, rotation.Yaw))
-	local quat3 = kismet_math_library:Multiply_QuatQuat(quat2, quat1)
-	local final = kismet_math_library:Quat_Rotator(quat3)
-	return final
+	return kismet_math_library:ComposeRotators(aimRotationOffset, rotation)
+
+	-- --Quat_MakeFromEuler expects Roll Pitch Yaw
+	-- local quat1 = kismet_math_library:Quat_MakeFromEuler(uevrUtils.vector(aimRotationOffset.Roll, aimRotationOffset.Pitch, aimRotationOffset.Yaw))
+	-- local quat2 = kismet_math_library:Quat_MakeFromEuler(uevrUtils.vector(rotation.Roll, rotation.Pitch, rotation.Yaw))
+	-- local quat3 = kismet_math_library:Multiply_QuatQuat(quat2, quat1)
+	-- local final = kismet_math_library:Quat_Rotator(quat3)
+	-- return final
 end
 getAimOffsetAdjustedRotation = uevrUtils.profiler:wrap("getAimOffsetAdjustedRotation", getAimOffsetAdjustedRotation)
 
@@ -151,8 +154,9 @@ local cameraComponent = {
 		local aimCamera = getParameter("aimCamera")
         local aimMethod = getParameter("aimMethod")
 		local validController = aimMethod == M.AimMethod.LEFT_CONTROLLER or aimMethod == M.AimMethod.RIGHT_CONTROLLER or aimMethod == M.AimMethod.HEAD
+		local validWeapon = aimMethod == M.AimMethod.LEFT_WEAPON or aimMethod == M.AimMethod.RIGHT_WEAPON
 		local validAimCamera = aimCamera ~= nil and aimCamera ~= "" and aimCamera ~= "None"
-		if validController and validAimCamera then
+		if (validController or validWeapon) and validAimCamera then
 			if self.component == nil then
 				self.component = uevrUtils.getObjectFromDescriptor(aimCamera)
 				if self.component ~= nil then
@@ -166,26 +170,77 @@ local cameraComponent = {
 		end
 
 		if self.component ~= nil then
-			local controllerID = aimMethod == M.AimMethod.LEFT_CONTROLLER and 0 or (aimMethod == M.AimMethod.RIGHT_CONTROLLER and 1 or (aimMethod == M.AimMethod.HEAD and 2 or 1))
-			self.currentControllerID = controllerID
+			if validController then
+				local controllerID = aimMethod == M.AimMethod.LEFT_CONTROLLER and 0 or (aimMethod == M.AimMethod.RIGHT_CONTROLLER and 1 or (aimMethod == M.AimMethod.HEAD and 2 or 1))
+				self.currentControllerID = controllerID
 
-			local rotation = controllers.getControllerRotation(controllerID)
-			local location = controllers.getControllerLocation(controllerID)
+				local rotation = controllers.getControllerRotation(controllerID)
+				local location = controllers.getControllerLocation(controllerID)
 
-			if aimMethod == M.AimMethod.LEFT_CONTROLLER or aimMethod == M.AimMethod.RIGHT_CONTROLLER then
-				rotation = getAimOffsetAdjustedRotation(rotation)
+				if aimMethod == M.AimMethod.LEFT_CONTROLLER or aimMethod == M.AimMethod.RIGHT_CONTROLLER then
+					rotation = getAimOffsetAdjustedRotation(rotation)
+				end
+
+				self.component:K2_SetWorldRotation(rotation,false,reusable_hit_result,false)
+				self.component:K2_SetWorldLocation(location,false,reusable_hit_result,false)
+			elseif validWeapon then
+				local attachment = attachments.getCurrentGrippedAttachment(aimMethod == M.AimMethod.LEFT_WEAPON and Handed.Left or Handed.Right)
+				if attachment ~= nil then
+					local controllerID = aimMethod == M.AimMethod.LEFT_WEAPON and Handed.Left or Handed.Right
+					self.currentControllerID = controllerID
+
+					local location, rotation = attachments.getActiveAttachmentTransforms(controllerID)
+
+					--local rotation = controllers.getControllerRotation(controllerID)
+					--local location = controllers.getControllerLocation(controllerID)
+
+					--print("Weapon transfoerms:", weaponLocation.X, weaponLocation.Y, weaponLocation.Z, weaponRotation.Pitch, weaponRotation.Yaw, weaponRotation.Roll)
+					--print("Controller transforms:", location.X, location.Y, location.Z, rotation.Pitch, rotation.Yaw, rotation.Roll)
+					
+					--rotation = getAimOffsetAdjustedRotation(rotation)
+
+					--location.Z = location.Z + 13
+					--uevrUtils.vector(13,0,0)
+
+					-- local vector = uevrUtils.rotateVector(attachments.getActiveAttachmentSightsPositionOffset(controllerID), rotation)
+					-- location = location + vector
+					self.component:K2_SetWorldRotation(rotation,false,reusable_hit_result,false)
+					self.component:K2_SetWorldLocation(location,false,reusable_hit_result,false)
+				end
+				--[[
+					local weaponRotation = attachment:GetSocketRotation(uevrUtils.fname_from_string("Muzzle"))
+					local weaponLocation = attachment:GetSocketLocation(uevrUtils.fname_from_string("Muzzle"))
+					--print("Weapon Socket Rotation:", weaponRotation.Pitch, weaponRotation.Yaw, weaponRotation.Roll)
+					--print("Weapon Socket Location:", weaponLocation.X, weaponLocation.Y, weaponLocation.Z)
+
+					self.currentControllerID = aimMethod == M.AimMethod.LEFT_WEAPON and Handed.Left or Handed.Right
+
+					local rotation = controllers.getControllerRotation(self.currentControllerID)
+					local location = controllers.getControllerLocation(self.currentControllerID)
+
+					--print("Location before", location.X, location.Y, location.Z)
+					--location = location + weaponLocation
+					location.Z = location.Z + 1000 --adjust down a bit to line up better
+					-- location.Y = location.Y + 1000 --adjust down a bit to line up better
+					-- location.X = location.X + 1000 --adjust down a bit to line up better
+					--print("Location after", location.X, location.Y, location.Z)
+
+					if aimMethod == M.AimMethod.LEFT_CONTROLLER or aimMethod == M.AimMethod.RIGHT_CONTROLLER then
+						rotation = getAimOffsetAdjustedRotation(rotation)
+					end
+
+					self.component:K2_SetWorldRotation(rotation,false,reusable_hit_result,false)
+					self.component:K2_SetWorldLocation(location,false,reusable_hit_result,false)
+
+				]]--
 			end
-
-			self.component:K2_SetWorldRotation(rotation,false,reusable_hit_result,false)
-			self.component:K2_SetWorldLocation(location,false,reusable_hit_result,false)
-
 			return true
 		end
 
 		return false
 	end,
 	setUsePawnControlRotation = function(self, val)
-		if self.component ~= nil then
+		if self.component ~= nil and self.component.bUsePawnControlRotation ~= nil then
 			--print(1, val, self.component:get_full_name())
 			if val == nil then
 				val = self.originalState
@@ -212,7 +267,7 @@ local cameraComponent = {
 				self.component:K2_SetWorldRotation(rotation,false,reusable_hit_result,false)
 				self.component:K2_SetWorldLocation(location,false,reusable_hit_result,false)
 			end
-			if self.originalState ~= nil then
+			if self.originalState ~= nil and self.component.bUsePawnControlRotation ~= nil then
 				self.component.bUsePawnControlRotation = self.originalState
 			end
 		end
@@ -857,6 +912,7 @@ local function updateBodyYaw(delta)
 				if pawnRotationMode == M.PawnRotationMode.LOCKED then
 					bodyRotationOffset = currentHeadRotator.Yaw - decoupledYaw
 				elseif pawnRotationMode == M.PawnRotationMode.LEFT_CONTROLLER then
+--TODO this seems wrong. 
 					local rotation = (aimMethod == M.AimMethod.LEFT_WEAPON and weaponRotation ~= nil and weaponRotation.left ~= nil) and weaponRotation.left or controllers.getControllerRotation(Handed.Left)
 					--did this to fix robocop. what happens with hello neighbor?
 					if rotation ~= nil then
@@ -865,6 +921,7 @@ local function updateBodyYaw(delta)
 					end
 					--if rotation ~= nil then bodyRotationOffset = rotation.Yaw - decoupledYaw end
 				elseif pawnRotationMode == M.PawnRotationMode.RIGHT_CONTROLLER then
+--TODO this seems wrong. 
 					local rotation = (aimMethod == M.AimMethod.RIGHT_WEAPON and weaponRotation ~= nil and weaponRotation.right ~= nil) and weaponRotation.right or controllers.getControllerRotation(Handed.Right)
 --					local rotation = controllers.getControllerRotation(Handed.Right)
 					--did this to fix robocop. what happens with hello neighbor? (even though hello neighbor doesnt need gunstock adjustments)

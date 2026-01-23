@@ -21,6 +21,11 @@ local parametersFileName = "gunstock_parameters"
 local parameters = {}
 local isParametersDirty = false
 
+local configFileName = "gunstock_config"
+local configTabLabel = "Gunstock Config"
+local widgetPrefix = "uevr_gunstock_"
+
+
 local disableGunstockConfiguration = false
 local activeAttachmentID = nil
 -- parameters["attachments"] = {
@@ -52,10 +57,10 @@ end
 
 
 local function getDefaultConfig(saveFileName)
-    if saveFileName == nil then saveFileName = "gunstock_config" end
+    if saveFileName == nil then saveFileName = configFileName end
 	return  {
 		{
-			panelLabel = "Gunstock Config",
+			panelLabel = configTabLabel,
 			saveFile = saveFileName,
 			layout =
 			{
@@ -69,7 +74,7 @@ local function updateConfigUI(configDefinition)
 	table.insert(configDefinition[1]["layout"],
         {
             widgetType = "checkbox",
-            id = "disable_gunstock_configuration",
+            id = widgetPrefix .. "disable_configuration",
             label = "Disable",
             initialValue = disableGunstockConfiguration
         }
@@ -78,11 +83,31 @@ local function updateConfigUI(configDefinition)
 	table.insert(configDefinition[1]["layout"],
 		{
 			widgetType = "tree_node",
-			id = "gunstock_configuration",
+			id = widgetPrefix .. "configuration",
 			initialOpen = true,
 			label = "Gunstock Configuration"
 		}
 	)
+
+    table.insert(configDefinition[1]["layout"],
+        {
+            widgetType = "tree_node",
+            id = widgetPrefix .. "default",
+            initialOpen = true,
+            label = "Default"
+        }
+    )
+    table.insert(configDefinition[1]["layout"],
+        {
+            id = widgetPrefix .. "default_rotation", label = "Rotation",
+            widgetType = "drag_float3", speed = .1, range = {-360, 360}, initialValue = {0,0,0}
+        }
+    )
+    table.insert(configDefinition[1]["layout"],
+        {
+            widgetType = "tree_pop"
+        }
+    )
 
     for i = 1, #attachmentList do
 		local id = attachmentList[i]["id"]
@@ -91,14 +116,20 @@ local function updateConfigUI(configDefinition)
         table.insert(configDefinition[1]["layout"],
             {
                 widgetType = "tree_node",
-                id = "gunstock_" .. id,
+                id = widgetPrefix .. id,
                 initialOpen = false,
                 label = label
             }
         )
 		table.insert(configDefinition[1]["layout"],
             {
-                id = "gunstock_" .. id .. "_rotation", label = "Rotation",
+                id = widgetPrefix .. id .. "_use_default", label = "Use Default",
+                widgetType = "checkbox", initialValue = true
+            }
+		)
+		table.insert(configDefinition[1]["layout"],
+            {
+                id = widgetPrefix .. id .. "_rotation", label = "Rotation",
                 widgetType = "drag_float3", speed = .1, range = {-360, 360}, initialValue = rot
             }
 		)
@@ -108,8 +139,11 @@ local function updateConfigUI(configDefinition)
             }
 		)
 
-        configui.onUpdate("gunstock_" .. id .. "_rotation", function(value)
+        configui.onUpdate(widgetPrefix .. id .. "_rotation", function(value)
 			M.updateAttachmentTransform(nil, value, nil, id)
+		end)
+        configui.onCreateOrUpdate(widgetPrefix .. id .. "_use_default", function(value)
+			configui.setHidden(widgetPrefix .. id .. "_rotation", value)
 		end)
 
     end
@@ -137,6 +171,7 @@ local createMonitor = doOnce(function()
 end, Once.EVER)
 
 local function getAttachment(id)
+    if id == nil then return nil end
     if parameters ~= nil and parameters["attachments"] ~= nil then
         for i = 1, #parameters["attachments"] do
             if id == parameters["attachments"][i].id then
@@ -182,7 +217,8 @@ function M.addAdjustment(attachment)
                 attachment.label = attachment.id
             end
             if attachment.rotation == nil then
-                attachment.rotation = {0,0,0}
+                local rot = configui.getValue(widgetPrefix .. "default_rotation")
+                if rot ~= nil then attachment.rotation =  {rot.x, rot.y, rot.z} end
             end
             table.insert(parameters["attachments"], attachment)
             isParametersDirty = true
@@ -213,12 +249,27 @@ function M.updateAttachmentTransform(pos, rot, scale, id)
 	end
 end
 
+local function updateDefaultAttachmentTransforms(pos, rot, scale)
+    for i = 1, #parameters["attachments"] do
+        local id = parameters["attachments"][i].id
+        local useDefault = configui.getValue(widgetPrefix .. id .. "_use_default")
+        if useDefault == true then
+            parameters["attachments"][i].rotation = {rot.x, rot.y, rot.z}
+            configui.setValue(widgetPrefix .. id .. "_rotation", parameters["attachments"][i].rotation, true)
+            isParametersDirty = true
+            if disableGunstockConfiguration == false and id == activeAttachmentID then
+                executeTransformChange(id, nil, uevrUtils.rotator(rot.x, rot.y, rot.z))
+            end
+        end
+    end
+end
+
 function M.setActive(id)
     activeAttachmentID = id
 
     local rot = nil
     if disableGunstockConfiguration == false then
-        local attachment  = getAttachment(id)
+        local attachment = getAttachment(id)
         if attachment ~= nil then
             rot = uevrUtils.rotator(attachment.rotation)
             --print("Setting gunstock rotation for " .. id .. " to " .. tostring(rot.Pitch) .. ", " .. tostring(rot.Yaw) .. ", " .. tostring(rot.Roll))
@@ -233,12 +284,15 @@ end
 
 function M.disable(val)
     disableGunstockConfiguration = val
-    configui.setValue("disable_gunstock_configuration", val, true)
+    configui.setValue(widgetPrefix .. "disable_configuration", val, true)
     M.setActive(activeAttachmentID)
 end
 
-configui.onCreateOrUpdate("disable_gunstock_configuration", function(value)
+configui.onCreateOrUpdate(widgetPrefix .. "disable_configuration", function(value)
     M.disable(value)
+end)
+configui.onUpdate(widgetPrefix .. "default_rotation", function(value)
+    updateDefaultAttachmentTransforms(nil, value, nil)
 end)
 
 uevrUtils.registerUEVRCallback("attachment_grip_changed", function(id, gripHand)

@@ -2215,6 +2215,10 @@ function M.isGamePaused()
 	return isPaused
 end
 
+function M.isCharacterHidden()
+	return isCharacterHidden
+end
+
 function M.getMatchState()
 	local world = M.get_world()
 	if world ~= nil then

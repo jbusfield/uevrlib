@@ -83,7 +83,7 @@ local function getConfigWidgets(m_paramManager)
 			widgetType = "combo",
 			id = widgetPrefix .. "aimMethod",
 			label = "Type",
-			selections = {"UEVR", "Head/HMD", "Right Controller", "Left Controller"}, --, "Right Weapon", "Left Weapon"},
+			selections = {"UEVR", "Head/HMD", "Right Controller", "Left Controller", "Right Weapon", "Left Weapon"},
 			initialValue = configDefaults["aimMethod"]
 		},
         {

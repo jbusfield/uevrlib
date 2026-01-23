@@ -218,6 +218,12 @@ M.ReticuleTargetMethod = {
 	LEFT_ATTACHMENT = 4,
 	RIGHT_ATTACHMENT = 5,
 }
+M.ReticuleEyeDominance = {
+	NONE = 1,
+	LEFT = 2,
+	RIGHT = 3,
+}
+
 
 
 local reticuleTargetMethod = M.ReticuleTargetMethod.CAMERA
@@ -246,6 +252,8 @@ local isHidden = false
 local reticuleUpdateDistance = 200
 local reticuleUpdateScale = 1.0
 local reticuleUpdateRotation = {0.0, 0.0, 0.0}
+local reticuleUpdateEyeDominance = 1
+local reticuleUpdateEyeDominanceOffset = 0
 
 local currentLogLevel = LogLevel.Error
 function M.setLogLevel(val)
@@ -375,6 +383,10 @@ local createConfigMonitor = doOnce(function()
 				reticuleUpdateDistance = paramValue
 			elseif paramName == "update_scale" then
 				reticuleUpdateScale = paramValue
+			elseif paramName == "eye_dominance" then
+				reticuleUpdateEyeDominance = paramValue
+			elseif paramName == "eye_dominance_offset" then
+				reticuleUpdateEyeDominanceOffset = paramValue
 			-- elseif paramName == "update_rotation" then
 			--     reticuleUpdateRotation = paramValue
 			end
@@ -468,6 +480,16 @@ end
 function M.setDistance(value)
 	reticuleUpdateDistance = value
 	if reticuleConfig ~= nil then reticuleConfig.setValue("update_distance", value, true) end
+end
+
+function M.setEyeDominance(value)
+	reticuleUpdateEyeDominance = value
+	if reticuleConfig ~= nil then reticuleConfig.setValue("eye_dominance", value, true) end
+end
+
+function M.setEyeDominanceOffset(value)
+	reticuleUpdateEyeDominanceOffset = value
+	if reticuleConfig ~= nil then reticuleConfig.setValue("eye_dominance_offset", value, true) end
 end
 
 function M.setScale(value)
@@ -652,34 +674,54 @@ function M.update(originLocation, targetLocation, drawDistance, scale, rotation,
 		if rotation == nil then rotation = reticuleUpdateRotation end
 		rotation = uevrUtils.rotator(rotation)
 
-		if originLocation == nil or targetLocation == nil then
-			local playerCameraManager = nil
+		if targetLocation == nil then
 			if reticuleTargetMethod == M.ReticuleTargetMethod.CAMERA then
 				local playerController = uevr.api:get_player_controller(0)
 				if playerController ~= nil then
-					playerCameraManager = playerController.PlayerCameraManager
+					local playerCameraManager = playerController.PlayerCameraManager
+					if playerCameraManager ~= nil and playerCameraManager.GetCameraRotation ~= nil then
+						local originDirection = kismet_math_library:GetForwardVector(playerCameraManager:GetCameraRotation())
+						targetLocation = uevrUtils.getTargetLocation(playerCameraManager:GetCameraLocation(), originDirection, currentReticuleOptions.collisionChannel, currentReticuleOptions.ignoreActors, currentReticuleOptions.traceComplex, currentReticuleOptions.minHitDistance)
+					end
 				end
-			end
---TODO add options to target from camera, target from controllers, or target from attachment
--- default to from controllers
-			if originLocation == nil then
-				if playerCameraManager ~= nil and playerCameraManager.GetCameraLocation ~= nil then
-					originLocation = playerCameraManager:GetCameraLocation()
-				elseif reticuleTargetMethod == M.ReticuleTargetMethod.LEFT_CONTROLLER or reticuleTargetMethod == M.ReticuleTargetMethod.RIGHT_CONTROLLER then
-					originLocation = M.getOriginPositionFromController()
-				end
-			end
-
-			if targetLocation == nil then
-				if playerCameraManager ~= nil and playerCameraManager.GetCameraRotation ~= nil then
-					local direction = kismet_math_library:GetForwardVector(playerCameraManager:GetCameraRotation())
-					targetLocation = M.getTargetLocation(originLocation, direction, currentReticuleOptions.collisionChannel, currentReticuleOptions.ignoreActors, currentReticuleOptions.traceComplex, currentReticuleOptions.minHitDistance)
-				elseif reticuleTargetMethod == M.ReticuleTargetMethod.LEFT_CONTROLLER or reticuleTargetMethod == M.ReticuleTargetMethod.RIGHT_CONTROLLER then
-					local handedness = (reticuleTargetMethod == M.ReticuleTargetMethod.LEFT_CONTROLLER and Handed.Left or Handed.Right)
-					targetLocation = M.getTargetLocationFromController(handedness, currentReticuleOptions.collisionChannel, currentReticuleOptions.ignoreActors, currentReticuleOptions.traceComplex, currentReticuleOptions.minHitDistance)
-				end
+			elseif reticuleTargetMethod == M.ReticuleTargetMethod.LEFT_CONTROLLER or reticuleTargetMethod == M.ReticuleTargetMethod.RIGHT_CONTROLLER then
+				local handedness = (reticuleTargetMethod == M.ReticuleTargetMethod.LEFT_CONTROLLER and Handed.Left or Handed.Right)
+				targetLocation = M.getTargetLocationFromController(handedness, currentReticuleOptions.collisionChannel, currentReticuleOptions.ignoreActors, currentReticuleOptions.traceComplex, currentReticuleOptions.minHitDistance)
 			end
 		end
+
+		if originLocation == nil then
+			originLocation = M.getOriginPositionFromController()
+		end
+
+-- 		if originLocation == nil or targetLocation == nil then
+-- 			local playerCameraManager = nil
+-- 			if reticuleTargetMethod == M.ReticuleTargetMethod.CAMERA then
+-- 				local playerController = uevr.api:get_player_controller(0)
+-- 				if playerController ~= nil then
+-- 					playerCameraManager = playerController.PlayerCameraManager
+-- 				end
+-- 			end
+-- --TODO add options to target from camera, target from controllers, or target from attachment
+-- -- default to from controllers
+-- 			if originLocation == nil then
+-- 				if playerCameraManager ~= nil and playerCameraManager.GetCameraLocation ~= nil then
+-- 					originLocation = playerCameraManager:GetCameraLocation()
+-- 				elseif reticuleTargetMethod == M.ReticuleTargetMethod.LEFT_CONTROLLER or reticuleTargetMethod == M.ReticuleTargetMethod.RIGHT_CONTROLLER then
+-- 					originLocation = M.getOriginPositionFromController()
+-- 				end
+-- 			end
+
+-- 			if targetLocation == nil then
+-- 				if playerCameraManager ~= nil and playerCameraManager.GetCameraRotation ~= nil then
+-- 					local direction = kismet_math_library:GetForwardVector(playerCameraManager:GetCameraRotation())
+-- 					targetLocation = M.getTargetLocation(originLocation, direction, currentReticuleOptions.collisionChannel, currentReticuleOptions.ignoreActors, currentReticuleOptions.traceComplex, currentReticuleOptions.minHitDistance)
+-- 				elseif reticuleTargetMethod == M.ReticuleTargetMethod.LEFT_CONTROLLER or reticuleTargetMethod == M.ReticuleTargetMethod.RIGHT_CONTROLLER then
+-- 					local handedness = (reticuleTargetMethod == M.ReticuleTargetMethod.LEFT_CONTROLLER and Handed.Left or Handed.Right)
+-- 					targetLocation = M.getTargetLocationFromController(handedness, currentReticuleOptions.collisionChannel, currentReticuleOptions.ignoreActors, currentReticuleOptions.traceComplex, currentReticuleOptions.minHitDistance)
+-- 				end
+-- 			end
+-- 		end
 
 		if originLocation ~= nil and targetLocation ~= nil then
 			local distanceToTarget = kismet_math_library:Vector_Distance(uevrUtils.vector(originLocation), uevrUtils.vector(targetLocation))
@@ -691,7 +733,13 @@ function M.update(originLocation, targetLocation, drawDistance, scale, rotation,
 			rot = uevrUtils.sumRotators(rot, currentReticuleOptions.rotation, rotation)
 
             temp_vec3f:set(originLocation.X + (hmdToTargetDirection.X * drawDistance), originLocation.Y + (hmdToTargetDirection.Y * drawDistance), originLocation.Z + (hmdToTargetDirection.Z * drawDistance))
-			local adjustedPosition = getOffsetWorldPosition(temp_vec3f, rot, currentReticuleOptions.position_2d.X, currentReticuleOptions.position_2d.Y)
+			
+			local reticulePositionX = currentReticuleOptions.position_2d.X
+			if reticuleUpdateEyeDominance ~= M.ReticuleEyeDominance.NONE then
+				reticulePositionX = reticulePositionX + ((reticuleUpdateEyeDominance == M.ReticuleEyeDominance.LEFT and -1 or 1) * reticuleUpdateEyeDominanceOffset)
+			end
+			
+			local adjustedPosition = getOffsetWorldPosition(temp_vec3f, rot, reticulePositionX, currentReticuleOptions.position_2d.Y)
 			reticuleComponent:K2_SetWorldLocationAndRotation(adjustedPosition, rot, false, reusable_hit_result, false)
 			if scale ~= nil then
 				local finalScale = kismet_math_library:Multiply_VectorVector(kismet_math_library:Multiply_VectorVector(uevrUtils.vector(scale), currentReticuleOptions.scale), uevrUtils.vector(1, currentReticuleOptions.scale_2d.X,  currentReticuleOptions.scale_2d.Y))
