@@ -871,6 +871,11 @@ uevrUtils.setInterval(1000, function()
 	end
 end)
 
+uevrUtils.registerUEVRCallback("scope_active_change", function(isActive)
+	M.setHidden(isActive)
+end)
+
+
 uevrUtils.registerPreLevelChangeCallback(function(level)
 	M.print("Pre-Level changed in reticule")
 	M.reset()

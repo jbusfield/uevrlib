@@ -161,6 +161,9 @@ local attachmentNames = {}
 local attachmentOffsets = {}
 local attachmentOffsetsLookup = {}
 
+--use supplied function that can give additional insight into whether or not a scope should be displayed
+local scopeActiveCallback = nil
+
 --local activeAttachment = nil
 local defaultLocation = nil
 local defaultRotation = nil
@@ -1221,7 +1224,7 @@ local function updateSelectedColors()
 end
 
 local function handleScope(id, attachment, gripHand)
-	if M.isActiveAttachmentScoped(gripHand) then
+	if M.isActiveAttachmentScoped(gripHand) and (scopeActiveCallback == nil or scopeActiveCallback(attachment)) then
 		scope.createAndAttach(id, attachment)
 	else
 		M.print("No weapon scope settings found. Destroying scope")
@@ -1819,6 +1822,10 @@ function M.registerOnGripUpdateCallback(callback)
 			-- end
 		end)
 	end
+end
+
+function M.registerOnScopeUpdateCallback(callback)
+	scopeActiveCallback = callback
 end
 
 function M.registerOnGripAnimationCallback(callbackFunc)

@@ -258,7 +258,7 @@ local cameraComponent = {
 		-- end
 	end,
 	reset = function(self)
-		print("Camera Component Reset called")
+		--print("Camera Component Reset called")
 		if uevrUtils.getValid(self.component) ~= nil  then
 			if self.component.AttachParent ~= nil then
 				--print("Resetting camera component world transform to parent transform")
@@ -390,7 +390,7 @@ local function resetPawnSettings()
 	cameraComponent:reset()
 	if uevrUtils.getValid(pawn) ~= nil and pawnSettings ~= nil then
 		--restore pawn settings
-		print("Restoring pawn settings")
+		--print("Restoring pawn settings")
 		pawn.bUseControllerRotationPitch = pawnSettings.bUseControllerRotationPitch
 		pawn.bUseControllerRotationYaw = pawnSettings.bUseControllerRotationYaw
 		pawn.bUseControllerRotationRoll = pawnSettings.bUseControllerRotationRoll

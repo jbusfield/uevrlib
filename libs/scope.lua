@@ -19,8 +19,8 @@ local isDisabled = true
 
 local maxZoom = 1.0
 local minZoom = 0.0
-local maxFOV = 30.0
-local minFOV = 1.0
+-- local maxFOV = 30.0
+-- local minFOV = 1.0
 
 local brightnessSpeed = 3.0
 local maxBrightness = 8.0
@@ -28,7 +28,8 @@ local minBrightness = 0.1
 --local currentBrightness = 1.0
 
 local parameterDefaults = {
-	fov = 2.0,
+	min_fov = 2.0,
+	max_fov = 32.0,
 	brightness = 2.0,
 	ocular_lens_scale = 1.0,
 	objective_lens_rotation = {0.0, 0.0, 0.0},
@@ -61,12 +62,7 @@ local paramManager = paramModule.new(parametersFileName, parameters, true)
 
 local function saveParameter(scopeID, key, value, persist)
 	--paramManager:set(key, value, persist)
-	--paramManager:set({scopes, {id = scopeID}}, value, persist)
 	paramManager:set({"scopes", scopeID, key}, value, persist)
-	-- if uiConfigDev ~= nil then
-	-- 	uiConfigDev.updateParameters(paramManager:getAll())
-	-- end
-	--self:set({"_profileLabels", currentProfileID}, newLabel, true)
 end
 
 local function getParameter(scopeID, key)
@@ -130,24 +126,31 @@ function M.getConfigWidgets(prefix)
         },
         {
             widgetType = "slider_float",
-            id = prefix .. "scope_fov",
-            label = "FOV",
+            id = prefix .. "scope_min_fov",
+            label = "Max Zoom FOV",
             range = {0.01, 30},
-            initialValue = 2
+            initialValue = parameterDefaults.min_fov
+        },
+        {
+            widgetType = "slider_float",
+            id = prefix .. "scope_max_fov",
+            label = "Min Zoom FOV",
+            range = {0.01, 30},
+            initialValue = parameterDefaults.max_fov
         },
         {
             widgetType = "slider_float",
             id = prefix .. "scope_brightness",
             label = "Brightness",
             range = {0, 10},
-            initialValue = 2
+            initialValue = parameterDefaults.brightness
         },
         {
             widgetType = "slider_float",
             id = prefix .. "scope_ocular_lens_scale",
             label = "Scale",
             range = {0.1, 10},
-            initialValue = 1
+            initialValue = parameterDefaults.ocular_lens_scale
         },
         {
             widgetType = "drag_float3",
@@ -218,9 +221,14 @@ function M.getConfigWidgets(prefix)
 end
 
 function M.createConfigCallbacks(id, prefix)
-	configui.onUpdate(prefix .. "scope_fov", function(value)
-		saveParameter(id, "fov", value, true)
-		M.setFOV(value)
+	configui.onUpdate(prefix .. "scope_min_fov", function(value)
+		saveParameter(id, "min_fov", value, true)
+		M.setZoom(getParameter(id, "zoom"))
+	end)
+
+	configui.onUpdate(prefix .. "scope_max_fov", function(value)
+		saveParameter(id, "max_fov", value, true)
+		M.setZoom(getParameter(id, "zoom"))
 	end)
 
 	configui.onUpdate(prefix .. "scope_zoom_speed", function(value)
@@ -456,11 +464,21 @@ end
 -- 		M.attachToLeftHand()
 -- 	end
 -- end)
+local function executeActiveScope(...)
+	uevrUtils.executeUEVRCallbacks("scope_active_change", table.unpack({...}))
+end
+function M.setFOV(value)
+	if uevrUtils.getValid(sceneCaptureComponent) ~= nil then
+		sceneCaptureComponent.FOVAngle = value
+		--M.print(sceneCaptureComponent.FOVAngle)
+	end
+end
 
+-- min_fov and max_fov may be confusing. min_fov is the narrowest field of view (highest zoom), max_fov is the widest field of view (lowest zoom)
 function M.setZoom(zoom)
 	local ratio = zoom / maxZoom
 	local exponentialRatio = ratio ^ getParameter(currentScopeID, "zoom_exponential") -- where zoomExponential is typically less than 1 for gradual increase, >1 for steeper curve {Link: according to GitHub https://rikunert.github.io/exponential_scaler}
-	local currentFOV = maxFOV + exponentialRatio * (minFOV - maxFOV)
+	local currentFOV = getParameter(currentScopeID, "max_fov") + exponentialRatio * (getParameter(currentScopeID, "min_fov") - getParameter(currentScopeID, "max_fov"))
 
 	M.setFOV(currentFOV)
 	if currentScopeID ~= nil and currentScopeID ~= "" then
@@ -524,10 +542,17 @@ function M.getObjectiveLensComponent()
 end
 
 function M.destroy()
-	uevrUtils.detachAndDestroyComponent(sceneCaptureComponent, true, true)
-	uevrUtils.detachAndDestroyComponent(scopeMeshComponent, true, true)
-	uevrUtils.detachAndDestroyComponent(scopeDebugComponent, true, true)
+	if sceneCaptureComponent ~= nil then
+		uevrUtils.detachAndDestroyComponent(sceneCaptureComponent, true, true)
+	end
+	if scopeMeshComponent ~= nil then
+		uevrUtils.detachAndDestroyComponent(scopeMeshComponent, true, true)
+	end
+	if scopeDebugComponent ~= nil then
+		uevrUtils.detachAndDestroyComponent(scopeDebugComponent, true, true)
+	end
 	M.reset()
+	executeActiveScope(false)
 end
 
 function M.reset()
@@ -558,13 +583,7 @@ function M.disable(value)
 		end
 		scopeDebugComponent:SetVisibility(not val)
 	end
-end
-
-function M.setFOV(value)
-	if uevrUtils.getValid(sceneCaptureComponent) ~= nil then
-		sceneCaptureComponent.FOVAngle = value
-		--M.print(sceneCaptureComponent.FOVAngle)
-	end
+	executeActiveScope(not value)
 end
 
 function M.setOcularLensScale(value)
@@ -810,8 +829,13 @@ function M.init(isDeveloperMode, logLevel)
 end
 
 function M.setActive(id)
-	print("Setting active scope to ", id)
+	--print("Setting active scope to ", id)
 	currentScopeID = id
+end
+
+function M.isActive()
+	--TODO add better checks
+	return currentScopeID ~= nil and currentScopeID ~= "" and scopeMeshComponent ~= nil and sceneCaptureComponent ~= nil
 end
 
 uevrUtils.registerUEVRCallback("attachment_grip_changed", function(id, gripHand)
@@ -824,5 +848,42 @@ end)
 uevr.params.sdk.callbacks.on_script_reset(function()
 	M.destroy()
 end)
+
+local autoHandleInput = true
+function M.setAutoHandleInput(value)
+	autoHandleInput = value
+end
+local scopeAdjustDirection = 0
+local scopeAdjustMode = M.AdjustMode.ZOOM
+local leftControls = false
+uevrUtils.registerOnPreInputGetStateCallback(function(retval, user_index, state)
+	if M.isActive() and autoHandleInput then
+		scopeAdjustDirection = 0
+		local thumbY = state.Gamepad.sThumbRY
+		if leftControls then
+			thumbY = state.Gamepad.sThumbLY
+		end
+
+		if thumbY >= 10000 or thumbY <= -10000 then
+			scopeAdjustDirection = thumbY/32768
+		end
+		scopeAdjustMode = M.AdjustMode.ZOOM
+		local dpadMethod = uevr.params.vr:get_mod_value("VR_DPadShiftingMethod")
+		--print(string.find(dpadMethod,"0"),string.find(dpadMethod,"1"))
+		if uevrUtils.isThumbpadTouched(state, string.find(dpadMethod,"1") and Handed.Right or Handed.Left) then
+			scopeAdjustMode = M.AdjustMode.BRIGHTNESS
+		end
+	end
+end, 9) --high priority to intercept messages before possible remapper
+
+function on_post_engine_tick(engine, delta)
+	if M.isActive() and autoHandleInput then
+		if scopeAdjustMode == M.AdjustMode.BRIGHTNESS then
+			M.updateBrightness(scopeAdjustDirection, delta)
+		elseif scopeAdjustMode == M.AdjustMode.ZOOM then
+			M.updateZoom(scopeAdjustDirection, delta)
+		end
+	end
+end
 
 return M
