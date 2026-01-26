@@ -1149,6 +1149,11 @@ uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
 	end
 end)
 
+-- function M.reapplyMaterials()
+-- 	uevrUtils.copyMaterials(armsAnimationMeshes[Handed.Left].mesh, M.getHandComponent(Handed.Left), false)
+-- 	uevrUtils.copyMaterials(armsAnimationMeshes[Handed.Right].mesh, M.getHandComponent(Handed.Right), false)
+-- end
+
 uevr.params.sdk.callbacks.on_script_reset(function()
 	M.destroyHands()
 end)

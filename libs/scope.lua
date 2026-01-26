@@ -156,7 +156,7 @@ function M.getConfigWidgets(prefix)
             widgetType = "drag_float3",
             id = prefix .. "scope_objective_lens_rotation",
             label = "Objective Lens Rotation",
-            speed = 0.01,
+            speed = 0.1,
             range = {-90, 90},
             initialValue = {0.0, 0.0, 0.0}
         },
@@ -172,7 +172,7 @@ function M.getConfigWidgets(prefix)
             widgetType = "drag_float3",
             id = prefix .. "scope_ocular_lens_rotation",
             label = "Ocular Lens Rotation",
-            speed = 0.01,
+            speed = 0.1,
             range = {-90, 90},
             initialValue = {0.0, 0.0, 0.0}
         },

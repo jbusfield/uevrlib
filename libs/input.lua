@@ -190,6 +190,7 @@ local cameraComponent = {
 					self.currentControllerID = controllerID
 
 					local location, rotation = attachments.getActiveAttachmentTransforms(controllerID)
+					rotation = getAimOffsetAdjustedRotation(rotation)
 
 					--local rotation = controllers.getControllerRotation(controllerID)
 					--local location = controllers.getControllerLocation(controllerID)
@@ -912,7 +913,7 @@ local function updateBodyYaw(delta)
 				if pawnRotationMode == M.PawnRotationMode.LOCKED then
 					bodyRotationOffset = currentHeadRotator.Yaw - decoupledYaw
 				elseif pawnRotationMode == M.PawnRotationMode.LEFT_CONTROLLER then
---TODO this seems wrong. 
+--TODO this seems wrong. Why is aim affecting body rotation?
 					local rotation = (aimMethod == M.AimMethod.LEFT_WEAPON and weaponRotation ~= nil and weaponRotation.left ~= nil) and weaponRotation.left or controllers.getControllerRotation(Handed.Left)
 					--did this to fix robocop. what happens with hello neighbor?
 					if rotation ~= nil then
@@ -921,7 +922,7 @@ local function updateBodyYaw(delta)
 					end
 					--if rotation ~= nil then bodyRotationOffset = rotation.Yaw - decoupledYaw end
 				elseif pawnRotationMode == M.PawnRotationMode.RIGHT_CONTROLLER then
---TODO this seems wrong. 
+--TODO this seems wrong. Why is aim affecting body rotation?
 					local rotation = (aimMethod == M.AimMethod.RIGHT_WEAPON and weaponRotation ~= nil and weaponRotation.right ~= nil) and weaponRotation.right or controllers.getControllerRotation(Handed.Right)
 --					local rotation = controllers.getControllerRotation(Handed.Right)
 					--did this to fix robocop. what happens with hello neighbor? (even though hello neighbor doesnt need gunstock adjustments)
@@ -1228,7 +1229,12 @@ uevrUtils.registerLevelChangeCallback(function(level)
 end)
 
 uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, newLocation, newRotation)
-	M.setAimRotationOffset(newRotation)
+	--only handle gunstock transform changes if aim method is left or right controller since
+	--if its left or right weapon, the weapon already has the gunstock adjustments applied
+    local aimMethod = getParameter("aimMethod")
+	if aimMethod == M.AimMethod.LEFT_CONTROLLER or aimMethod == M.AimMethod.RIGHT_CONTROLLER then
+		M.setAimRotationOffset(newRotation)
+	end
 end)
 
 uevrUtils.registerUEVRCallback("on_pawn_param_change", function(name, value)

@@ -235,6 +235,8 @@ local autoHandleInput = true -- unless an external call is made to update(), in 
 local reticuleComponent = nil
 local restoreWidgetPosition = nil
 
+local scopeHidden = false
+
 --this should be the options structure
 -- local reticuleRotation = nil
 -- local reticulePosition = {X = 0.0, Y = 0.0}
@@ -532,6 +534,7 @@ end
 -- widget can be string or object
 -- options can be removeFromViewport, twoSided, drawSize, scale, rotation, position, collisionChannel, ignoreActors, traceComplex, minHitDistance
 function M.createFromWidget(widget, options)
+	if isHidden then return end
 	M.print("Creating reticule from widget")
 	M.destroy()
 
@@ -558,6 +561,7 @@ end
 -- mesh can be string or object
 -- options can be materialName, scale, rotation, position, collisionChannel
 function M.createFromMesh(mesh, options)
+	if isHidden then return end
 	M.print("Creating reticule from mesh")
 	M.destroy()
 
@@ -662,7 +666,7 @@ function M.update(originLocation, targetLocation, drawDistance, scale, rotation,
 	end
 
 	if uevrUtils.getValid(reticuleComponent) ~= nil then
-		if isHidden then
+		if isHidden or scopeHidden then
 			reticuleComponent:SetVisibility(false)
 			return
 		end
@@ -872,7 +876,8 @@ uevrUtils.setInterval(1000, function()
 end)
 
 uevrUtils.registerUEVRCallback("scope_active_change", function(isActive)
-	M.setHidden(isActive)
+	scopeHidden = isActive
+	--M.setHidden(isActive)
 end)
 
 

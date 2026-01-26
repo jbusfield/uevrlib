@@ -3313,7 +3313,19 @@ function M.getActiveWidgetByClass(className)
 	end
 end
 
--- local widget = WidgetBlueprintLibrary:Create(uevrUtils.get_world(), uevrUtils.get_class("WidgetBlueprintGeneratedClass /Game/UI/HUD/Reticle/Reticle_BP.Reticle_BP_C"), playerController)
+function M.createWidget(className, playerController)
+	local widget = nil
+	if className ~= nil then
+		if playerController == nil then
+			playerController = uevr.api:get_player_controller(0)
+		end
+		--UUserWidget* Create(class UObject* WorldContextObject, TSubclassOf<class UUserWidget> WidgetType, class APlayerController* OwningPlayer);
+		--widget = WidgetBlueprintLibrary:Create(playerController, M.get_class(className), playerController)
+---@diagnostic disable-next-line: undefined-field
+		widget = WidgetBlueprintLibrary:Create(M.get_world(), M.get_class(className), playerController)
+	end
+	return widget
+end
 
 --options are manualAttachment, relativeTransform, deferredFinish, parent, tag, removeFromViewport, twoSided, drawSize
 function M.createWidgetComponent(widget, options)
@@ -3325,17 +3337,6 @@ function M.createWidgetComponent(widget, options)
 			className = widget
 			widget = M.getActiveWidgetByClass(widget)
 		end
-		-- if type(widget) == "string" then
-		-- 	className = widget
-		-- 	local ok, result = pcall(function()
-		-- 		return M.getActiveWidgetByClass(widget)
-		-- 	end)
-		-- 	widget = result
-		-- 	if not ok then
-		-- 		print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Error in createWidgetComponent: ", className, type(className))
-		-- 		widget = nil
-		-- 	end
-		-- end
 
 		if M.getValid(widget) ~= nil then
 			widgetAlignment = widget:GetAlignmentInViewport()

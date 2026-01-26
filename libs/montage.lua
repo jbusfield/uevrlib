@@ -76,12 +76,17 @@ local M = {}
 local MAX_RECENT_MONTAGES = 10
 local recentMontages = {}  -- Queue of recent montages, newest first
 
+local configFileName = "dev/montage_config_dev"
+
 local parametersFileName = "montage_parameters"
 local parameters = {}
 local isParametersDirty = false
 
 local montageList = {}
 local montageIDList = {}
+
+local meshMonitors = {}
+local disableMeshMonitoring = false
 
 local montageState = {hands = nil, leftArm = nil, rightArm = nil, pawnBody = nil, pawnArms = nil, pawnArmBones = nil, motionSicknessCompensation = nil, inputEnabled = nil}
 
@@ -107,7 +112,7 @@ function M.print(text, logLevel)
     end
 end
 
-local helpText = "This module allows you to configure how montages (animations) are handled. You can view a list of recently played montages to see what montage is triggered for actions you perform in the game. You can use the configuration panel of a selected montage to adjust settings such as whether the montage will trigger hand animations or cause motion sickness compensation to kick in. Priority settings can b e useful if you have written a general purpose montage handler in code but want to override certain montages manually"
+local helpText = "This module allows you to configure how montages (animations) are handled. You can view a list of recently played montages to see what montage is triggered for actions you perform in the game. You can use the configuration panel of a selected montage to adjust settings such as whether the montage will trigger hand animations or cause motion sickness compensation to kick in. Priority settings can be useful if you have written a general purpose montage handler in code but want to override certain montages manually"
 local configWidgets = spliceableInlineArray{
 }
 
@@ -364,7 +369,7 @@ local createDevMonitor = doOnce(function()
         end
     end)
 
-	uevrUtils.registerMontageChangeCallback(function(montage, montageName)
+	M.registerMontageChangeCallback(function(montageObject, montageName, label)
 		if parameters ~= nil and montageName ~= nil and montageName ~= "" then
 			if parameters["montagelist"] == nil then
 				parameters["montagelist"] = {}
@@ -372,12 +377,12 @@ local createDevMonitor = doOnce(function()
 			end
 			if parameters["montagelist"][montageName] == nil then
 				parameters["montagelist"][montageName] = {}
-				parameters["montagelist"][montageName]["label"] = montageName
-				parameters["montagelist"][montageName]["class_name"] = montage:get_full_name()
+				parameters["montagelist"][montageName]["label"] = label .. " " .. montageName
+				parameters["montagelist"][montageName]["class_name"] = montageObject:get_full_name()
 				isParametersDirty = true
 				updateMontageList()
 			elseif parameters["montagelist"][montageName]["class_name"] == nil then
-				parameters["montagelist"][montageName]["class_name"] = montage:get_full_name()
+				parameters["montagelist"][montageName]["class_name"] = montageObject:get_full_name()
 				isParametersDirty = true
 			end
 			--configui.setValue("lastMontagePlayed", montageName)
@@ -385,6 +390,28 @@ local createDevMonitor = doOnce(function()
 			configui.setValue("recentMontagesPlayed", M.getRecentMontagesAsString())
 		end
 	end)
+
+	-- uevrUtils.registerMontageChangeCallback(function(montage, montageName)
+	-- 	if parameters ~= nil and montageName ~= nil and montageName ~= "" then
+	-- 		if parameters["montagelist"] == nil then
+	-- 			parameters["montagelist"] = {}
+	-- 			isParametersDirty = true
+	-- 		end
+	-- 		if parameters["montagelist"][montageName] == nil then
+	-- 			parameters["montagelist"][montageName] = {}
+	-- 			parameters["montagelist"][montageName]["label"] = montageName
+	-- 			parameters["montagelist"][montageName]["class_name"] = montage:get_full_name()
+	-- 			isParametersDirty = true
+	-- 			updateMontageList()
+	-- 		elseif parameters["montagelist"][montageName]["class_name"] == nil then
+	-- 			parameters["montagelist"][montageName]["class_name"] = montage:get_full_name()
+	-- 			isParametersDirty = true
+	-- 		end
+	-- 		--configui.setValue("lastMontagePlayed", montageName)
+    --         M.addRecentMontage(montageName)  -- Track in recent history
+	-- 		configui.setValue("recentMontagesPlayed", M.getRecentMontagesAsString())
+	-- 	end
+	-- end)
 end, Once.EVER)
 
 local function updateCurrentMontageFields()
@@ -415,15 +442,11 @@ local function updateStateIfHigherPriority(data, stateKey, valueKey)
 	end
 end
 
-uevrUtils.registerMontageChangeCallback(function(montage, montageName)
-	-- if montageState["inputEnabled"] == 3 and montageName == nil then
-	-- 	delay(3000, function()
-	-- 		montageState["inputEnabled"] = nil
-	-- 		montageState["inputEnabledPriority"] = 0
-	-- 	end)
-	-- 	return
-	-- end
+local function executeMontageChange(...)
+	uevrUtils.executeUEVRCallbacks("on_module_montage_change", table.unpack({...}))
+end
 
+local function handleMontageChanged(montage, montageName, label)
 	for _, config in ipairs(stateConfig) do
 		montageState[config.stateKey] = nil
 		montageState[config.stateKey .. "Priority"] = 0
@@ -435,7 +458,144 @@ uevrUtils.registerMontageChangeCallback(function(montage, montageName)
 			updateStateIfHigherPriority(data, config.stateKey, config.valueKey)
 		end
 	end
+
+	executeMontageChange(montage, montageName, label)
+end
+
+uevrUtils.registerMontageChangeCallback(function(montage, montageName)
+	handleMontageChanged(montage, montageName, "Pawn")
+	-- if montageState["inputEnabled"] == 3 and montageName == nil then
+	-- 	delay(3000, function()
+	-- 		montageState["inputEnabled"] = nil
+	-- 		montageState["inputEnabledPriority"] = 0
+	-- 	end)
+	-- 	return
+	-- end
+
+	-- for _, config in ipairs(stateConfig) do
+	-- 	montageState[config.stateKey] = nil
+	-- 	montageState[config.stateKey .. "Priority"] = 0
+	-- end
+
+	-- if parameters ~= nil and montageName ~= nil and montageName ~= "" and parameters["montagelist"] ~= nil and parameters["montagelist"][montageName] ~= nil  then
+	-- 	local data = parameters["montagelist"][montageName]
+	-- 	for _, config in ipairs(stateConfig) do
+	-- 		updateStateIfHigherPriority(data, config.stateKey, config.valueKey)
+	-- 	end
+	-- end
 end)
+
+--TODO implement monitoring of montage states on meshes as well as pawn
+--AnimMontage /Game/Art/ANIM/Character/FirstPerson/MeleeHvy/AS_MeleeHvy_FP_BasicAttack_R2L_Start_001_Montage.AS_MeleeHvy_FP_BasicAttack_R2L_Start_001_Montage
+--AnimMontage /Game/Art/ANIM/Character/FirstPerson/MeleeHvy/AS_MeleeHvy_FP_BasicAttack_R2L_Hit_001_Montage.AS_MeleeHvy_FP_BasicAttack_R2L_Hit_001_Montage
+-- local currentMontage = nil
+-- function checkMontage()
+-- 	local animInstance = uevrUtils.getValid(pawn,{"FPVMesh","AnimScriptInstance"})
+-- 	if animInstance ~= nil then
+-- 		local montage = animInstance:GetCurrentActiveMontage()
+-- 		print(montage and montage:get_full_name() or "nil")
+-- 		if currentMontage ~= montage then
+-- 			currentMontage = montage
+-- 			local montageName = currentMontage and M.getShortName(currentMontage) or ""
+-- 			if on_montage_change ~= nil then
+-- 				on_montage_change(currentMontage, montageName)
+-- 			end
+-- 		end
+-- 	end
+-- end
+
+-- function M.playAnimScriptInstanceMontage(montageName, speed, startTime, stopAllAnimations)
+-- 	local animInstance = uevrUtils.getValid(pawn,{"FPVMesh","AnimScriptInstance"})
+-- 	if animInstance ~= nil then
+-- 		--local className = parameters["montagelist"][montageName]["class_name"]
+-- 		local className = "AnimMontage /Game/Art/ANIM/Character/FirstPerson/MeleeHvy/AS_MeleeHvy_FP_BasicAttack_R2L_Hit_001_Montage.AS_MeleeHvy_FP_BasicAttack_R2L_Hit_001_Montage"
+-- 		if className ~= nil then
+-- 			--this should be get_class so it caches
+-- 			local montage = uevrUtils.find_required_object(className)
+-- 			if montage ~= nil then
+-- 				local result = animInstance:Montage_Play(montage, speed or 1.0, 0, startTime or 0.0, stopAllAnimations or false)
+-- 			end
+-- 		end
+-- 	end
+-- end
+
+-- function M.stopAnimScriptInstanceMontage(montageName, blendTime)
+-- 	local animInstance = uevrUtils.getValid(pawn,{"FPVMesh","AnimScriptInstance"})
+-- 	if animInstance ~= nil then
+-- 		--local className = parameters["montagelist"][montageName]["class_name"]
+-- 		local className = "AnimMontage /Game/Art/ANIM/Character/FirstPerson/MeleeHvy/AS_MeleeHvy_FP_BasicAttack_R2L_Hit_001_Montage.AS_MeleeHvy_FP_BasicAttack_R2L_Hit_001_Montage"
+-- 		if className ~= nil then
+-- 			--this should be get_class so it caches
+-- 			local montage = uevrUtils.find_required_object(className)
+-- 			if montage ~= nil then
+-- 				local result = animInstance:Montage_Stop(blendTime or 0.0, montage )
+-- 			end
+-- 		end
+-- 	end
+-- end
+
+-- function M.setPlayRateAnimScriptInstanceMontage(montageName, newPlayRate)
+-- 	local animInstance = uevrUtils.getValid(pawn,{"FPVMesh","AnimScriptInstance"})
+-- 	if animInstance ~= nil then
+-- 		--local className = parameters["montagelist"][montageName]["class_name"]
+-- 		local className = "AnimMontage /Game/Art/ANIM/Character/FirstPerson/MeleeHvy/AS_MeleeHvy_FP_BasicAttack_R2L_Hit_001_Montage.AS_MeleeHvy_FP_BasicAttack_R2L_Hit_001_Montage"
+-- 		if className ~= nil then
+-- 			--this should be get_class so it caches
+-- 			local montage = uevrUtils.find_required_object(className)
+-- 			if montage ~= nil then
+-- 				local result = animInstance:Montage_SetPlayRate(montage, newPlayRate or 1.0)
+-- 			end
+-- 		end
+-- 	end
+-- end
+
+local function getAnimInstanceForMontage(montageObject, label)
+	if label == nil or label == "" then
+		--try to find the montage object in the meshMonitors current montages
+		for descriptor, monitor in pairs(meshMonitors) do
+			if monitor["currentMontage"] == montageObject then
+				label = monitor.label
+				break
+			end
+		end
+	end
+	if label == nil or label == "" or label == "Pawn" then
+		return uevrUtils.getValid(pawn, {"Mesh","AnimScriptInstance"}), montageObject
+	else
+		for descriptor, monitor in pairs(meshMonitors) do
+			if monitor.label == label then
+				if monitor.meshObject ~= nil then
+					if montageObject == nil then
+						montageObject = monitor["currentMontage"]
+					end
+					return monitor.meshObject.AnimScriptInstance, montageObject
+				end
+			end
+		end
+	end
+end
+
+function M.setPlaybackRate(montage, label, rate)
+	local animInstance, montageObject = getAnimInstanceForMontage(montage, label)
+	if animInstance ~= nil then
+		animInstance:Montage_SetPlayRate(montageObject, rate or 1.0)
+		print("Set playback rate to " .. tostring(rate) .. " for montage " .. montageObject:get_full_name() .. " on " .. tostring(label))
+	end
+end
+
+function M.play(montage, label, rate, startTime, stopAllAnimations)
+	local animInstance, montageObject = getAnimInstanceForMontage(montage, label)
+	if animInstance ~= nil then
+		animInstance:Montage_Play(montageObject, rate or 1.0, 0, startTime or 0.0, stopAllAnimations or false)
+	end
+end
+
+function M.stop(montage, label, rate)
+	local animInstance, montageObject = getAnimInstanceForMontage(montage, label)
+	if animInstance ~= nil then
+		animInstance:Montage_Stop(rate or 0.0, montageObject)
+	end
+end
 
 function M.init(isDeveloperMode, logLevel)
     if logLevel ~= nil then
@@ -446,10 +606,51 @@ function M.init(isDeveloperMode, logLevel)
     end
 
     if isDeveloperMode then
-	    M.showDeveloperConfiguration("montage_config_dev")
+		--maintain backward compatability
+		if json.load_file("montage_config_dev.json") ~= nil then
+			configFileName = "montage_config_dev"
+		end
+		M.showDeveloperConfiguration(configFileName)
         createDevMonitor()
         updateMontageList()
     end
+end
+
+local function checkMonitoredMeshes()
+	for descriptor, monitor in pairs(meshMonitors) do
+		if monitor.meshObject ~= nil then
+			local animInstance = monitor.meshObject.AnimScriptInstance
+			if animInstance ~= nil then
+				local playingMontage = animInstance:GetCurrentActiveMontage()
+				if monitor["currentMontage"] ~= playingMontage then
+					monitor["currentMontage"] = playingMontage
+					local montageName = playingMontage and uevrUtils.getShortName(playingMontage) or ""
+					handleMontageChanged(playingMontage, montageName, monitor.label)
+				end
+			end
+		end
+	end
+end	
+
+function M.addMeshMonitor(label, meshDescriptor)
+	meshMonitors[meshDescriptor] = {label = label, descriptor = meshDescriptor, meshObject = uevrUtils.getObjectFromDescriptor(meshDescriptor, false)}
+end
+
+setInterval(2000, function()
+	if not disableMeshMonitoring then
+		for descriptor, monitor in pairs(meshMonitors) do
+			if monitor.meshObject == nil then
+				monitor.meshObject = uevrUtils.getObjectFromDescriptor(descriptor, false)
+			end
+		end
+	end
+end)
+
+function M.reset()
+	for descriptor, monitor in pairs(meshMonitors) do
+		monitor.meshObject = nil
+		monitor["currentMontage"] = nil
+	end
 end
 
 function M.loadParameters(fileName)
@@ -524,10 +725,12 @@ function M.clearRecentMontages()
     recentMontages = {}
 end
 
+--deprecated, use M.play instead
 function M.playMontage(montageName, speed)
 	if uevrUtils.getValid(pawn) ~= nil and parameters ~= nil and montageName ~= nil and montageName ~= "" and parameters["montagelist"][montageName] ~= nil then
 		local className = parameters["montagelist"][montageName]["class_name"]
 		if className ~= nil then
+			--this should be get_class so it caches
 			local montage = uevrUtils.find_required_object(className)
 			if montage ~= nil then
 				local result = pawn:PlayAnimMontage(montage, speed or 1.0, uevrUtils.fname_from_string(""))
@@ -572,6 +775,12 @@ uevrUtils.registerUEVRCallback("is_input_disabled", function()
 	return montageState["inputEnabled"] ~= nil and (not montageState["inputEnabled"]) or nil, montageState["inputEnabledPriority"]
 end)
 
+function M.registerMontageChangeCallback(func)
+    if func ~= nil and type(func) == "function" then
+	    uevrUtils.registerUEVRCallback("on_module_montage_change", func)
+    end
+end
+
 -- Register update handlers for all state configs and their priorities
 for _, config in ipairs(stateConfig) do
     local valueKey = config.valueKey
@@ -587,6 +796,19 @@ configui.onUpdate("knownMontageList", function(value)
 	showMontageEditFields()
 end)
 
+uevrUtils.registerPreLevelChangeCallback(function(level)
+	--disableMeshMonitoring added to help prevent crash but I dont think it actually does anything
+	disableMeshMonitoring = true
+	M.reset()
+	delay(10000, function()
+		disableMeshMonitoring = false
+	end)
+end)
+
+uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
+	--check the monitored meshes for montages
+	checkMonitoredMeshes()
+end)
 
 M.loadParameters()
 

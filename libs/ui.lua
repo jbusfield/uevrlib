@@ -222,13 +222,17 @@ end
 -- input.registerIsDisabledCallback(function()
 -- 	return uiState["inputEnabled"] ~= nil and (not uiState["inputEnabled"]) or nil, uiState["inputEnabledPriority"]
 -- end)
+function M.isRemapDisabled()
+    return uiState["remapEnabled"] ~= nil and (not uiState["remapEnabled"]) or nil, uiState["remapEnabledPriority"]
+end
 
 uevrUtils.registerUEVRCallback("is_input_disabled", function()
 	return uiState["inputEnabled"] ~= nil and (not uiState["inputEnabled"]) or nil, uiState["inputEnabledPriority"]
 end)
 
 uevrUtils.registerUEVRCallback("is_remap_disabled", function()
-	return uiState["remapEnabled"] ~= nil and (not uiState["remapEnabled"]) or nil, uiState["remapEnabledPriority"]
+    return M.isRemapDisabled()
+	--return uiState["remapEnabled"] ~= nil and (not uiState["remapEnabled"]) or nil, uiState["remapEnabledPriority"]
 end)
 
 uevrUtils.registerUEVRCallback("is_hands_hidden", function()
