@@ -50,6 +50,7 @@ local rootComponent = nil
 local decoupledYaw = nil
 local bodyRotationOffset = 0
 local bodyMesh = nil
+local pawnRotationModeOverride = nil
 
 --Normally body yaw only needs to be calculated for one eye only in on_early_calculate_stereo_view_offset
 --but in some cases, like Avowed when climbing, the body yaw needs to be calculated for both eyes or else the eyes desync
@@ -728,6 +729,10 @@ function M.getPawnRotationMode()
 	return getParameter("pawnRotationMode")
 end
 
+function M.setOverridePawnRotationMode(val)
+	pawnRotationModeOverride = val
+end
+
 function M.setPawnPositionMode(val)
 	saveParameter("pawnPositionMode", val)
 end
@@ -895,10 +900,13 @@ local function getEyeOffsetDelta(pawn, pawnYaw)
 end
 getEyeOffsetDelta = uevrUtils.profiler:wrap("getEyeOffsetDelta", getEyeOffsetDelta)
 
+local function getPawnRotationMode()
+	return pawnRotationModeOverride ~= nil and pawnRotationModeOverride or getParameter("pawnRotationMode")
+end
 --this is called from both on_pre_engine_tick and on_early_calculate_stereo_view_offset but K2_SetWorldRotation can only be called once per tick
 --because of the currentOffset ~= bodyRotationOffset check
 local function updateBodyYaw(delta)
-	local pawnRotationMode = getParameter("pawnRotationMode")
+	local pawnRotationMode = getPawnRotationMode() -- getParameter("pawnRotationMode")
 	if pawnRotationMode ~= M.PawnRotationMode.NONE then
 		if decoupledYaw~= nil and rootComponent ~= nil then
 			local currentOffset = bodyRotationOffset

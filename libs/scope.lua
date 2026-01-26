@@ -587,7 +587,7 @@ function M.disable(value)
 end
 
 function M.setOcularLensScale(value)
-	if uevrUtils.getValid(scopeMeshComponent) ~= nil then
+	if uevrUtils.getValid(scopeMeshComponent) ~= nil and value ~= nil then
 		uevrUtils.set_component_relative_scale(scopeMeshComponent, {value*0.05,value*0.05,value*0.001})
 	end
 end
