@@ -138,6 +138,7 @@ local uevrUtils = require("libs/uevr_utils")
 local configui = require("libs/configui")
 local controllers = require("libs/controllers")
 local scope = require('libs/scope')
+local laser = require('libs/laser')
 
 --local debugger = require("libs/uevr_debug")
 
@@ -160,6 +161,9 @@ local isParametersDirty = false
 local attachmentNames = {}
 local attachmentOffsets = {}
 local attachmentOffsetsLookup = {}
+
+local attachmentLasers = {}
+local attachmentScopes = {}
 
 --use supplied function that can give additional insight into whether or not a scope should be displayed
 local scopeActiveCallback = nil
@@ -241,15 +245,16 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		local pos = m_attachmentOffsets[i]["location"]
 		local rot = m_attachmentOffsets[i]["rotation"]
 		local scale = m_attachmentOffsets[i]["scale"]
-		local isMelee = m_attachmentOffsets[i]["melee"]
-		local isTwoHanded = m_attachmentOffsets[i]["two_handed"]
-		local isScoped = m_attachmentOffsets[i]["scoped"]
+		local isMelee = m_attachmentOffsets[i]["melee"] or false
+		local isTwoHanded = m_attachmentOffsets[i]["two_handed"] or false
+		local isScoped = m_attachmentOffsets[i]["scoped"] or false
 		local animation = m_attachmentOffsets[i]["animation"]
 		local anyChild = m_attachmentOffsets[i]["any_child"] and true or false
 		local anyParent = m_attachmentOffsets[i]["any_parent"] and true or false
 		local meleeRotationOffset = m_attachmentOffsets[i]["melee_rotation_offset"] or {0,0,0}
-		local useSightsPositionOffset = m_attachmentOffsets[i]["use_sights_position_offset"] or false
+		--local useSightsPositionOffset = m_attachmentOffsets[i]["use_sights_position_offset"] or false
 		local sightsPositionOffset = m_attachmentOffsets[i]["sights_position_offset"] or {0,0,0}
+		local useLaser = m_attachmentOffsets[i]["use_laser"] or false
 
 		local selectedIndex = 1
 		for j = 1, #animationIDs do
@@ -280,6 +285,20 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 						id = "attachment_" .. name .. "_scale", label = "Scale",
 						widgetType = "drag_float3", speed = .1, range = {0.01, 10}, initialValue = scale
 					}
+		)
+		table.insert(configDefinition[1]["layout"],
+			{
+				id = "attachment_" .. name .. "_sights_position_offset", label = "Sights Position Offset",
+				widgetType = "drag_float3", speed = .1, range = {-500, 500}, initialValue = sightsPositionOffset,  width = 250
+			}
+		)
+		table.insert(configDefinition[1]["layout"],
+            {
+                widgetType = "checkbox",
+                id =  "attachment_" .. name .. "_use_laser",
+                label = "Use Laser",
+                initialValue = useLaser
+            }
 		)
 		table.insert(configDefinition[1]["layout"],
             {
@@ -333,22 +352,22 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		table.insert(configDefinition[1]["layout"], { widgetType = "end_group" })
 
 
-		table.insert(configDefinition[1]["layout"],
-            {
-                widgetType = "checkbox",
-                id =  "attachment_" .. name .. "_use_sights_position_offset",
-                label = "Sights",
-                initialValue = useSightsPositionOffset
-            }
-		)
-		table.insert(configDefinition[1]["layout"],{ widgetType = "indent", width = 20 })
-		table.insert(configDefinition[1]["layout"],
-			{
-				id = "attachment_" .. name .. "_sights_position_offset", label = "Sights Position Offset",
-				widgetType = "drag_float3", speed = .1, range = {-500, 500}, initialValue = sightsPositionOffset, isHidden = useSightsPositionOffset ~= true, width = 250
-			}
-		)
-		table.insert(configDefinition[1]["layout"],{ widgetType = "unindent", width = 20 })
+		-- table.insert(configDefinition[1]["layout"],
+        --     {
+        --         widgetType = "checkbox",
+        --         id =  "attachment_" .. name .. "_use_sights_position_offset",
+        --         label = "Sights",
+        --         initialValue = useSightsPositionOffset
+        --     }
+		-- )
+		-- table.insert(configDefinition[1]["layout"],{ widgetType = "indent", width = 20 })
+		-- table.insert(configDefinition[1]["layout"],
+		-- 	{
+		-- 		id = "attachment_" .. name .. "_sights_position_offset", label = "Sights Position Offset",
+		-- 		widgetType = "drag_float3", speed = .1, range = {-500, 500}, initialValue = sightsPositionOffset, isHidden = useSightsPositionOffset ~= true, width = 250
+		-- 	}
+		-- )
+		-- table.insert(configDefinition[1]["layout"],{ widgetType = "unindent", width = 20 })
 		table.insert(configDefinition[1]["layout"],
 			{
 				id = "attachment_" .. name .. "_grip_animation", label = "Grip Animation",
@@ -414,12 +433,15 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		configui.onUpdate("attachment_" .. name .. "_melee_rotation_offset", function(value)
 			M.updateMeleeRotationOffset(value, id)
 		end)
-		configui.onCreateOrUpdate("attachment_" .. name .. "_use_sights_position_offset", function(value)
-			M.updateAttachmentUseSightsPositionOffset(id, value)
-			configui.setHidden("attachment_" .. name .. "_sights_position_offset", not value)
-		end)
+		-- configui.onCreateOrUpdate("attachment_" .. name .. "_use_sights_position_offset", function(value)
+		-- 	M.updateAttachmentUseSightsPositionOffset(id, value)
+		-- 	configui.setHidden("attachment_" .. name .. "_sights_position_offset", not value)
+		-- end)
 		configui.onUpdate("attachment_" .. name .. "_sights_position_offset", function(value)
 			M.updateSightsPositionOffset(value, id)
+		end)
+		configui.onCreateOrUpdate("attachment_" .. name .. "_use_laser", function(value)
+			M.updateAttachmentHasLaser(id, value)
 		end)
 
 	end
@@ -521,11 +543,15 @@ local createDevMonitor = doOnce(function()
     end)
 end, Once.EVER)
 
+local configFileName = "dev/attachments_config_dev"
 local function getDefaultConfig()
+	if json.load_file("attachments_config_dev.json") ~= nil then
+		configFileName = "attachments_config_dev"
+	end
 	return  {
 		{
 			panelLabel = "Attachments Config Dev",
-			saveFile = "attachments_config_dev",
+			saveFile = configFileName,
 			layout =
 			{
 			}
@@ -574,6 +600,7 @@ function M.init(isDeveloperMode, logLevel, m_defaultLocation, m_defaultRotation,
 	    M.showDeveloperConfiguration(m_defaultLocation, m_defaultRotation, m_defaultScale)
         createDevMonitor()
     end
+
 	scope.init()
 end
 
@@ -770,6 +797,7 @@ function M.getAttachmentOffset(attachment)
 	return uevrUtils.vector(attachmentLocation), uevrUtils.rotator(attachmentRotation), uevrUtils.rotator(attachmentScale)
 end
 
+
 -- function M.setAttachmentOffset(parentName, childName, location, rotation)
 -- 	for i = 1, #attachmentOffsets do
 -- 		local parent = attachmentOffsets[i]["parent"]
@@ -836,14 +864,104 @@ function M.getMeleeRotationOffset(id)
 	return uevrUtils.rotator(0,0,0)
 end
 
+-- local function handleScope(id, attachment, gripHand)
+-- 	if M.isActiveAttachmentScoped(gripHand) and (scopeActiveCallback == nil or scopeActiveCallback(attachment)) then
+-- 		scope.createAndAttach(id, attachment)
+-- 	else
+-- 		M.print("No weapon scope settings found. Destroying scope")
+-- 		scope.destroy()
+-- 	end
+-- end
+
+-- Scopes ------------------------------------------------
+local function createScopeForAttachment(id,attachment, gripHand)
+	attachmentScopes[gripHand] = scope.new(id)
+	attachmentScopes[gripHand]:attachTo(attachment)
+	return attachmentScopes[gripHand]
+end
+
+local function destroyScopeForGripHand(gripHand)
+	if attachmentScopes[gripHand] ~= nil then
+		attachmentScopes[gripHand]:destroy()
+		attachmentScopes[gripHand] = nil
+	end
+end
+
+local function updateScopeForAttachment(id, attachment, gripHand)
+	if M.isActiveAttachmentScoped(gripHand) and (scopeActiveCallback == nil or scopeActiveCallback(attachment)) then
+		if attachmentScopes[gripHand] == nil then
+			createScopeForAttachment(id, attachment, gripHand)
+		end
+	else
+		destroyScopeForGripHand(gripHand)
+	end
+end
+
+local function updateScopeForAttachmentID(id)
+	local attachmentDataArray = getAttachmentDataFromMeshAttachmentList(id)
+	--local attachment, _, _ = getAttachmentDataFromMeshAttachmentList(id)
+	if attachmentDataArray ~= nil and #attachmentDataArray > 0 then
+		for j = 1, #attachmentDataArray do
+			local attachmentData = attachmentDataArray[j]
+			if attachmentData ~= nil and uevrUtils.getValid(attachmentData.attachment) ~= nil and attachmentData.gripHand ~= nil then
+				updateScopeForAttachment(id, attachmentData.attachment, attachmentData.gripHand)
+			end
+		end
+	end
+end
+--------------------------------------------------------
+
+
+--- Lasers ---------------------------------------------
+local function createLaserForAttachment(attachment, gripHand)
+	attachmentLasers[gripHand] = laser.new({laserColor = "#00FFFFFF"})
+	attachmentLasers[gripHand]:attachTo(attachment)--, "Sight_Socket")
+	attachmentLasers[gripHand]:setLength(50)
+	attachmentLasers[gripHand]:setRelativePosition(M.getActiveAttachmentSightsPositionOffset(gripHand))
+	return attachmentLasers[gripHand]
+end
+
+local function destroyLaserForGripHand(gripHand)
+	if attachmentLasers[gripHand] ~= nil then
+		attachmentLasers[gripHand]:destroy()
+		attachmentLasers[gripHand] = nil
+	end
+end
+
+local function updateLaserForAttachment(attachment, gripHand)
+	if M.isActiveAttachmentLasered(gripHand) then
+		if attachmentLasers[gripHand] == nil then
+			createLaserForAttachment(attachment, gripHand)
+		else
+			attachmentLasers[gripHand]:setRelativePosition(M.getActiveAttachmentSightsPositionOffset(gripHand))
+		end
+	else
+		destroyLaserForGripHand(gripHand)
+	end
+end
+
+local function updateLaserForAttachmentID(id)
+	local attachmentDataArray = getAttachmentDataFromMeshAttachmentList(id)
+	--local attachment, _, _ = getAttachmentDataFromMeshAttachmentList(id)
+	if attachmentDataArray ~= nil and #attachmentDataArray > 0 then
+		for j = 1, #attachmentDataArray do
+			local attachmentData = attachmentDataArray[j]
+			if attachmentData ~= nil and uevrUtils.getValid(attachmentData.attachment) ~= nil and attachmentData.gripHand ~= nil then
+				updateLaserForAttachment(attachmentData.attachment, attachmentData.gripHand)
+			end
+		end
+	end
+end
+---------------------------------------------------------
+
+-- Sights ----------------------------------------------
 local sightsCache = {}
 function M.updateSightsPositionOffset(positionOffset, id)
-	for i = 1, #attachmentOffsets do
-		local attachmentID = attachmentOffsets[i]["id"]
-		if id == attachmentID then
-			attachmentOffsets[i]["sights_position_offset"] = {positionOffset.X, positionOffset.Y, positionOffset.Z}
-			sightsCache[id] = nil --the cache will update itself next time it's requested
-		end
+	local offset = getAttachmentOffsetByID(id)
+	if offset ~= nil then
+		offset["sights_position_offset"] = {positionOffset.X, positionOffset.Y, positionOffset.Z}
+		sightsCache[id] = nil --the cache will update itself next time it's requested
+		updateLaserForAttachmentID(id)
 	end
 	parameters["attachmentOffsets"] = attachmentOffsets
 	isParametersDirty = true
@@ -854,13 +972,11 @@ function M.getSightsPositionOffset(id)
 		return sightsCache[id]
 	end
 	local vector = nil
-	for i = 1, #attachmentOffsets do
-		local attachmentID = attachmentOffsets[i]["id"]
-		if id == attachmentID then
-			local pos = attachmentOffsets[i]["sights_position_offset"]
-			if pos ~= nil then
-				vector = uevrUtils.vector(pos)
-			end
+	local offset = getAttachmentOffsetByID(id)
+	if offset ~= nil then
+		local pos = offset["sights_position_offset"]
+		if pos ~= nil then
+			vector = uevrUtils.vector(pos)
 		end
 	end
 	if vector == nil then
@@ -869,6 +985,8 @@ function M.getSightsPositionOffset(id)
 	sightsCache[id] = vector
 	return vector
 end
+------------------------------------------------
+
 
 --My homespun version of kismet_math_library:ComposeRotators
 -- local function compose(rotation1, rotation2)
@@ -1002,6 +1120,7 @@ end
 
 function M.updateAttachmentIsScoped(id, isScoped)
 	updateAttachmentProperty(id, "scoped", isScoped)
+	updateScopeForAttachmentID(id)
 end
 
 function M.updateAttachmentIsTwoHanded(id, isTwoHanded)
@@ -1012,9 +1131,14 @@ function M.updateAttachmentIsMelee(id, isMelee)
 	updateAttachmentProperty(id, "melee", isMelee)
 end
 
-function M.updateAttachmentUseSightsPositionOffset(id, useSightsPositionOffset)
-	updateAttachmentProperty(id, "use_sights_position_offset", useSightsPositionOffset)
+function M.updateAttachmentHasLaser(id, hasLaser)
+	updateAttachmentProperty(id, "use_laser", hasLaser)
+	updateLaserForAttachmentID(id)
 end
+
+-- function M.updateAttachmentUseSightsPositionOffset(id, useSightsPositionOffset)
+-- 	updateAttachmentProperty(id, "use_sights_position_offset", useSightsPositionOffset)
+-- end
 
 local function checkAttachmentProperty(attachment, property)
 	--print("checkAttachmentProperty called for property " .. property, attachment)
@@ -1065,6 +1189,10 @@ end
 
 function M.isActiveAttachmentScoped(hand)
 	return checkAttachmentProperty( M.getCurrentGrippedAttachment(hand), "scoped")
+end
+
+function M.isActiveAttachmentLasered(hand)
+	return checkAttachmentProperty( M.getCurrentGrippedAttachment(hand), "use_laser")
 end
 
 function M.isActiveAttachmentTwoHanded(hand)
@@ -1223,15 +1351,6 @@ local function updateSelectedColors()
 
 end
 
-local function handleScope(id, attachment, gripHand)
-	if M.isActiveAttachmentScoped(gripHand) and (scopeActiveCallback == nil or scopeActiveCallback(attachment)) then
-		scope.createAndAttach(id, attachment)
-	else
-		M.print("No weapon scope settings found. Destroying scope")
-		scope.destroy()
-	end
-end
-
 
 function M.initAttachment(attachment, gripHand)
 	if attachment ~= nil then
@@ -1248,7 +1367,8 @@ function M.initAttachment(attachment, gripHand)
 		M.updateAttachmentTransform(location, rotation, scale, id)
 		M.setActiveAnimation(attachment, gripHand)
 
-		handleScope(id, attachment, gripHand)
+		updateScopeForAttachmentID(id)
+		updateLaserForAttachmentID(id)
 
 		updateSelectedColors()
 	end
@@ -1576,6 +1696,9 @@ local function detachAndCleanup(attachmentData, reattachToParent)
     if attachmentData == nil then return end
 
     if attachmentData.gripHand ~= nil then
+		destroyLaserForGripHand(attachmentData.gripHand)
+		destroyScopeForGripHand(attachmentData.gripHand)
+
         activeGripAnimations[attachmentData.gripHand] = false
         executeGripAnimationChange(false, attachmentData.gripHand)
     end

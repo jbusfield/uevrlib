@@ -368,7 +368,7 @@ function M.createFromConfig(configuration, profileName, animationName)
 						end
 					else
 						local component = uevrUtils.getObjectFromDescriptor(meshPropertyName, true) -- "Pawn.Mesh(Arm).Glove")
-						print(component,meshPropertyName)
+						--print(component,meshPropertyName)
 						if component ~= nil then
 							components[key] = component
 						end

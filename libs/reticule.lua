@@ -235,6 +235,7 @@ local autoHandleInput = true -- unless an external call is made to update(), in 
 local reticuleComponent = nil
 local restoreWidgetPosition = nil
 
+local hideWhenScopeActive = false
 local scopeHidden = false
 
 --this should be the options structure
@@ -876,10 +877,17 @@ uevrUtils.setInterval(1000, function()
 end)
 
 uevrUtils.registerUEVRCallback("scope_active_change", function(isActive)
-	scopeHidden = isActive
+	if hideWhenScopeActive then
+		scopeHidden = isActive
+	else
+		scopeHidden = false
+	end
 	--M.setHidden(isActive)
 end)
 
+function M.setHiddenWhenScopeActive(value)
+	hideWhenScopeActive = value
+end
 
 uevrUtils.registerPreLevelChangeCallback(function(level)
 	M.print("Pre-Level changed in reticule")

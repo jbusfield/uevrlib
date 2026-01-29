@@ -776,6 +776,7 @@ Usage
 			Post engine
 
 ]]--
+--Find orphaned prints: ^[^-]*[^.\w]print\(
 
 require("libs/enums/unreal")
 -------------------------------
@@ -2332,6 +2333,9 @@ function M.validate_object(object)
     end
 end
 
+---@generic T
+---@overload fun(object: T): T|nil
+---@overload fun(object: any, properties: string[]): any|nil
 function M.getValid(object, properties)
 	if M.validate_object(object) ~= nil then
 		if properties ~= nil and #properties > 0 then

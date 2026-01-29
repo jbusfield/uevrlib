@@ -5,41 +5,32 @@ local paramModule = require("libs/core/params")
 
 local M = {}
 
-local settings = {}
-local currentScopeID = ""
-
----@type any
-local sceneCaptureComponent = nil
----@type any
-local scopeMeshComponent = nil
----@type any
-local scopeDebugComponent = nil
-local currentActiveState = true
-local isDisabled = true
+-- Scope class definition
+local Scope = {}
+Scope.__index = Scope
 
 local maxZoom = 1.0
 local minZoom = 0.0
--- local maxFOV = 30.0
--- local minFOV = 1.0
 
 local brightnessSpeed = 3.0
 local maxBrightness = 8.0
 local minBrightness = 0.1
---local currentBrightness = 1.0
+
+local defaultPitchOffset = 0.0
 
 local parameterDefaults = {
 	min_fov = 2.0,
-	max_fov = 32.0,
+	max_fov = 20.0,
 	brightness = 2.0,
 	ocular_lens_scale = 1.0,
 	objective_lens_rotation = {0.0, 0.0, 0.0},
-	objective_lens_location = {0.0, 0.0, 0.0},
+	objective_lens_location = {0.0, 0.0, 20.0},
 	ocular_lens_rotation = {0.0, 0.0, 0.0},
-	ocular_lens_location = {0.0, 0.0, 0.0},
+	ocular_lens_location = {0.0, 0.0, 20.0},
 	zoom_speed = 1.0,
 	zoom_exponential = 0.5,
 	disable = false,
-	deactivate_distance = 15.0,
+	deactivate_distance = 50.0,
 	show_debug = false,
 	zoom = 1.0,
 	hide_ocular_lens_on_disable = true,
@@ -60,15 +51,43 @@ local parametersFileName = "scope_parameters"
 local parameters = {}
 local paramManager = paramModule.new(parametersFileName, parameters, true)
 
+local activeScopeInstances = {}  -- Table to track all active scope instances by weaponTypeID
+local activeScopeCount = 0
+
+-- Module-level parameter functions (shared by weapon type ID)
 local function saveParameter(scopeID, key, value, persist)
-	--paramManager:set(key, value, persist)
 	paramManager:set({"scopes", scopeID, key}, value, persist)
 end
 
 local function getParameter(scopeID, key)
-    --return paramManager:get(key)
 	local value = paramManager:get({"scopes", scopeID, key})
     return value or parameterDefaults[key]
+end
+
+-- Constructor for new scope instance
+function M.new(weaponTypeID, options)
+	local instance = setmetatable({}, Scope)
+
+	instance.weaponTypeID = weaponTypeID or ""
+	instance.sceneCaptureComponent = nil
+	instance.scopeMeshComponent = nil
+	instance.scopeDebugComponent = nil
+	instance.currentActiveState = true
+	instance.isDisabled = true
+
+	-- Auto-create the scope components
+	instance:create(options)
+
+	-- Register this scope instance
+    if instance.weaponTypeID ~= "" then
+        if activeScopeInstances[instance.weaponTypeID] == nil then
+            activeScopeInstances[instance.weaponTypeID] = {}
+        end
+        table.insert(activeScopeInstances[instance.weaponTypeID], instance)
+    end
+	activeScopeCount = M.getScopeCount()
+
+	return instance
 end
 
 
@@ -121,7 +140,7 @@ function M.getConfigWidgets(prefix)
         {
             widgetType = "checkbox",
             id = prefix .. "scope_show_debug",
-            label = "Show visual layout guide",
+            label = "Show Objective Lens Debug Mesh",
             initialValue = false
         },
         {
@@ -158,7 +177,7 @@ function M.getConfigWidgets(prefix)
             label = "Objective Lens Rotation",
             speed = 0.1,
             range = {-90, 90},
-            initialValue = {0.0, 0.0, 0.0}
+            initialValue = parameterDefaults.objective_lens_rotation
         },
         {
             widgetType = "drag_float3",
@@ -166,7 +185,7 @@ function M.getConfigWidgets(prefix)
             label = "Objective Lens Location",
             speed = 0.05,
             range = {-100, 100},
-            initialValue = {0.0, 0.0, 0.0}
+            initialValue = parameterDefaults.objective_lens_location
         },
         {
             widgetType = "drag_float3",
@@ -174,7 +193,7 @@ function M.getConfigWidgets(prefix)
             label = "Ocular Lens Rotation",
             speed = 0.1,
             range = {-90, 90},
-            initialValue = {0.0, 0.0, 0.0}
+            initialValue = parameterDefaults.ocular_lens_rotation
         },
         {
             widgetType = "drag_float3",
@@ -182,7 +201,7 @@ function M.getConfigWidgets(prefix)
             label = "Ocular Lens Location",
             speed = 0.05,
             range = {-100, 100},
-            initialValue = {0.0, 0.0, 0.0}
+            initialValue = parameterDefaults.ocular_lens_location
         },
         -- {
         --     widgetType = "checkbox",
@@ -223,12 +242,12 @@ end
 function M.createConfigCallbacks(id, prefix)
 	configui.onUpdate(prefix .. "scope_min_fov", function(value)
 		saveParameter(id, "min_fov", value, true)
-		M.setZoom(getParameter(id, "zoom"))
+		-- Note: After multi-scope refactor, setZoom needs to be called on specific scope instance
 	end)
 
 	configui.onUpdate(prefix .. "scope_max_fov", function(value)
 		saveParameter(id, "max_fov", value, true)
-		M.setZoom(getParameter(id, "zoom"))
+		-- Note: After multi-scope refactor, setZoom needs to be called on specific scope instance
 	end)
 
 	configui.onUpdate(prefix .. "scope_zoom_speed", function(value)
@@ -241,61 +260,85 @@ function M.createConfigCallbacks(id, prefix)
 
 	configui.onUpdate(prefix .. "scope_ocular_lens_scale", function(value)
 		saveParameter(id, "ocular_lens_scale", value, true)
-		M.setOcularLensScale(value)
+		if activeScopeInstances[id] ~= nil then
+			for _, scope in ipairs(activeScopeInstances[id]) do
+				scope:setOcularLensScale(value)
+			end
+		end
 	end)
 
 	configui.onUpdate(prefix .. "scope_brightness", function(value)
 		saveParameter(id, "brightness", value, true)
-		M.setBrightness(value)
+		if activeScopeInstances[id] ~= nil then
+			for _, scope in ipairs(activeScopeInstances[id]) do
+				scope:setBrightness(value)
+			end
+		end
 	end)
 
 	configui.onUpdate(prefix .. "scope_objective_lens_rotation", function(value)
 		saveParameter(id, "objective_lens_rotation", {value.Pitch, value.Yaw, value.Roll}, true)
-		M.setObjectiveLensRelativeRotation(value)
+        if activeScopeInstances[id] ~= nil then
+            for _, scope in ipairs(activeScopeInstances[id]) do
+                scope:setObjectiveLensRelativeRotation(value)
+            end
+        end
 	end)
 
 	configui.onUpdate(prefix .. "scope_objective_lens_location", function(value)
 		saveParameter(id, "objective_lens_location", {value.X, value.Y, value.Z}, true)
-		M.setObjectiveLensRelativeLocation(value)
+        if activeScopeInstances[id] ~= nil then
+            for _, scope in ipairs(activeScopeInstances[id]) do
+                scope:setObjectiveLensRelativeLocation(value)
+            end
+        end
 	end)
 
 	configui.onUpdate(prefix .. "scope_ocular_lens_rotation", function(value)
 		saveParameter(id, "ocular_lens_rotation", {value.Pitch, value.Yaw, value.Roll}, true)
-		M.setOcularLensRelativeRotation(value)
+        if activeScopeInstances[id] ~= nil then
+            for _, scope in ipairs(activeScopeInstances[id]) do
+                scope:setOcularLensRelativeRotation(value)
+            end
+        end
 	end)
 
 	configui.onUpdate(prefix .. "scope_ocular_lens_location", function(value)
 		saveParameter(id, "ocular_lens_location", {value.X, value.Y, value.Z}, true)
-		M.setOcularLensRelativeLocation(value)
+        if activeScopeInstances[id] ~= nil then
+            for _, scope in ipairs(activeScopeInstances[id]) do
+                scope:setOcularLensRelativeLocation(value)
+            end
+        end
 	end)
 
 	configui.onUpdate(prefix .. "scope_disable", function(value)
 		saveParameter(id, "disable", value, true)
 		M.print("Scope disable set to " .. tostring(value))
-		M.disable(value)
+        if activeScopeInstances[id] ~= nil then
+            for _, scope in ipairs(activeScopeInstances[id]) do
+                scope:disable(value)
+            end
+        end
 	end)
 
 	configui.onUpdate(prefix .. "scope_deactivate_distance", function(value)
 		saveParameter(id, "deactivate_distance", value, true)
-		--M.setDeactivateDistance(value)
 	end)
 
 	configui.onUpdate(prefix .. "scope_hide_ocular_lens_on_disable", function(value)
 		saveParameter(id, "hide_ocular_lens_on_disable", value, true)
 	end)
 
-
 	configui.onUpdate(prefix .. "scope_show_debug", function(value)
 		saveParameter(id, "show_debug", value, true)
-		M.showDebugMeshes(value)
+		-- Note: After multi-scope refactor, showDebugMeshes needs to be called on specific scope instance
+		if activeScopeInstances[id] ~= nil then
+			for _, scope in ipairs(activeScopeInstances[id]) do
+				scope:showDebugMeshes(value)
+			end
+		end
 	end)
-
-	-- configui.onUpdate(prefix .. "scope_create_demo", function(value)
-	-- 	saveParameter(id, "create_demo", value)
-	-- 	M.destroy()
-	-- 	M.create()
-	-- end)
-
 end
 
 -- local configDefinition = {
@@ -467,47 +510,56 @@ end
 local function executeActiveScope(...)
 	uevrUtils.executeUEVRCallbacks("scope_active_change", table.unpack({...}))
 end
-function M.setFOV(value)
-	if uevrUtils.getValid(sceneCaptureComponent) ~= nil then
-		sceneCaptureComponent.FOVAngle = value
-		--M.print(sceneCaptureComponent.FOVAngle)
+
+function M.getScopeCount()
+    local count = 0
+    for weaponTypeID, scopes in pairs(activeScopeInstances) do
+        count = count + #scopes
+    end
+    return count
+end
+
+
+function Scope:setFOV(value)
+	if uevrUtils.getValid(self.sceneCaptureComponent) ~= nil then
+		self.sceneCaptureComponent.FOVAngle = value
 	end
 end
 
 -- min_fov and max_fov may be confusing. min_fov is the narrowest field of view (highest zoom), max_fov is the widest field of view (lowest zoom)
-function M.setZoom(zoom)
+function Scope:setZoom(zoom)
 	local ratio = zoom / maxZoom
-	local exponentialRatio = ratio ^ getParameter(currentScopeID, "zoom_exponential") -- where zoomExponential is typically less than 1 for gradual increase, >1 for steeper curve {Link: according to GitHub https://rikunert.github.io/exponential_scaler}
-	local currentFOV = getParameter(currentScopeID, "max_fov") + exponentialRatio * (getParameter(currentScopeID, "min_fov") - getParameter(currentScopeID, "max_fov"))
+	local exponentialRatio = ratio ^ getParameter(self.weaponTypeID, "zoom_exponential")
+	local currentFOV = getParameter(self.weaponTypeID, "max_fov") + exponentialRatio * (getParameter(self.weaponTypeID, "min_fov") - getParameter(self.weaponTypeID, "max_fov"))
 
-	M.setFOV(currentFOV)
-	if currentScopeID ~= nil and currentScopeID ~= "" then
-		saveParameter(currentScopeID, "zoom", zoom, true)
+	self:setFOV(currentFOV)
+	if self.weaponTypeID ~= nil and self.weaponTypeID ~= "" then
+		saveParameter(self.weaponTypeID, "zoom", zoom, true)
 	end
 end
 
-function M.updateZoom(zoomDirection, delta)
+function Scope:updateZoom(zoomDirection, delta)
 	if zoomDirection ~= 0 then
-		local currentZoom = getParameter(currentScopeID, "zoom")
-		currentZoom = currentZoom + (1 * getParameter(currentScopeID, "zoom_speed") * zoomDirection * delta)
+		local currentZoom = getParameter(self.weaponTypeID, "zoom")
+		currentZoom = currentZoom + (1 * getParameter(self.weaponTypeID, "zoom_speed") * zoomDirection * delta)
 		currentZoom = math.max(minZoom, math.min(maxZoom, currentZoom))
 
-		M.setZoom(currentZoom)
-		if currentScopeID ~= nil and currentScopeID ~= "" then
-			saveParameter(currentScopeID, "zoom", currentZoom, true)
+		self:setZoom(currentZoom)
+		if self.weaponTypeID ~= nil and self.weaponTypeID ~= "" then
+			saveParameter(self.weaponTypeID, "zoom", currentZoom, true)
 		end
 	end
 end
 
-function M.updateBrightness(brightnessDirection, delta)
+function Scope:updateBrightness(brightnessDirection, delta)
 	if brightnessDirection ~= 0 then
-		local currentBrightness = getParameter(currentScopeID, "brightness")
+		local currentBrightness = getParameter(self.weaponTypeID, "brightness")
 		currentBrightness = currentBrightness + (1 * brightnessSpeed * brightnessDirection * delta)
 		currentBrightness = math.max(minBrightness, math.min(maxBrightness, currentBrightness))
 
-		M.setBrightness(currentBrightness)
-		if currentScopeID ~= nil and currentScopeID ~= "" then
-			saveParameter(currentScopeID, "brightness", currentBrightness, true)
+		self:setBrightness(currentBrightness)
+		if self.weaponTypeID ~= nil and self.weaponTypeID ~= "" then
+			saveParameter(self.weaponTypeID, "brightness", currentBrightness, true)
 		end
 	end
 end
@@ -533,129 +585,145 @@ end
 	-- M.zoom(1, zoomSpeed)
 -- end
 
-function M.getOcularLensComponent()
-	return scopeMeshComponent
+function Scope:getOcularLensComponent()
+	return self.scopeMeshComponent
 end
 
-function M.getObjectiveLensComponent()
-	return sceneCaptureComponent
+function Scope:getObjectiveLensComponent()
+	return self.sceneCaptureComponent
 end
 
-function M.destroy()
-	if sceneCaptureComponent ~= nil then
-		uevrUtils.detachAndDestroyComponent(sceneCaptureComponent, true, true)
+function Scope:destroy()
+	if self.sceneCaptureComponent ~= nil then
+		uevrUtils.detachAndDestroyComponent(self.sceneCaptureComponent, true, true)
 	end
-	if scopeMeshComponent ~= nil then
-		uevrUtils.detachAndDestroyComponent(scopeMeshComponent, true, true)
+	if self.scopeMeshComponent ~= nil then
+		uevrUtils.detachAndDestroyComponent(self.scopeMeshComponent, true, true)
 	end
-	if scopeDebugComponent ~= nil then
-		uevrUtils.detachAndDestroyComponent(scopeDebugComponent, true, true)
+	if self.scopeDebugComponent ~= nil then
+		uevrUtils.detachAndDestroyComponent(self.scopeDebugComponent, true, true)
 	end
-	M.reset()
+
+	    -- Unregister this scope instance
+    if self.weaponTypeID ~= "" and activeScopeInstances[self.weaponTypeID] ~= nil then
+        for i, scope in ipairs(activeScopeInstances[self.weaponTypeID]) do
+            if scope == self then
+                table.remove(activeScopeInstances[self.weaponTypeID], i)
+                -- Clean up empty table
+                if #activeScopeInstances[self.weaponTypeID] == 0 then
+                    activeScopeInstances[self.weaponTypeID] = nil
+                end
+                break
+            end
+        end
+    end
+	activeScopeCount = M.getScopeCount()
+
+	self:reset()
 	executeActiveScope(false)
 end
 
-function M.reset()
-	sceneCaptureComponent = nil
-	scopeMeshComponent = nil
-	scopeDebugComponent = nil
-	currentActiveState = true
-	isDisabled = true
+function Scope:reset()
+	self.sceneCaptureComponent = nil
+	self.scopeMeshComponent = nil
+	self.scopeDebugComponent = nil
+	self.currentActiveState = true
+	self.isDisabled = true
 end
 
-function M.disable(value)
-	isDisabled = true
-	if uevrUtils.getValid(sceneCaptureComponent) ~= nil and sceneCaptureComponent.SetVisibility ~= nil then
-		sceneCaptureComponent:SetVisibility(not value)
-		isDisabled = value
+function Scope:disable(value)
+	self.isDisabled = true
+	if uevrUtils.getValid(self.sceneCaptureComponent) ~= nil and self.sceneCaptureComponent.SetVisibility ~= nil then
+		self.sceneCaptureComponent:SetVisibility(not value, false)
+		self.isDisabled = value
 	end
-	if uevrUtils.getValid(scopeMeshComponent) ~= nil and scopeMeshComponent.SetVisibility ~= nil then
+	if uevrUtils.getValid(self.scopeMeshComponent) ~= nil and self.scopeMeshComponent.SetVisibility ~= nil then
 		local val = value
-		if getParameter(currentScopeID, "hide_ocular_lens_on_disable") == false then
+		if getParameter(self.weaponTypeID, "hide_ocular_lens_on_disable") == false then
 			val = false
 		end
-		scopeMeshComponent:SetVisibility(not val)
+		self.scopeMeshComponent:SetVisibility(not val)
 	end
-	if uevrUtils.getValid(scopeDebugComponent) ~= nil and scopeDebugComponent.SetVisibility ~= nil then
+	if uevrUtils.getValid(self.scopeDebugComponent) ~= nil and self.scopeDebugComponent.SetVisibility ~= nil then
 		local val = value
-		if getParameter(currentScopeID, "show_debug") == false then
+		if getParameter(self.weaponTypeID, "show_debug") == false then
 			val = true
 		end
-		scopeDebugComponent:SetVisibility(not val)
+		--self.scopeDebugComponent:SetVisibility(not val)
+		if val == true then
+			self:destroyOcularLensDebugMesh()
+		else
+			self:createOcularLensDebugMesh()
+		end
+
 	end
 	executeActiveScope(not value)
 end
 
-function M.setOcularLensScale(value)
-	if uevrUtils.getValid(scopeMeshComponent) ~= nil and value ~= nil then
-		uevrUtils.set_component_relative_scale(scopeMeshComponent, {value*0.05,value*0.05,value*0.001})
+function Scope:setOcularLensScale(value)
+	if uevrUtils.getValid(self.scopeMeshComponent) ~= nil and value ~= nil then
+		uevrUtils.set_component_relative_scale(self.scopeMeshComponent, {value*0.05,value*0.05,value*0.001})
 	end
 end
 
-function M.setObjectiveLensRelativeRotation(value)
+function Scope:setObjectiveLensRelativeRotation(value)
 	value = uevrUtils.vector(value)
-	if uevrUtils.getValid(sceneCaptureComponent) ~= nil and value ~= nil then
-		uevrUtils.set_component_relative_rotation(sceneCaptureComponent, {value.X-90,value.Y,value.Z})
-		--print(value.X-90,value.Y,value.Z)
+	if uevrUtils.getValid(self.sceneCaptureComponent) ~= nil and value ~= nil then
+		uevrUtils.set_component_relative_rotation(self.sceneCaptureComponent, {value.X - 90 + defaultPitchOffset,value.Y,value.Z})
 	end
 end
 
-function M.setObjectiveLensRelativeLocation(value)
+function Scope:setObjectiveLensRelativeLocation(value)
 	value = uevrUtils.vector(value)
-	if uevrUtils.getValid(sceneCaptureComponent) ~= nil and value ~= nil then
-		uevrUtils.set_component_relative_location(sceneCaptureComponent, {value.X,value.Y,value.Z})
+	if uevrUtils.getValid(self.sceneCaptureComponent) ~= nil and value ~= nil then
+		uevrUtils.set_component_relative_location(self.sceneCaptureComponent, {value.X,value.Y,value.Z})
 	end
 end
 
--- function M.setDeactivateDistance(value)
--- 	deactivateDistance = value
--- end
-
-function M.setOcularLensRelativeRotation(value)
+function Scope:setOcularLensRelativeRotation(value)
 	value = uevrUtils.vector(value)
-	if uevrUtils.getValid(scopeMeshComponent) ~= nil and value ~= nil then
-		uevrUtils.set_component_relative_rotation(scopeMeshComponent, {value.X,value.Y,value.Z})
+	if uevrUtils.getValid(self.scopeMeshComponent) ~= nil and value ~= nil then
+		uevrUtils.set_component_relative_rotation(self.scopeMeshComponent, {value.X + defaultPitchOffset,value.Y,value.Z})
 	end
 end
 
 local function activeStateChanged(isActive)
-	M.disable(not isActive)
+	-- Called when active state changes
 end
 
-function M.updateActiveState()
+function Scope:updateActiveState()
 	local isActive = true
-	if uevrUtils.getValid(scopeMeshComponent) == nil or uevrUtils.getValid(sceneCaptureComponent) == nil or scopeMeshComponent.K2_GetComponentLocation == nil then
+	if uevrUtils.getValid(self.scopeMeshComponent) == nil or uevrUtils.getValid(self.sceneCaptureComponent) == nil or self.scopeMeshComponent.K2_GetComponentLocation == nil then
 		isActive = false
 	else
-		local deactivateDistance = getParameter(currentScopeID, "deactivate_distance")
+		local deactivateDistance = getParameter(self.weaponTypeID, "deactivate_distance")
 		local headLocation = controllers.getControllerLocation(2)
-		local ocularLensLocation = scopeMeshComponent:K2_GetComponentLocation()
+		local ocularLensLocation = self.scopeMeshComponent:K2_GetComponentLocation()
 		if headLocation ~= nil and ocularLensLocation ~= nil then
 			local distance = kismet_math_library:Vector_Distance(headLocation, ocularLensLocation)
 			isActive = distance < deactivateDistance
-			--M.disable(distance > deactivateDistance)
-			--scopeMeshComponent:SetVisibility(not (distance > deactivateDistance))
 		end
 	end
-	if isActive ~= currentActiveState then
+	if isActive ~= self.currentActiveState then
+		self:disable(not isActive)
 		activeStateChanged(isActive)
 	end
-	currentActiveState = isActive
+	self.currentActiveState = isActive
 end
 
-function M.isDisplaying()
-	return not isDisabled
+function Scope:isDisplaying()
+	return not self.isDisabled
 end
 
-function M.setOcularLensRelativeLocation(value)
+function Scope:setOcularLensRelativeLocation(value)
 	value = uevrUtils.vector(value)
-	if uevrUtils.getValid(scopeMeshComponent) ~= nil and value ~= nil then
-		uevrUtils.set_component_relative_location(scopeMeshComponent, {value.X,value.Y,value.Z})
+	if uevrUtils.getValid(self.scopeMeshComponent) ~= nil and value ~= nil then
+		uevrUtils.set_component_relative_location(self.scopeMeshComponent, {value.X,value.Y,value.Z})
 	end
 end
 
-function M.setBrightness(value)
-	local scopeMaterial = scopeMeshComponent:GetMaterial(0)
+function Scope:setBrightness(value)
+	local scopeMaterial = self.scopeMeshComponent:GetMaterial(0)
 	if scopeMaterial ~= nil then
 		local color = uevrUtils.color_from_rgba(value, value, value, value)
 		scopeMaterial:SetVectorParameterValue("Color", color)
@@ -669,36 +737,25 @@ EAttachmentRule = {
     EAttachmentRule_MAX = 3,
 }
 
-function M.createOcularLens(renderTarget2D, options)
+function Scope:createOcularLens(renderTarget2D, options)
 	if options == nil then options = {} end
 	if options.scale == nil then options.scale = configui.getValue("uevr_lib_scope_ocular_lens_scale") end
-	if options.brightness == nil then options.brightness = getParameter(currentScopeID, "brightness") end
-
-	--currentBrightness = options.brightness
-	-- if settings[currentScopeID] ~= nil and settings[currentScopeID].brightness ~= nil then
-	-- 	currentBrightness = settings[currentScopeID].brightness
-	-- end
+	if options.brightness == nil then options.brightness = getParameter(self.weaponTypeID, "brightness") end
 
 	uevrUtils.getLoadedAsset("StaticMesh /Engine/BasicShapes/Cylinder.Cylinder")
-	scopeMeshComponent = uevrUtils.createStaticMeshComponent("StaticMesh /Engine/BasicShapes/Cylinder.Cylinder", {visible=false, collisionEnabled=false} )
-	if uevrUtils.getValid(scopeMeshComponent) ~= nil then
-		M.setOcularLensScale(options.scale)
+	self.scopeMeshComponent = uevrUtils.createStaticMeshComponent("StaticMesh /Engine/BasicShapes/Cylinder.Cylinder", {visible=false, collisionEnabled=false} )
+	if uevrUtils.getValid(self.scopeMeshComponent) ~= nil then
+		self:setOcularLensScale(options.scale)
 
 		local templateMaterial = uevrUtils.find_required_object("Material /Engine/EngineMaterials/EmissiveMeshMaterial.EmissiveMeshMaterial")
 		if templateMaterial ~= nil then
-			--templateMaterial.BlendMode = 7
-			-- templateMaterial.BlendMode = 0
-			-- templateMaterial.TwoSided = 0
 			templateMaterial:set_property("BlendMode", 0)
 			templateMaterial:set_property("TwoSided", false)
 
-			-- templateMaterial.bDisableDepthTest = true
-			-- templateMaterial.MaterialDomain = 0
-			-- templateMaterial.ShadingModel = 0
 ---@diagnostic disable-next-line: need-check-nil
-			local scopeMaterial = scopeMeshComponent:CreateDynamicMaterialInstance(0, templateMaterial, "scope_material")
+			local scopeMaterial = self.scopeMeshComponent:CreateDynamicMaterialInstance(0, templateMaterial, "scope_material")
 			scopeMaterial:SetTextureParameterValue("LinearColor", renderTarget2D)
-			M.setBrightness(options.brightness)
+			self:setBrightness(options.brightness)
 		end
 		M.print("scopeMeshComponent created")
 	else
@@ -706,26 +763,43 @@ function M.createOcularLens(renderTarget2D, options)
 	end
 end
 
-function M.createObjectiveLens(renderTarget2D, options)
-	if options == nil then options = {} end
-	if options.fov == nil then options.fov = getParameter(currentScopeID, "fov") end
----@diagnostic disable-next-line: cast-local-type
-	minFOV = options.fov
-
-	sceneCaptureComponent = uevrUtils.createSceneCaptureComponent({visible=false, collisionEnabled=false})
-	if uevrUtils.getValid(sceneCaptureComponent) ~= nil then
-		sceneCaptureComponent.TextureTarget = renderTarget2D
-		--M.setFOV(minFOV)
-		M.updateZoom(1, 0)
-		M.setObjectiveLensRelativeRotation(getParameter(currentScopeID, "objective_lens_rotation"))
-		--uevrUtils.set_component_relative_rotation(sceneCaptureComponent, {Pitch=-90, Yaw=0, Roll=0})
-
-		scopeDebugComponent = uevrUtils.createStaticMeshComponent("StaticMesh /Engine/BasicShapes/Cylinder.Cylinder", {visible=true, collisionEnabled=false})
-		if scopeDebugComponent ~= nil then
-			scopeDebugComponent:K2_AttachTo(sceneCaptureComponent, uevrUtils.fname_from_string(""), EAttachmentRule.KeepRelative, false)
-			uevrUtils.set_component_relative_transform(scopeDebugComponent, {0.5,0,0},{Pitch=90, Yaw=0, Roll=0},{0.01,0.01,0.01})
-			scopeDebugComponent:SetVisibility(getParameter(currentScopeID, "show_debug"))
+function Scope:createOcularLensDebugMesh()
+	if self.scopeDebugComponent == nil and uevrUtils.getValid(self.sceneCaptureComponent) ~= nil then
+		self.scopeDebugComponent = uevrUtils.createStaticMeshComponent("StaticMesh /Engine/BasicShapes/Cylinder.Cylinder", {visible=true, collisionEnabled=false})
+		if self.scopeDebugComponent ~= nil then
+			self.scopeDebugComponent:K2_AttachTo(self.sceneCaptureComponent, uevrUtils.fname_from_string(""), EAttachmentRule.KeepRelative, false)
+			uevrUtils.set_component_relative_transform(self.scopeDebugComponent, {0.5,0,0}, {Pitch=90, Yaw=0, Roll=0}, {0.01 ,0.01, 0.01})
+			--self.scopeDebugComponent:SetVisibility(getParameter(self.weaponTypeID, "show_debug"))
 		end
+	end
+end
+
+function Scope:destroyOcularLensDebugMesh()
+	if self.scopeDebugComponent ~= nil then
+		uevrUtils.detachAndDestroyComponent(self.scopeDebugComponent, true, true)
+		self.scopeDebugComponent = nil
+	end
+end
+
+function Scope:createObjectiveLens(renderTarget2D, options)
+	if options == nil then options = {} end
+	if options.fov == nil then options.fov = getParameter(self.weaponTypeID, "fov") end
+
+	self.sceneCaptureComponent = uevrUtils.createSceneCaptureComponent({visible=false, collisionEnabled=false})
+	if uevrUtils.getValid(self.sceneCaptureComponent) ~= nil then
+		self.sceneCaptureComponent.TextureTarget = renderTarget2D
+		self:updateZoom(1, 0)
+		self:setObjectiveLensRelativeRotation(getParameter(self.weaponTypeID, "objective_lens_rotation"))
+
+		if getParameter(self.weaponTypeID, "show_debug") == true then
+			self:createOcularLensDebugMesh()
+		end
+		-- self.scopeDebugComponent = uevrUtils.createStaticMeshComponent("StaticMesh /Engine/BasicShapes/Cylinder.Cylinder", {visible=true, collisionEnabled=false})
+		-- if self.scopeDebugComponent ~= nil then
+		-- 	self.scopeDebugComponent:K2_AttachTo(self.sceneCaptureComponent, uevrUtils.fname_from_string(""), EAttachmentRule.KeepRelative, false)
+		-- 	uevrUtils.set_component_relative_transform(self.scopeDebugComponent, {0.5,0,0}, {Pitch=90, Yaw=0, Roll=0}, {0.01 ,0.01, 0.01})
+		-- 	self.scopeDebugComponent:SetVisibility(getParameter(self.weaponTypeID, "show_debug"))
+		-- end
 
 		M.print("sceneCaptureComponent created")
 	else
@@ -733,19 +807,24 @@ function M.createObjectiveLens(renderTarget2D, options)
 	end
 end
 
-function M.showDebugMeshes(value)
-	if uevrUtils.getValid(scopeDebugComponent) ~= nil then
-		scopeDebugComponent:SetVisibility(value)
+function Scope:showDebugMeshes(value)
+	if value == false then
+		self:destroyOcularLensDebugMesh()
+	else
+		self:createOcularLensDebugMesh()
 	end
+	-- if uevrUtils.getValid(self.scopeDebugComponent) ~= nil then
+	-- 	self.scopeDebugComponent:SetVisibility(value)
+	-- end
 end
 
-function M.createAndAttach(id, attachment)
+function Scope:attachTo(attachment)
 	M.print("Found scope settings. Creating scope")
-	local ocularLensComponent, objectiveLensComponent = M.create(id)
+	local ocularLensComponent, objectiveLensComponent = self:getOcularLensComponent(), self:getObjectiveLensComponent()
 	if objectiveLensComponent ~= nil then
 		objectiveLensComponent:K2_AttachToComponent(
 				attachment,
-				"", --scopeSettings["socket"],
+				"",
 				0, -- Location rule
 				0, -- Rotation rule
 				0, -- Scale rule
@@ -766,59 +845,137 @@ function M.createAndAttach(id, attachment)
 	else
 		M.print("Ocular lens component creation failed")
 	end
-	M.setObjectiveLensRelativeRotation(getParameter(currentScopeID, "objective_lens_rotation"))
-	M.setObjectiveLensRelativeLocation(getParameter(currentScopeID, "objective_lens_location"))
-	M.setOcularLensRelativeRotation(getParameter(currentScopeID, "ocular_lens_rotation"))
-	M.setOcularLensRelativeLocation(getParameter(currentScopeID, "ocular_lens_location"))
-	M.setOcularLensScale(getParameter(currentScopeID, "ocular_lens_scale"))
+	self:setObjectiveLensRelativeRotation(getParameter(self.weaponTypeID, "objective_lens_rotation"))
+	self:setObjectiveLensRelativeLocation(getParameter(self.weaponTypeID, "objective_lens_location"))
+	self:setOcularLensRelativeRotation(getParameter(self.weaponTypeID, "ocular_lens_rotation"))
+	self:setOcularLensRelativeLocation(getParameter(self.weaponTypeID, "ocular_lens_location"))
+	self:setOcularLensScale(getParameter(self.weaponTypeID, "ocular_lens_scale"))
 
 	M.print("Scope created")
 end
 
 -- options example { disabled=true, fov=2.0, brightness=2.0, scale=1.0, deactivateDistance=15, hideOcularLensOnDisable=true}
-function M.create(id, options)
-	currentScopeID = id or ""
-	M.destroy()
+function Scope:create(options)
+	self:destroy()
 
 	if options == nil then options = {} end
 	if options.brightness == nil then options.brightness = 1.0 end
 
-	-- currentID = ""
-	-- local id = options.id
-	-- if id ~= nil then
-	-- 	if settings[id] == nil then
-	-- 		settings[id] = {}
-	-- 		settings[id].zoom = 1.0
-	-- 		settings[id].brightness = options.brightness
-	-- 	end
-	-- 	currentID = id
-	-- end
 	if options.deactivateDistance then
-		saveParameter(currentScopeID, "deactivate_distance", options.deactivateDistance, false)
+		saveParameter(self.weaponTypeID, "deactivate_distance", options.deactivateDistance, false)
 	end
 	if options.hideOcularLensOnDisable then
-		saveParameter(currentScopeID, "hide_ocular_lens_on_disable", options.hideOcularLensOnDisable, false)
+		saveParameter(self.weaponTypeID, "hide_ocular_lens_on_disable", options.hideOcularLensOnDisable, false)
 	end
 
 	local renderTarget2D = uevrUtils.createRenderTarget2D({width=1024, height=1024, format=ETextureRenderTargetFormat.RTF_RGBA16f})
-	M.createOcularLens(renderTarget2D, options)
-	M.createObjectiveLens(renderTarget2D, options)
+	self:createOcularLens(renderTarget2D, options)
+	self:createObjectiveLens(renderTarget2D, options)
 
-	local disabled = options ~= nil and (options.disabled == true) or getParameter(currentScopeID, "disable") == true
-	M.disable(disabled)
+	local disabled = options ~= nil and (options.disabled == true) or getParameter(self.weaponTypeID, "disable") == true
+	self:disable(disabled)
 
-	return M.getOcularLensComponent(), M.getObjectiveLensComponent()
+	return self:getOcularLensComponent(), self:getObjectiveLensComponent()
 end
 
-function M.attachToLeftHand()
-	local headConnected = controllers.attachComponentToController(Handed.Left, M.getObjectiveLensComponent(), nil, nil, nil, true)
-	local leftConnected = controllers.attachComponentToController(Handed.Left, M.getOcularLensComponent(), nil, nil, nil, true)
+function Scope:attachToLeftHand()
+	local headConnected = controllers.attachComponentToController(Handed.Left, self:getObjectiveLensComponent(), nil, nil, nil, true)
+	local leftConnected = controllers.attachComponentToController(Handed.Left, self:getOcularLensComponent(), nil, nil, nil, true)
 end
 
-uevrUtils.registerPostEngineTickCallback(function(engine, delta)
-	M.updateActiveState()
-	--checkUpdates(delta)
-end)
+-- Input state tracking for multi-scope support
+local autoHandleInput = true
+local scopeAdjustDirection = 0
+local scopeAdjustMode = M.AdjustMode.ZOOM
+local leftControls = false
+
+function M.setAutoHandleInput(value)
+	autoHandleInput = value
+end
+
+-- Find the scope closest to the HMD/head position
+local function findClosestScopeToHead()
+	if activeScopeCount == 0 then return nil end
+
+    local headLocation = controllers.getControllerLocation(2)
+    if headLocation == nil then return nil end
+
+    local closestScope = nil
+    local closestDistance = math.huge
+
+    for weaponTypeID, scopes in pairs(activeScopeInstances) do
+        for _, scope in ipairs(scopes) do
+            if scope ~= nil and scope:isDisplaying() then
+                local ocularLens = scope:getOcularLensComponent()
+                if uevrUtils.getValid(ocularLens) ~= nil and ocularLens.K2_GetComponentLocation ~= nil then
+                    local scopeLocation = ocularLens:K2_GetComponentLocation()
+                    if scopeLocation ~= nil then
+                        local distance = kismet_math_library:Vector_Distance(headLocation, scopeLocation)
+                        if distance < closestDistance then
+                            closestDistance = distance
+                            closestScope = scope
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return closestScope
+end
+
+-- Update multiple scopes - call from attachments or main loop
+-- Handles input routing to closest scope
+function M.updateScopes(delta)
+    if autoHandleInput and activeScopeCount > 0 then
+        -- Update active state for all scopes
+        for weaponTypeID, scopes in pairs(activeScopeInstances) do
+            for _, scope in ipairs(scopes) do
+                if scope ~= nil then
+                    scope:updateActiveState()
+                end
+            end
+        end
+
+        -- Find closest scope for input routing
+        local closestScope = findClosestScopeToHead()
+
+        -- Handle input for the closest scope
+        if closestScope ~= nil then
+            if scopeAdjustMode == M.AdjustMode.BRIGHTNESS then
+                closestScope:updateBrightness(scopeAdjustDirection, delta)
+            elseif scopeAdjustMode == M.AdjustMode.ZOOM then
+                closestScope:updateZoom(scopeAdjustDirection, delta)
+            end
+        end
+    end
+end
+
+function M.setDefaultPitchOffset(value)
+	defaultPitchOffset = value
+end
+
+-- Deprecated singleton-style functions kept for backward compatibility
+-- These will operate on the "current" scope if set
+local currentScopeID = ""
+function M.setActive(id)
+	currentScopeID = id
+end
+
+function M.isActive()
+	return currentScopeID ~= nil and currentScopeID ~= ""
+end
+
+-- Legacy singleton destroy function
+function M.destroy()
+	-- This is kept for backward compatibility
+	-- New code should call scope:destroy() on the instance
+	M.print("M.destroy() called - consider using scope:destroy() on instance instead")
+end
+
+function M.reset()
+	currentScopeID = ""
+end
 
 uevrUtils.registerLevelChangeCallback(function(level)
 	M.reset()
@@ -828,62 +985,40 @@ function M.init(isDeveloperMode, logLevel)
     paramManager:load()
 end
 
-function M.setActive(id)
-	--print("Setting active scope to ", id)
-	currentScopeID = id
-end
-
-function M.isActive()
-	--TODO add better checks
-	return currentScopeID ~= nil and currentScopeID ~= "" and scopeMeshComponent ~= nil and sceneCaptureComponent ~= nil
-end
-
 uevrUtils.registerUEVRCallback("attachment_grip_changed", function(id, gripHand)
-    --M.addAdjustment({id = id})
 	M.setActive("")
-	M.destroy()
-
 end)
 
 uevr.params.sdk.callbacks.on_script_reset(function()
-	M.destroy()
+	-- Note: Individual scopes should be destroyed by their owners
+	-- This is mainly for cleanup of any legacy singleton state
+	M.reset()
 end)
 
-local autoHandleInput = true
-function M.setAutoHandleInput(value)
-	autoHandleInput = value
-end
-local scopeAdjustDirection = 0
-local scopeAdjustMode = M.AdjustMode.ZOOM
-local leftControls = false
 uevrUtils.registerOnPreInputGetStateCallback(function(retval, user_index, state)
-	if M.isActive() and autoHandleInput then
-		scopeAdjustDirection = 0
-		local thumbY = state.Gamepad.sThumbRY
-		if leftControls then
-			thumbY = state.Gamepad.sThumbLY
-		end
-
-		if thumbY >= 10000 or thumbY <= -10000 then
-			scopeAdjustDirection = thumbY/32768
-		end
-		scopeAdjustMode = M.AdjustMode.ZOOM
-		local dpadMethod = uevr.params.vr:get_mod_value("VR_DPadShiftingMethod")
-		--print(string.find(dpadMethod,"0"),string.find(dpadMethod,"1"))
-		if uevrUtils.isThumbpadTouched(state, string.find(dpadMethod,"1") and Handed.Right or Handed.Left) then
-			scopeAdjustMode = M.AdjustMode.BRIGHTNESS
-		end
+	if autoHandleInput == false or activeScopeCount == 0 then
+		return
 	end
-end, 9) --high priority to intercept messages before possible remapper
+
+	scopeAdjustDirection = 0
+	local thumbY = state.Gamepad.sThumbRY
+	if leftControls then
+		thumbY = state.Gamepad.sThumbLY
+	end
+
+	if thumbY >= 10000 or thumbY <= -10000 then
+		scopeAdjustDirection = thumbY/32768
+	end
+
+	scopeAdjustMode = M.AdjustMode.ZOOM
+	local dpadMethod = uevr.params.vr:get_mod_value("VR_DPadShiftingMethod")
+	if uevrUtils.isThumbpadTouched(state, string.find(dpadMethod,"1") and Handed.Right or Handed.Left) then
+		scopeAdjustMode = M.AdjustMode.BRIGHTNESS
+	end
+end, 9)
 
 function on_post_engine_tick(engine, delta)
-	if M.isActive() and autoHandleInput then
-		if scopeAdjustMode == M.AdjustMode.BRIGHTNESS then
-			M.updateBrightness(scopeAdjustDirection, delta)
-		elseif scopeAdjustMode == M.AdjustMode.ZOOM then
-			M.updateZoom(scopeAdjustDirection, delta)
-		end
-	end
+	M.updateScopes(delta)
 end
 
 return M

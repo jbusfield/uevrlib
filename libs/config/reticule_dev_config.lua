@@ -713,7 +713,7 @@ local createDevMonitor = doOnce(function()
     end)
 
 	uevrUtils.registerLevelChangeCallback(function(level)
-		print("Level changed, updating reticule list")
+		--print("Level changed, updating reticule list")
 	end)
 end, Once.EVER)
 
@@ -993,7 +993,7 @@ local function getUniqueName(reticuleType)
 end
 
 configui.onCreateOrUpdate(widgetPrefix .. "list", function(value)
-    print("Reticule selection changed to index " .. tostring(value), #reticuleIDList)
+    --print("Reticule selection changed to index " .. tostring(value), #reticuleIDList)
     if #reticuleIDList >= value then
         if reticuleIDList[value].id == "_new_widget" then
             M.addDefaultWidgetReticule(getUniqueName("Widget"), "", true)
