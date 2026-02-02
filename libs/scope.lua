@@ -955,45 +955,45 @@ function M.setDefaultPitchOffset(value)
 	defaultPitchOffset = value
 end
 
--- Deprecated singleton-style functions kept for backward compatibility
--- These will operate on the "current" scope if set
-local currentScopeID = ""
-function M.setActive(id)
-	currentScopeID = id
-end
+-- -- Deprecated singleton-style functions kept for backward compatibility
+-- -- These will operate on the "current" scope if set
+-- local currentScopeID = ""
+-- function M.setActive(id)
+-- 	currentScopeID = id
+-- end
 
-function M.isActive()
-	return currentScopeID ~= nil and currentScopeID ~= ""
-end
+-- function M.isActive()
+-- 	return currentScopeID ~= nil and currentScopeID ~= ""
+-- end
 
--- Legacy singleton destroy function
-function M.destroy()
-	-- This is kept for backward compatibility
-	-- New code should call scope:destroy() on the instance
-	M.print("M.destroy() called - consider using scope:destroy() on instance instead")
-end
+-- -- Legacy singleton destroy function
+-- function M.destroy()
+-- 	-- This is kept for backward compatibility
+-- 	-- New code should call scope:destroy() on the instance
+-- 	M.print("M.destroy() called - consider using scope:destroy() on instance instead")
+-- end
 
-function M.reset()
-	currentScopeID = ""
-end
+-- function M.reset()
+-- 	currentScopeID = ""
+-- end
 
-uevrUtils.registerLevelChangeCallback(function(level)
-	M.reset()
-end)
+-- uevrUtils.registerLevelChangeCallback(function(level)
+-- 	M.reset()
+-- end)
 
 function M.init(isDeveloperMode, logLevel)
     paramManager:load()
 end
 
-uevrUtils.registerUEVRCallback("attachment_grip_changed", function(id, gripHand)
-	M.setActive("")
-end)
+-- uevrUtils.registerUEVRCallback("attachment_grip_changed", function(id, gripHand)
+-- 	M.setActive("")
+-- end)
 
-uevr.params.sdk.callbacks.on_script_reset(function()
-	-- Note: Individual scopes should be destroyed by their owners
-	-- This is mainly for cleanup of any legacy singleton state
-	M.reset()
-end)
+-- uevr.params.sdk.callbacks.on_script_reset(function()
+-- 	-- Note: Individual scopes should be destroyed by their owners
+-- 	-- This is mainly for cleanup of any legacy singleton state
+-- 	M.reset()
+-- end)
 
 uevrUtils.registerOnPreInputGetStateCallback(function(retval, user_index, state)
 	if autoHandleInput == false or activeScopeCount == 0 then
@@ -1010,12 +1010,17 @@ uevrUtils.registerOnPreInputGetStateCallback(function(retval, user_index, state)
 		scopeAdjustDirection = thumbY/32768
 	end
 
+	-- prevent annoying accidental snap turn when making adjustments
+	if scopeAdjustDirection ~= 0 then
+		state.Gamepad.sThumbRX = 0
+	end
+
 	scopeAdjustMode = M.AdjustMode.ZOOM
 	local dpadMethod = uevr.params.vr:get_mod_value("VR_DPadShiftingMethod")
 	if uevrUtils.isThumbpadTouched(state, string.find(dpadMethod,"1") and Handed.Right or Handed.Left) then
 		scopeAdjustMode = M.AdjustMode.BRIGHTNESS
 	end
-end, 9)
+end, 11)
 
 function on_post_engine_tick(engine, delta)
 	M.updateScopes(delta)

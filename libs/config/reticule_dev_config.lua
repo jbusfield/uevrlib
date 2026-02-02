@@ -931,7 +931,7 @@ local function populateMaterialSearchList()
 end
 
 function M.setCurrentReticleParameter(paramName, value)
-    print("Setting reticule parameter " .. paramName .. " to " .. tostring(value))
+    --print("Setting reticule parameter " .. paramName .. " to " .. tostring(value))
     local currentReticuleID = parameters["currentReticuleID"]
     local reticuleParameters = getReticuleParametersByID(currentReticuleID)
     if reticuleParameters ~= nil then

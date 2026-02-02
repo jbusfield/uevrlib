@@ -47,10 +47,10 @@ local parameterConfigs = {
 	},
 	{
 		name = "eye_dominance_offset",
-		label = "Eye Dominance Offset",
+		label = "Interpupillary Distance (mm)",
 		widgetType = "slider_float",
-		speed = 0.01,
-		range = {0, 10},
+		speed = 0.1,
+		range = {0, 100},
 		initialValue = eyeDominanceOffset
 	},
 	-- {

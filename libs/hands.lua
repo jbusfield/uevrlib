@@ -149,6 +149,7 @@ local handComponents = {}
 local handDefinitions = {}
 local handBoneList = {} --used for debugging
 local offset={X=0, Y=0, Z=0, Pitch=0, Yaw=0, Roll=0}
+local ignoreRelativeOffset = false
 local inputHandlerAnimID = {} --list of animID only used for the default input handler
 local handsConfig = nil -- the configuration tool for creating hands in game
 local holdingAttachment = {}
@@ -261,6 +262,7 @@ function M.reset()
 	handDefinitions = {}
 	handBoneList = {}
 	offset={X=0, Y=0, Z=0, Pitch=0, Yaw=0, Roll=0}
+	ignoreRelativeOffset = false
 	inputHandlerAnimID = {}
 	armsAnimationMeshes[Handed.Left] = {animating=false, mesh=nil, componentName=nil}
 	armsAnimationMeshes[Handed.Right] = {animating=false, mesh=nil, componentName=nil}
@@ -420,6 +422,7 @@ function M.create(skeletalMeshComponent, definition, handAnimations)
 			if skeletalMeshDefinition["Offset"] ~= nil then
 				offset = skeletalMeshDefinition["Offset"]
 			end
+			ignoreRelativeOffset = skeletalMeshDefinition["IgnoreRelativeOffset"] == true
 			M.print("Creating hand component: " .. name )
 			local component = nil
 			if type(skeletalMeshComponent) == "table" then
@@ -485,7 +488,7 @@ function M.createComponent(skeletalMeshComponent, name, hand, definition)
 			component.bCastDynamicShadow = false
 
 			controllers.attachComponentToController(hand, component)
-			local baseRotation = skeletalMeshComponent.RelativeRotation
+			local baseRotation = ignoreRelativeOffset and uevrUtils.rotator(0,0,0) or skeletalMeshComponent.RelativeRotation
 			uevrUtils.set_component_relative_transform(component, offset, {Pitch=baseRotation.Pitch+offset.Pitch, Yaw=baseRotation.Yaw+offset.Yaw,Roll=baseRotation.Roll+offset.Roll})
 
 			if definition ~= nil then
@@ -530,10 +533,14 @@ function  M.setOffset(newOffset)
 	offset = newOffset
 end
 
+function  M.setIgnoreRelativeOffset(value)
+	ignoreRelativeOffset = value
+end
+
 --only for debugging
-function M.updateOffset(skeletalMeshComponent, newOffset)
+function M.updateOffset(skeletalMeshComponent, newOffset, ignoreRelative)
 	if skeletalMeshComponent ~= nil then
-		local baseRotation = skeletalMeshComponent.RelativeRotation
+		local baseRotation = ignoreRelative and uevrUtils.rotator(0,0,0) or skeletalMeshComponent.RelativeRotation
 		local component = handComponents["Arms"][Handed.Right]
 		uevrUtils.set_component_relative_transform(component, newOffset, {Pitch=baseRotation.Pitch+newOffset.Pitch, Yaw=baseRotation.Yaw+newOffset.Yaw,Roll=baseRotation.Roll+newOffset.Roll})
 	end

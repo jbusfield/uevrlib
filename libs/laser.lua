@@ -1,6 +1,9 @@
 local uevrUtils = require("libs/uevr_utils")
+local particles = require("libs/particles")
 
 local M = {}
+
+local laserLengthPerecentage = 1.0 --global multiplier for laser length 0.0 - 1.0
 
 local Laser = {}
 Laser.__index = Laser
@@ -10,12 +13,16 @@ local function normalizeColor(val)
     return uevrUtils.intToHexString(val)
 end
 
+-- options.target = {type="particle", options={...}} -- optional target to spawn at laser end
 function M.new(options)
     options = options or {}
     local self = setmetatable({
         component = nil,
+        targetComponent = nil,
         laserLengthOffset = options.laserLengthOffset or 0,
         laserColor = normalizeColor(options.laserColor or "#0000FFFF"),
+        relativePosition = options.relativePosition or uevrUtils.vector(0,0,0),
+        target = options.target or nil,
     }, Laser)
 
     self:create() -- auto-create component
@@ -45,6 +52,19 @@ function Laser:create()
             self:setRelativePosition(uevrUtils.vector(0,0,0))
         end
     end
+    if self.target ~= nil then
+        if self.targetComponent == nil then
+            if self.target.type == "particle" then
+                self.targetComponent = particles.new(self.target.options or {})
+            end
+            -- self.targetComponent = particles.new({
+            --     particleSystemAsset = "ParticleSystem /Game/Art/VFX/ParticleSystems/Weapons/Projectiles/Plasma/PS_Plasma_Ball.PS_Plasma_Ball",
+            --     scale = {0.04, 0.04, 0.04},
+            --     autoActivate = true
+            -- })
+        end
+    end
+
     return self.component
 end
 
@@ -66,6 +86,10 @@ function Laser:destroy()
         c:DetachFromParent(false,false)
         uevrUtils.destroyComponent(self.component, true, true)
         self.component = nil
+    end
+    if self.targetComponent ~= nil then
+        self.targetComponent:destroy()
+        self.targetComponent = nil
     end
 end
 
@@ -90,19 +114,26 @@ function Laser:updatePointer(origin, target)
     end
 end
 
+function Laser:updateRelativePositionOffset()
+    local c = uevrUtils.getValid(self.component)
+    if c ~= nil then
+        c.RelativeLocation = uevrUtils.vector(self.relativePosition)
+        c.RelativeLocation.X = c.RelativeLocation.X + c:GetUnscaledCapsuleHalfHeight()
+    end
+end
+
 function Laser:setRelativePosition(pos)
     local c = uevrUtils.getValid(self.component)
     if c ~= nil then
-        --pos.X = pos.X + (c:GetUnscaledCapsuleHalfHeight() / 2)
-        c.RelativeLocation = uevrUtils.vector(pos)
-        c.RelativeLocation.X = c.RelativeLocation.X + c:GetUnscaledCapsuleHalfHeight()
+        self.relativePosition = pos
+        self:updateRelativePositionOffset()
     end
 end
 
 function Laser:setLength(length)
     local c = uevrUtils.getValid(self.component)
     if c ~= nil then
-        c:SetCapsuleHalfHeight(length / 2, false)
+        c:SetCapsuleHalfHeight((length / 2) * laserLengthPerecentage, false)
     end
 end
 
@@ -110,6 +141,9 @@ function Laser:setVisibility(isVisible)
     local c = uevrUtils.getValid(self.component)
     if c ~= nil then
         c:SetVisibility(isVisible, false)
+    end
+    if self.targetComponent ~= nil then
+        self.targetComponent:setVisibility(isVisible)
     end
 end
 
@@ -123,6 +157,70 @@ function Laser:setLaserColor(val)
     if c ~= nil then
         c.ShapeColor = uevrUtils.hexToColor(self.laserColor)
     end
+end
+
+
+--local debugSphereComponent = nil
+--local particleComponent = nil
+function Laser:setTargetLocation(location)
+    --calculate the distance between the laser's current location and the target location and set the distance from that
+    local c = uevrUtils.getValid(self.component)
+
+    -- if particleComponent == nil then
+    --     particleComponent = particles.new({
+    --         particleSystemAsset = "ParticleSystem /Game/Art/VFX/ParticleSystems/Weapons/Projectiles/Plasma/PS_Plasma_Ball.PS_Plasma_Ball",
+    --         scale = {0.04, 0.04, 0.04},
+    --         autoActivate = true
+    --     })
+    -- end
+    -- if particleComponent ~= nil then
+    --     particleComponent:setWorldLocation(location)
+    -- end
+    -- if debugSphereComponent == nil then
+	-- 	--debugSphereComponent = uevrUtils.createStaticMeshComponent("StaticMesh /Engine/EngineMeshes/Sphere.Sphere")
+    --     debugSphereComponent = uevrUtils.create_component_of_class("Class /Script/Engine.SceneComponent")
+    --     --"Class /Script/Engine.SceneComponent")--
+	-- 	if debugSphereComponent ~= nil then
+    --         -- debugSphereComponent.BoundsScale = 10
+    --         -- debugSphereComponent:SetVisibility(true,true)
+    --         -- debugSphereComponent:SetHiddenInGame(false,true)
+	-- 		-- uevrUtils.set_component_relative_transform(debugSphereComponent, nil, nil, {X=0.01, Y=0.01, Z=0.01})
+	-- 		-- --uevrUtils.set_component_relative_transform(debugSphereComponent, nil, nil, {X=1, Y=1, Z=1})
+    --     end
+
+    --     local ps = uevrUtils.getLoadedAsset("ParticleSystem /Game/Art/VFX/ParticleSystems/Weapons/Projectiles/Plasma/PS_Plasma_Ball.PS_Plasma_Ball")
+    --     particleComponent = Statics:SpawnEmitterAttached(
+    --         ps, debugSphereComponent, uevrUtils.fname_from_string(""), uevrUtils.vector(0, 0, 0 ), uevrUtils.rotator(0, 0, 0), uevrUtils.vector( 0.04, 0.04, 0.04 ), 0, true, 0, true)
+
+    --     if particleComponent ~= nil then
+    --         particleComponent:SetAutoActivate(true)
+    --         particleComponent.SecondsBeforeInactive = 0.0
+    --         particleComponent:SetCollisionEnabled(3)
+    --         particleComponent:SetCollisionResponseToAllChannels(2)
+    --         particleComponent:SetRenderInMainPass(true)
+    --         particleComponent.bRenderInDepthPass = true
+    --     end
+ 
+    -- end
+    -- if debugSphereComponent ~= nil then
+    --     debugSphereComponent:K2_SetWorldLocation(location, false, reusable_hit_result, false)
+    -- end
+
+    if c ~= nil and location ~= nil then
+        local cWorldLocation = c:K2_GetComponentLocation()
+        local hitDistance = kismet_math_library:Vector_Distance(cWorldLocation, location) + self.laserLengthOffset
+        self:setLength(hitDistance * 1.9) --not sure why 1.9 is the right number here. Maybe has to do with endcaps?
+        self:updateRelativePositionOffset()
+
+        if self.targetComponent ~= nil then
+            self.targetComponent:setWorldLocation(location)
+        end
+    end
+
+end
+
+function M.setLaserLengthPercentage(val)
+    laserLengthPerecentage = math.max(0.0, math.min(1.0, val or 1.0))
 end
 
 return M

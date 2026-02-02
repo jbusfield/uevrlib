@@ -1,0 +1,373 @@
+--[[ 
+Usage
+    Drop the lib folder containing this file into your project folder
+    Add code like this in your script:
+        local linetracer = require("libs/linetracer")
+
+    Line tracing is a common function in 3D applications. It is however, inefficient to
+    have many line traces running every frame, that essentially do the same thing. This
+    module allows multiple subscribers to share line traces based on camera or controller.
+    The trace is only run a single time per frame for each camera or controller and the results are shared
+    with all subscribers, creating a very efficient system. If there are no subscribers, no traces are run.
+    Set includeFullDetails to true in the options in order to get back a fully populated hitResult  
+    including actor that was hit, etc.
+
+    Available functions:
+
+    linetracer.subscribe(subscriberID, traceType, callback, options, priority) - subscribes to a line trace type
+        subscriberID: unique identifier for this subscriber (string). Used to later unsubscribe
+        traceType: one of linetracer.TraceType.CAMERA, linetracer.TraceType.HMD, linetracer.TraceType.LEFT_CONTROLLER, or linetracer.TraceType.RIGHT_CONTROLLER
+        callback: function(hitResult, hitLocation) that receives trace results each frame
+        options: table containing { collisionChannel, ignoreActors, traceComplex, minHitDistance, maxDistance, includeFullDetails }
+        priority: (optional) higher priority subscribers control the trace options (default: 0)
+        example:
+            linetracer.subscribe("reticule_system", linetracer.TraceType.CAMERA, 
+                function(hitResult, hitLocation)
+                    if hitLocation then
+                        updateReticulePosition(hitLocation)
+                    end
+                end,
+                { collisionChannel = 4, maxDistance = 10000 },
+                10
+            )
+
+    linetracer.updateOptions(subscriberID, traceType, options, priority) - updates options for an existing subscription
+        subscriberID: unique identifier for the subscriber
+        traceType: the trace type being updated
+        options: new options to set (replaces existing options)
+        priority: (optional) new priority value
+        returns: true if subscription exists and was updated, false otherwise
+        example:
+            linetracer.updateOptions("reticule_system", linetracer.TraceType.CAMERA, { maxDistance = 15000 }, 20)
+
+    linetracer.unsubscribe(subscriberID, traceType) - unsubscribes from a specific trace type
+        subscriberID: unique identifier for the subscriber
+        traceType: the trace type to unsubscribe from
+        example:
+            linetracer.unsubscribe("reticule_system", linetracer.TraceType.CAMERA)
+
+    linetracer.unsubscribeAll(subscriberID) - unsubscribes from all trace types
+        subscriberID: unique identifier for the subscriber
+        example:
+            linetracer.unsubscribeAll("reticule_system")
+
+    linetracer.hasSubscriptions() - checks if there are any active subscriptions
+        returns: true if any subscriptions exist, false otherwise
+        example:
+            if linetracer.hasSubscriptions() then
+                -- traces are running
+            end
+
+    linetracer.getSubscriberCount(traceType) - gets the number of subscribers for a specific trace type
+        traceType: the trace type to check
+        returns: number of subscribers
+        example:
+            local count = linetracer.getSubscriberCount(linetracer.TraceType.CAMERA)
+
+    linetracer.getLastResult(traceType) - gets the cached result from the last trace
+        traceType: the trace type to get results for
+        returns: hitResult table or nil if no trace has been performed
+        example:
+            local hitResult = linetracer.getLastResult(linetracer.TraceType.CAMERA)
+            if hitResult then
+                print(hitResult.Location.X, hitResult.Location.Y, hitResult.Location.Z)
+            end
+
+    linetracer.TraceType - enum containing available trace types
+        linetracer.TraceType.CAMERA - traces from player camera (not the HMD)
+        linetracer.TraceType.HMD - traces from head mounted display (VR headset)
+        linetracer.TraceType.LEFT_CONTROLLER - traces from left VR controller
+        linetracer.TraceType.RIGHT_CONTROLLER - traces from right VR controller
+
+    Notes:
+        - Line traces are automatically updated every frame via registered tick callback
+        - When multiple subscribers exist for the same trace type, the highest priority subscriber's options are used
+        - All subscribers receive the same trace results regardless of their priority
+        - Trace results are reused across frames for efficiency (no new allocations per tick)
+        - Subscriptions are automatically cleaned up when all subscribers for a trace type are removed
+    
+    More Examples:
+        -- Subscribe to camera-based line traces
+        linetracer.subscribe("reticule_system", linetracer.TraceType.CAMERA, 
+            function(hitResult, hitLocation)
+                if hitLocation then
+                    updateReticulePosition(hitLocation)
+                end
+            end,
+            {
+                collisionChannel = 4,
+                traceComplex = false,
+                maxDistance = 10000,
+                ignoreActors = {pawn}
+            }
+        )
+
+        -- Subscribe to left controller traces
+        linetracer.subscribe("left_laser", linetracer.TraceType.LEFT_CONTROLLER,
+            function(hitResult, hitLocation)
+                leftLaser:updatePointer(controllerPos, hitLocation)
+            end,
+            { collisionChannel = 0, maxDistance = 5000 }
+        )
+
+        -- Unsubscribe when done
+        linetracer.unsubscribe("reticule_system", linetracer.TraceType.CAMERA)
+
+]]--
+
+
+local uevrUtils = require("libs/uevr_utils")
+local controllers = require("libs/controllers")
+
+local M = {}
+
+-- Trace types enum
+M.TraceType = {
+    CAMERA = "camera",
+    HMD = "hmd",
+    LEFT_CONTROLLER = "left_controller",
+    RIGHT_CONTROLLER = "right_controller",
+}
+
+-- LineTracer class
+local LineTracer = {}
+LineTracer.__index = LineTracer
+
+-- Module-level state
+local activeSubscriptions = {}  -- { [traceType] = { [subscriberID] = {callback, options} } }
+local reusableHitResults = {}  -- Reusable hitResult structures per trace type (also serves as result cache)
+
+function M.new()
+    local instance = setmetatable({}, LineTracer)
+    return instance
+end
+
+-- Subscribe to a trace type
+-- subscriberID: unique identifier for this subscriber
+-- traceType: one of M.TraceType values
+-- callback: function(hitResult, hitLocation, hitNormal, hitActor) to receive results
+-- options: { collisionChannel, ignoreActors, traceComplex, minHitDistance, maxDistance }
+-- priority: higher values take precedence for options (default: 0)
+function M.subscribe(subscriberID, traceType, callback, options, priority)
+    if activeSubscriptions[traceType] == nil then
+        activeSubscriptions[traceType] = {}
+    end
+
+    activeSubscriptions[traceType][subscriberID] = {
+        callback = callback,
+        options = options or {},
+        priority = priority or 0
+    }
+end
+
+-- Update options for an existing subscription
+-- subscriberID: unique identifier for the subscriber
+-- traceType: one of M.TraceType values
+-- options: new options to set (merges with existing if partial)
+-- priority: optional new priority value
+function M.updateOptions(subscriberID, traceType, options, priority)
+    if activeSubscriptions[traceType] == nil or activeSubscriptions[traceType][subscriberID] == nil then
+        return false  -- Subscription doesn't exist
+    end
+
+    local subscription = activeSubscriptions[traceType][subscriberID]
+
+    if options ~= nil then
+        subscription.options = options
+    end
+
+    if priority ~= nil then
+        subscription.priority = priority
+    end
+
+    return true
+end
+
+-- Unsubscribe from a trace type
+function M.unsubscribe(subscriberID, traceType)
+    if activeSubscriptions[traceType] ~= nil then
+        activeSubscriptions[traceType][subscriberID] = nil
+
+        -- Clean up empty subscription tables
+        if next(activeSubscriptions[traceType]) == nil then
+            activeSubscriptions[traceType] = nil
+        end
+    end
+end
+
+-- Unsubscribe from all trace types
+function M.unsubscribeAll(subscriberID)
+    for traceType, _ in pairs(activeSubscriptions) do
+        M.unsubscribe(subscriberID, traceType)
+    end
+end
+
+-- Check if there are any active subscriptions
+function M.hasSubscriptions()
+    return next(activeSubscriptions) ~= nil
+end
+
+-- Get the number of subscribers for a specific trace type
+function M.getSubscriberCount(traceType)
+    if activeSubscriptions[traceType] == nil then return 0 end
+
+    local count = 0
+    for _ in pairs(activeSubscriptions[traceType]) do
+        count = count + 1
+    end
+    return count
+end
+
+-- Perform camera-based line trace
+local function performCameraTrace(options, hitResult)
+    local playerController = uevr.api:get_player_controller(0)
+    if playerController == nil then return nil end
+
+    local playerCameraManager = playerController.PlayerCameraManager
+    if playerCameraManager == nil or playerCameraManager.GetCameraRotation == nil then
+        return nil
+    end
+
+    local cameraLocation = playerCameraManager:GetCameraLocation()
+    local cameraRotation = playerCameraManager:GetCameraRotation()
+    local forwardVector = kismet_math_library:GetForwardVector(cameraRotation)
+
+    local result = uevrUtils.getLineTraceHitResult(
+        cameraLocation,
+        forwardVector,
+        options.collisionChannel or 0,
+        options.traceComplex or false,
+        options.ignoreActors or {},
+        options.minHitDistance,
+        options.maxDistance or 10000,
+        options.includeFullDetails or false,
+        hitResult
+    )
+
+    return result
+end
+
+-- Perform HMD-based line trace
+local function performHMDTrace(options, hitResult)
+    local hmdLocation = controllers.getControllerLocation(2)  -- 2 = HMD
+    local hmdRotation = controllers.getControllerRotation(2)
+
+    if hmdLocation == nil or hmdRotation == nil then
+        return nil
+    end
+
+    local forwardVector = kismet_math_library:GetForwardVector(hmdRotation)
+
+    local result = uevrUtils.getLineTraceHitResult(
+        hmdLocation,
+        forwardVector,
+        options.collisionChannel or 0,
+        options.traceComplex or false,
+        options.ignoreActors or {},
+        options.minHitDistance,
+        options.maxDistance or 10000,
+        options.includeFullDetails or false,
+        hitResult
+    )
+
+    return result
+end
+
+-- Perform controller-based line trace
+local function performControllerTrace(handedness, options, hitResult)
+    local controllerLocation = controllers.getControllerLocation(handedness)
+    local controllerRotation = controllers.getControllerRotation(handedness)
+
+    if controllerLocation == nil or controllerRotation == nil then
+        return nil
+    end
+
+    local forwardVector = kismet_math_library:GetForwardVector(controllerRotation)
+
+    local result = uevrUtils.getLineTraceHitResult(
+        controllerLocation,
+        forwardVector,
+        options.collisionChannel or 0,
+        options.traceComplex or false,
+        options.ignoreActors or {},
+        options.minHitDistance,
+        options.maxDistance or 10000,
+        options.includeFullDetails or false,
+        hitResult
+    )
+
+    return result
+end
+
+-- Execute a trace for a specific type and notify subscribers
+local function executeTrace(traceType, subscribers)
+    if subscribers == nil or next(subscribers) == nil then
+        return
+    end
+
+    -- Find highest priority subscriber and use their options
+    local highestPriority = -math.huge
+    local highestPriorityOptions = {}
+    for subscriberID, subData in pairs(subscribers) do
+        local priority = subData.priority or 0
+        if priority > highestPriority then
+            highestPriority = priority
+            highestPriorityOptions = subData.options
+        end
+    end
+    local mergedOptions = highestPriorityOptions
+
+    -- Get or create reusable hitResult for this trace type
+    if reusableHitResults[traceType] == nil then
+        reusableHitResults[traceType] = uevrUtils.get_struct_object("ScriptStruct /Script/Engine.HitResult")
+    end
+    local hitResult = reusableHitResults[traceType]
+
+    -- Perform the appropriate trace
+    local result = nil
+    if traceType == M.TraceType.CAMERA then
+        result = performCameraTrace(mergedOptions, hitResult)
+    elseif traceType == M.TraceType.HMD then
+        result = performHMDTrace(mergedOptions, hitResult)
+    elseif traceType == M.TraceType.LEFT_CONTROLLER then
+        result = performControllerTrace(Handed.Left, mergedOptions, hitResult)
+    elseif traceType == M.TraceType.RIGHT_CONTROLLER then
+        result = performControllerTrace(Handed.Right, mergedOptions, hitResult)
+    end
+
+    -- Notify all subscribers
+    if result ~= nil then
+        -- local hitLocation = result.Location or result.ImpactPoint
+        -- local hitNormal = result.Normal or result.ImpactNormal
+        -- local hitActor = result.HitObjectHandle and result.HitObjectHandle.Actor
+
+        for subscriberID, subData in pairs(subscribers) do
+            if subData.callback ~= nil then
+                subData.callback(result, uevrUtils.vector(hitResult.Location))
+            end
+        end
+    end
+end
+
+-- Update all active traces (call from tick)
+function M.update(delta)
+    if not M.hasSubscriptions() then
+        return
+    end
+
+    for traceType, subscribers in pairs(activeSubscriptions) do
+        executeTrace(traceType, subscribers)
+    end
+end
+
+-- Get cached trace result for a type (useful if you want result without waiting for callback)
+function M.getLastResult(traceType)
+    return reusableHitResults[traceType]
+end
+
+-- Register tick callback
+uevrUtils.registerPostEngineTickCallback(function(engine, delta)
+    M.update(delta)
+end)
+
+return M

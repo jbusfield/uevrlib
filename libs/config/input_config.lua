@@ -25,7 +25,7 @@ local function getConfigWidgets()
             selections = {"Game", "Right Controller", "Left Controller", "Locked Head/HMD", "Follows Head (Simple)", "Follows Head (Advanced)"},
             initialValue = configDefaults["pawnRotationMode"]
         },
-       {
+        {
             widgetType = "checkbox",
             id = widgetPrefix .. "useSnapTurn",
             label = "Use Snap Turn",

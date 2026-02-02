@@ -3529,7 +3529,7 @@ function M.getCleanHitResult(hitResult)
 	return nil
 end
 
-function M.getLineTraceHitResult(originPosition, originDirection, collisionChannel, traceComplex, ignoreActors, minHitDistance, maxTraceDistance, includeFullDetails)
+function M.getLineTraceHitResult(originPosition, originDirection, collisionChannel, traceComplex, ignoreActors, minHitDistance, maxTraceDistance, includeFullDetails, hitResult)
 	if originPosition ~= nil and originDirection ~= nil then
 		if maxTraceDistance == nil then maxTraceDistance = 8192.0 end
 		local endLocation = originPosition + (originDirection * maxTraceDistance)
@@ -3539,18 +3539,19 @@ function M.getLineTraceHitResult(originPosition, originDirection, collisionChann
 		if collisionChannel == nil then collisionChannel = 0 end
 		local world = M.get_world()
 		if world ~= nil then
-			local hit = kismet_system_library:LineTraceSingle(world, originPosition, endLocation, collisionChannel, traceComplex, ignore_actors, 0, reusable_hit_result, true, zero_color, zero_color, 1.0)
+			if hitResult == nil then hitResult = reusable_hit_result end
+			local hit = kismet_system_library:LineTraceSingle(world, originPosition, endLocation, collisionChannel, traceComplex, ignore_actors, 0, hitResult, true, zero_color, zero_color, 1.0)
 			local exceedsMinDistance = true
 			if minHitDistance ~= nil then
-				local distance = M.vectorDistance(originPosition, M.vector(reusable_hit_result.Location))
+				local distance = M.vectorDistance(originPosition, M.vector(hitResult.Location))
 				exceedsMinDistance = distance >= minHitDistance
 			end
 			--print(collisionChannel, traceComplex, maxTraceDistance, hit, reusable_hit_result.Distance, minHitDistance,reusable_hit_result.Location.X, reusable_hit_result.Location.Y, reusable_hit_result.Location.Z)
 			if hit and exceedsMinDistance then --reusable_hit_result.Distance > minHitDistance then
 				if includeFullDetails == true then
-					return M.getCleanHitResult(reusable_hit_result)
+					return M.getCleanHitResult(hitResult)
 				end
-				return reusable_hit_result
+				return hitResult
 			end
 		end
 	end
@@ -3872,7 +3873,6 @@ function M.GetInstanceMatching(class_to_search, match_string)
 		end
 	end
 end
-
 
 -------------------------------------------------------------------------------
 -- Example hook pre function. Post is same but no return.

@@ -139,6 +139,7 @@ local configui = require("libs/configui")
 local controllers = require("libs/controllers")
 local scope = require('libs/scope')
 local laser = require('libs/laser')
+local linetracer = require('libs/linetracer')
 
 --local debugger = require("libs/uevr_debug")
 
@@ -158,12 +159,16 @@ local parametersFileName = "attachments_parameters"
 local parameters = {}
 local isParametersDirty = false
 
+local configFileName = "dev/attachments_config_dev"
+local widgetPrefix = "uevr_attachments_"
+
 local attachmentNames = {}
 local attachmentOffsets = {}
 local attachmentOffsetsLookup = {}
 
 local attachmentLasers = {}
 local attachmentScopes = {}
+local laserColor = "#FF0000FF" --red by default
 
 --use supplied function that can give additional insight into whether or not a scope should be displayed
 local scopeActiveCallback = nil
@@ -218,7 +223,7 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 	table.insert(configDefinition[1]["layout"],
 		{
 			widgetType = "tree_node",
-			id = "attachment_offsets",
+			id = widgetPrefix .. "offsets",
 			initialOpen = true,
 			label = "Attachment Configuration"
 		}
@@ -228,7 +233,7 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		table.insert(configDefinition[1]["layout"],
 			{
 				widgetType = "text",
-				id = "no_attachments_configured",
+				id = widgetPrefix .. "no_attachments_configured",
 				label = "No attachments configured yet. Either implement the attachments.registerOnGripUpdateCallback(callback) function or manually call the attachments.attachToMesh() function as described in attachments.lua.",
 				wrapped = true
 			}
@@ -265,45 +270,37 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 
 		table.insert(configDefinition[1]["layout"],
 				{
-					id = "attachment_" .. name, label = name, widgetType = "tree_node",
+					id = widgetPrefix .. name, label = name, widgetType = "tree_node",
 				}
 		)
 		table.insert(configDefinition[1]["layout"],
 					{
-						id = "attachment_" .. name .. "_position", label = "Position",
+						id = widgetPrefix .. name .. "_position", label = "Position",
 						widgetType = "drag_float3", speed = .1, range = {-500, 500}, initialValue = pos
 					}
 		)
 		table.insert(configDefinition[1]["layout"],
 					{
-						id = "attachment_" .. name .. "_rotation", label = "Rotation",
+						id = widgetPrefix .. name .. "_rotation", label = "Rotation",
 						widgetType = "drag_float3", speed = .1, range = {-360, 360}, initialValue = rot
 					}
 		)
 		table.insert(configDefinition[1]["layout"],
 					{
-						id = "attachment_" .. name .. "_scale", label = "Scale",
+						id = widgetPrefix .. name .. "_scale", label = "Scale",
 						widgetType = "drag_float3", speed = .1, range = {0.01, 10}, initialValue = scale
 					}
 		)
 		table.insert(configDefinition[1]["layout"],
 			{
-				id = "attachment_" .. name .. "_sights_position_offset", label = "Sights Position Offset",
+				id = widgetPrefix .. name .. "_sights_position_offset", label = "Sights Position Offset",
 				widgetType = "drag_float3", speed = .1, range = {-500, 500}, initialValue = sightsPositionOffset,  width = 250
 			}
 		)
 		table.insert(configDefinition[1]["layout"],
             {
                 widgetType = "checkbox",
-                id =  "attachment_" .. name .. "_use_laser",
-                label = "Use Laser",
-                initialValue = useLaser
-            }
-		)
-		table.insert(configDefinition[1]["layout"],
-            {
-                widgetType = "checkbox",
-                id =  "attachment_" .. name .. "_is_melee",
+                id =  widgetPrefix .. name .. "_is_melee",
                 label = "Melee",
                 initialValue = isMelee
             }
@@ -311,7 +308,7 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		table.insert(configDefinition[1]["layout"],{ widgetType = "indent", width = 20 })
 		table.insert(configDefinition[1]["layout"],
 			{
-				id = "attachment_" .. name .. "_melee_rotation_offset", label = "Melee Rotation Offset",
+				id = widgetPrefix .. name .. "_melee_rotation_offset", label = "Melee Rotation Offset",
 				widgetType = "drag_float3", speed = .1, range = {-360, 360}, initialValue = meleeRotationOffset, isHidden = isMelee ~= true, width = 250
 			}
 		)
@@ -319,7 +316,7 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		table.insert(configDefinition[1]["layout"],
             {
                 widgetType = "checkbox",
-                id =  "attachment_" .. name .. "_is_two_handed",
+                id =  widgetPrefix .. name .. "_is_two_handed",
                 label = "Two Handed",
                 initialValue = isTwoHanded
             }
@@ -327,20 +324,28 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		table.insert(configDefinition[1]["layout"],
             {
                 widgetType = "checkbox",
-                id =  "attachment_" .. name .. "_is_scoped",
+                id =  widgetPrefix .. name .. "_use_laser",
+                label = "Use Laser",
+                initialValue = useLaser
+            }
+		)
+		table.insert(configDefinition[1]["layout"],
+            {
+                widgetType = "checkbox",
+                id =  widgetPrefix .. name .. "_is_scoped",
                 label = "Scoped",
                 initialValue = isScoped
             }
 		)
 
 
-		table.insert(configDefinition[1]["layout"], { widgetType = "begin_group", id = "attachment_scope_group_" .. name, isHidden = false })
+		table.insert(configDefinition[1]["layout"], { widgetType = "begin_group", id = widgetPrefix .. "scope_group_" .. name, isHidden = false })
 		table.insert(configDefinition[1]["layout"],
 			{
-				id = "attachment_scope_settings_" .. name, label = "Settings", widgetType = "tree_node",
+				id = widgetPrefix .. "scope_settings_" .. name, label = "Settings", widgetType = "tree_node",
 			}
 		)
-		local scopeWidgets = scope.getConfigWidgets("attachment_" .. name .. "_")
+		local scopeWidgets = scope.getConfigWidgets(widgetPrefix .. name .. "_")
 		for j = 1, #scopeWidgets do
 			table.insert(configDefinition[1]["layout"], scopeWidgets[j])
 		end
@@ -370,14 +375,14 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		-- table.insert(configDefinition[1]["layout"],{ widgetType = "unindent", width = 20 })
 		table.insert(configDefinition[1]["layout"],
 			{
-				id = "attachment_" .. name .. "_grip_animation", label = "Grip Animation",
+				id = widgetPrefix .. name .. "_grip_animation", label = "Grip Animation",
 				widgetType = "combo", selections = animationLabels, initialValue = selectedIndex
 			}
 		)
 		table.insert(configDefinition[1]["layout"],
             {
                 widgetType = "checkbox",
-                id =  "attachment_" .. name .. "_any_child",
+                id =  widgetPrefix .. name .. "_any_child",
                 label = "Use for all children",
                 initialValue = anyChild
             }
@@ -388,7 +393,7 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		table.insert(configDefinition[1]["layout"],
             {
                 widgetType = "checkbox",
-                id =  "attachment_" .. name .. "_any_parent",
+                id =  widgetPrefix .. name .. "_any_parent",
                 label = "Use for all parents",
                 initialValue = anyParent
             }
@@ -399,48 +404,48 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 				}
 		)
 
-		scope.createConfigCallbacks(name, "attachment_" .. name .. "_")
+		scope.createConfigCallbacks(name, widgetPrefix .. name .. "_")
 
-		configui.onUpdate("attachment_" .. name .. "_position", function(value)
+		configui.onUpdate(widgetPrefix .. name .. "_position", function(value)
 			M.updateAttachmentTransform(value, nil, nil, id)
 		end)
-		configui.onUpdate("attachment_" .. name .. "_rotation", function(value)
+		configui.onUpdate(widgetPrefix .. name .. "_rotation", function(value)
 			M.updateAttachmentTransform(nil, value, nil, id)
 		end)
-		configui.onUpdate("attachment_" .. name .. "_scale", function(value)
+		configui.onUpdate(widgetPrefix .. name .. "_scale", function(value)
 			M.updateAttachmentTransform(nil, nil, value, id)
 		end)
-		configui.onCreateOrUpdate("attachment_" .. name .. "_is_melee", function(value)
+		configui.onCreateOrUpdate(widgetPrefix .. name .. "_is_melee", function(value)
 			M.updateAttachmentIsMelee(id, value)
-			configui.setHidden("attachment_" .. name .. "_melee_rotation_offset", not value)
+			configui.setHidden(widgetPrefix .. name .. "_melee_rotation_offset", not value)
 		end)
-		configui.onCreateOrUpdate("attachment_" .. name .. "_is_two_handed", function(value)
+		configui.onCreateOrUpdate(widgetPrefix .. name .. "_is_two_handed", function(value)
 			M.updateAttachmentIsTwoHanded(id, value)
 		end)
-		configui.onCreateOrUpdate("attachment_" .. name .. "_is_scoped", function(value)
+		configui.onCreateOrUpdate(widgetPrefix .. name .. "_is_scoped", function(value)
 			M.updateAttachmentIsScoped(id, value)
-			configui.setHidden("attachment_scope_group_" .. name, not value)
+			configui.setHidden(widgetPrefix .. "scope_group_" .. name, not value)
 		end)
-		configui.onCreateOrUpdate("attachment_" .. name .. "_any_child", function(value)
+		configui.onCreateOrUpdate(widgetPrefix .. name .. "_any_child", function(value)
 			M.updateAttachmentUseAnyChild(id, value)
 		end)
-		configui.onCreateOrUpdate("attachment_" .. name .. "_any_parent", function(value)
+		configui.onCreateOrUpdate(widgetPrefix .. name .. "_any_parent", function(value)
 			M.updateAttachmentUseAnyParent(id, value)
 		end)
-		configui.onUpdate("attachment_" .. name .. "_grip_animation", function(value)
+		configui.onUpdate(widgetPrefix .. name .. "_grip_animation", function(value)
 			M.updateAttachmentAnimation(id, value)
 		end)
-		configui.onUpdate("attachment_" .. name .. "_melee_rotation_offset", function(value)
+		configui.onUpdate(widgetPrefix .. name .. "_melee_rotation_offset", function(value)
 			M.updateMeleeRotationOffset(value, id)
 		end)
-		-- configui.onCreateOrUpdate("attachment_" .. name .. "_use_sights_position_offset", function(value)
+		-- configui.onCreateOrUpdate(widgetPrefix .. name .. "_use_sights_position_offset", function(value)
 		-- 	M.updateAttachmentUseSightsPositionOffset(id, value)
-		-- 	configui.setHidden("attachment_" .. name .. "_sights_position_offset", not value)
+		-- 	configui.setHidden(widgetPrefix .. name .. "_sights_position_offset", not value)
 		-- end)
-		configui.onUpdate("attachment_" .. name .. "_sights_position_offset", function(value)
+		configui.onUpdate(widgetPrefix .. name .. "_sights_position_offset", function(value)
 			M.updateSightsPositionOffset(value, id)
 		end)
-		configui.onCreateOrUpdate("attachment_" .. name .. "_use_laser", function(value)
+		configui.onCreateOrUpdate(widgetPrefix .. name .. "_use_laser", function(value)
 			M.updateAttachmentHasLaser(id, value)
 		end)
 
@@ -543,11 +548,7 @@ local createDevMonitor = doOnce(function()
     end)
 end, Once.EVER)
 
-local configFileName = "dev/attachments_config_dev"
 local function getDefaultConfig()
-	if json.load_file("attachments_config_dev.json") ~= nil then
-		configFileName = "attachments_config_dev"
-	end
 	return  {
 		{
 			panelLabel = "Attachments Config Dev",
@@ -597,6 +598,12 @@ function M.init(isDeveloperMode, logLevel, m_defaultLocation, m_defaultRotation,
     end
 
     if isDeveloperMode then
+		--backward compatibility
+		if json.load_file("attachments_config_dev.json") ~= nil then
+			configFileName = "attachments_config_dev"
+			widgetPrefix = "attachment_"
+		end
+
 	    M.showDeveloperConfiguration(m_defaultLocation, m_defaultRotation, m_defaultScale)
         createDevMonitor()
     end
@@ -766,13 +773,13 @@ function M.getAttachmentOffset(attachment)
 			--if hasNamedObject(attachment, parent, child) then
 			local _, _, attachmentID = getAttachmentNames(attachment)
 			if id == attachmentID then
-				local position = configui.getValue("attachment_" .. id .. "_position")
+				local position = configui.getValue(widgetPrefix .. id .. "_position")
 				if position == nil then position = attachmentOffsets[i]["location"] end
 
-				local rotation = configui.getValue("attachment_" .. id .. "_rotation")
+				local rotation = configui.getValue(widgetPrefix .. id .. "_rotation")
 				if rotation == nil then rotation = attachmentOffsets[i]["rotation"] end
 
-				local scale = configui.getValue("attachment_" .. id .. "_scale")
+				local scale = configui.getValue(widgetPrefix .. id .. "_scale")
 				if scale == nil then scale = attachmentOffsets[i]["scale"] end
 				if scale == nil then --set a fixed scale in case something else tries to change it
 					attachmentOffsets[i]["scale"] = {attachment.RelativeScale3D.X, attachment.RelativeScale3D.Y, attachment.RelativeScale3D.Z}
@@ -913,8 +920,45 @@ end
 
 
 --- Lasers ---------------------------------------------
+local function leftLineTracerCallback(hitResult, hitLocation)
+	if hitLocation and attachmentLasers[Handed.Left] ~= nil then
+		attachmentLasers[Handed.Left]:setTargetLocation(hitLocation)
+	end
+end
+
+local function rightLineTracerCallback(hitResult, hitLocation)
+	if hitLocation and attachmentLasers[Handed.Right] ~= nil then
+		attachmentLasers[Handed.Right]:setTargetLocation(hitLocation)
+	end
+end
+
+local lineTracerSubscribed = {}
+lineTracerSubscribed[Handed.Left] = false
+lineTracerSubscribed[Handed.Right] = false
+local function subscribeToLineTracer(gripHand)
+	local lineTracerType = linetracer.TraceType.CAMERA
+	local options = {
+		collisionChannel = 0,
+		traceComplex = false,
+		minHitDistance = 0,
+		ignoreActors = {}
+	}
+	if lineTracerSubscribed[gripHand] ~= true then
+		lineTracerSubscribed[gripHand] = true
+		linetracer.subscribe("laser_module_" .. gripHand, lineTracerType, gripHand == Handed.Left and leftLineTracerCallback or rightLineTracerCallback, options, 0)
+	end
+end
+
+local function unsubscribeFromLineTracer(gripHand)
+	if lineTracerSubscribed[gripHand] then
+		linetracer.unsubscribe("laser_module_" .. gripHand)
+		lineTracerSubscribed[gripHand] = false
+	end
+end
+
 local function createLaserForAttachment(attachment, gripHand)
-	attachmentLasers[gripHand] = laser.new({laserColor = "#00FFFFFF"})
+	subscribeToLineTracer(gripHand)
+	attachmentLasers[gripHand] = laser.new({laserColor = laserColor, target = {type = "particle", options = {particleSystemAsset = "ParticleSystem /Game/Art/VFX/ParticleSystems/Weapons/Projectiles/Plasma/PS_Plasma_Ball.PS_Plasma_Ball", scale = {0.04, 0.04, 0.04}, autoActivate = true}}})
 	attachmentLasers[gripHand]:attachTo(attachment)--, "Sight_Socket")
 	attachmentLasers[gripHand]:setLength(50)
 	attachmentLasers[gripHand]:setRelativePosition(M.getActiveAttachmentSightsPositionOffset(gripHand))
@@ -922,6 +966,7 @@ local function createLaserForAttachment(attachment, gripHand)
 end
 
 local function destroyLaserForGripHand(gripHand)
+	unsubscribeFromLineTracer(gripHand)
 	if attachmentLasers[gripHand] ~= nil then
 		attachmentLasers[gripHand]:destroy()
 		attachmentLasers[gripHand] = nil
@@ -949,6 +994,15 @@ local function updateLaserForAttachmentID(id)
 			if attachmentData ~= nil and uevrUtils.getValid(attachmentData.attachment) ~= nil and attachmentData.gripHand ~= nil then
 				updateLaserForAttachment(attachmentData.attachment, attachmentData.gripHand)
 			end
+		end
+	end
+end
+
+function M.setLaserColor(colorHex)
+	laserColor = colorHex
+	for gripHand, laserInstance in pairs(attachmentLasers) do
+		if laserInstance ~= nil then
+			laserInstance:setColor(laserColor)
 		end
 	end
 end
@@ -1311,7 +1365,7 @@ end
 
 local function updateSelectedColor(id, color)
 	--print("changing color", "attachment_" .. id)
-	configui.setColor("attachment_" .. id, color)
+	configui.setColor(widgetPrefix .. id, color)
 end
 
 local function updateSelectedColors()
@@ -1320,7 +1374,7 @@ local function updateSelectedColors()
 		local child = attachmentOffsets[i]["child"]
 		local m_id = attachmentOffsets[i]["id"]
 		if m_id == nil then m_id = parent .. "_" .. child end
-		configui.setColor("attachment_" .. m_id, "#FFFFFFFF")
+		configui.setColor(widgetPrefix .. m_id, "#FFFFFFFF")
 	end
 
 	local leftAttachment = uevrUtils.getValid(M.getCurrentGrippedAttachment(Handed.Left))
@@ -1352,11 +1406,18 @@ local function updateSelectedColors()
 end
 
 
-function M.initAttachment(attachment, gripHand)
+function M.initAttachment(attachment, gripHand, options)
 	if attachment ~= nil then
-		attachment:SetVisibility(true, allowChildVisibilityHandling)
-		attachment:SetHiddenInGame(false, allowChildVisibilityHandling)
-		attachment:call("SetRenderInMainPass", true)
+		if options == nil then options = {} end
+		if options.allowChildVisibilityHandling == nil or options.allowChildVisibilityHandling == true then
+			attachment:SetVisibility(true, allowChildVisibilityHandling)
+		end
+		if options.allowChildHiddenInGameHandling == nil or options.allowChildHiddenInGameHandling == true then
+			attachment:SetHiddenInGame(false, allowChildVisibilityHandling)
+		end
+		if options.allowRenderInMainPassHandling == nil or options.allowRenderInMainPassHandling == true then
+			attachment:call("SetRenderInMainPass", true)
+		end
 		local location, rotation, scale = M.getAttachmentOffset(attachment)
 		local parentName, childName, id = getAttachmentNames(attachment)
 		M.print("Initializing attachment " .. id)
@@ -1477,11 +1538,26 @@ local function printMeshAttachmentList()
 	end
 end
 
-function M.attachToMesh(attachment, mesh, socketName, gripHand, detachFromParent, allowReattach)
+--options = {detachFromOriginOnGrip = true, maintainWorldPositionOnDetachFromOrigin = true, detachFromParentOnRelease = true, maintainWorldPositionOnDetachFromParent = true, reattachToOriginOnRelease = true, restoreTransformToOriginOnReattach = true, useZeroTransformOnReattach = false}
+function M.attachToMesh(attachment, mesh, socketName, gripHand, options)
+	--printMeshAttachmentList()
 	local success = false
 	--print(attachment:get_full_name(), mesh:get_full_name(), socketName, tostring(gripHand), tostring(detachFromParent), tostring(allowReattach))
 	if uevrUtils.getValid(attachment) ~= nil and uevrUtils.getValid(mesh) ~= nil  then
-		--printMeshAttachmentList()
+		if options == nil then 
+			options = {
+				detachFromOriginOnGrip = true,
+				maintainWorldPositionOnDetachFromOrigin = false,
+				detachFromParentOnRelease = true,
+				maintainWorldPositionOnDetachFromParent = false,
+				reattachToOriginOnRelease = false,
+				restoreTransformToOriginOnReattach = false,
+				useZeroTransformOnReattach = false,
+				allowChildVisibilityHandling = true,
+				allowChildHiddenInGameHandling = true,
+				allowRenderInMainPassHandling = true
+			}
+		end
 
 		--see if the attachment is already a child of the mesh
 		--In atomic heart, the entire attachment can run apparently successfully and still not be attached to the mesh
@@ -1516,15 +1592,14 @@ function M.attachToMesh(attachment, mesh, socketName, gripHand, detachFromParent
 		--end
 		--local attachmentName = attachment:get_full_name()
 		--if meshAttachmentList[meshName][attachmentName] == nil then
-			meshAttachmentList[meshName].attachments[attachmentName] = {attachment=attachment, socket=socketName, detachFromParent = detachFromParent, attachType = M.AttachType.MESH, gripHand = gripHand}
+			meshAttachmentList[meshName].attachments[attachmentName] = {attachment=attachment, socket=socketName, detachFromParentOnRelease = options.detachFromParentOnRelease, maintainWorldPositionOnDetachFromParent = options.maintainWorldPositionOnDetachFromParent, attachType = M.AttachType.MESH, gripHand = gripHand}
 		--end
 
-		if detachFromParent == true then
-			if allowReattach then
-				--print("Storing parent for reattachment", attachment.AttachParent)
-				meshAttachmentList[meshName].attachments[attachmentName].parent = attachment.AttachParent
+		if options.reattachToOriginOnRelease == true then
+			meshAttachmentList[meshName].attachments[attachmentName].parent = attachment.AttachParent
+			if options.restoreTransformToOriginOnReattach == true then
 				meshAttachmentList[meshName].attachments[attachmentName].originalTransform = {}
-				if useZeroTransformOnReattach then
+				if options.useZeroTransformOnReattach or useZeroTransformOnReattach then
 					meshAttachmentList[meshName].attachments[attachmentName].originalTransform.rotation = uevrUtils.rotator(0,0,0)
 					meshAttachmentList[meshName].attachments[attachmentName].originalTransform.location = uevrUtils.vector(0,0,0)
 					meshAttachmentList[meshName].attachments[attachmentName].originalTransform.scale = uevrUtils.vector(1,1,1)
@@ -1534,7 +1609,10 @@ function M.attachToMesh(attachment, mesh, socketName, gripHand, detachFromParent
 					meshAttachmentList[meshName].attachments[attachmentName].originalTransform.scale = attachment.RelativeScale3D
 				end
 			end
-			attachment:DetachFromParent(false,false)
+		end
+
+		if options.detachFromOriginOnGrip == true then
+			attachment:DetachFromParent(options.maintainWorldPositionOnDetachFromOrigin or false, false)
 		end
 
 		M.print("Attaching attachment to mesh: " .. attachment:get_full_name() .. " to " .. mesh:get_full_name())
@@ -1544,7 +1622,7 @@ function M.attachToMesh(attachment, mesh, socketName, gripHand, detachFromParent
 		if socketName == nil then socketName = attachment.AttachSocketName end
 		success = attachment:K2_AttachTo(mesh, socketName, 0, false)
 
-		M.initAttachment(attachment, gripHand)
+		M.initAttachment(attachment, gripHand, options)
 		M.print("Attached attachment to mesh" .. (success and " successfully" or " with errors"))
 
 		-- if mesh.AttachChildren ~= nil then
@@ -1561,12 +1639,26 @@ function M.attachToMesh(attachment, mesh, socketName, gripHand, detachFromParent
 	return success
 end
 
-function M.attachToController(attachment, controllerID, detachFromParent)
-	M.attachToMesh(attachment, controllers.getController(controllerID), nil, controllerID, detachFromParent)
+function M.attachToController(attachment, controllerID, options)
+	M.attachToMesh(attachment, controllers.getController(controllerID), nil, controllerID, options)
 end
 
-function M.attachToRawController(attachment, gripHand, detachFromParent, allowReattach)
+function M.attachToRawController(attachment, gripHand, options)
 	if uevrUtils.getValid(attachment) ~= nil then
+		if options == nil then 
+			options = {
+				detachFromOriginOnGrip = true,
+				maintainWorldPositionOnDetachFromOrigin = false,
+				detachFromParentOnRelease = true,
+				maintainWorldPositionOnDetachFromParent = false,
+				reattachToOriginOnRelease = false,
+				restoreTransformToOriginOnReattach = false,
+				useZeroTransformOnReattach = false,
+				allowChildVisibilityHandling = true,
+				allowChildHiddenInGameHandling = true,
+				allowRenderInMainPassHandling = true
+			}
+		end
 		local meshName = "Controller_Raw" .. (gripHand and ("_" .. gripHand) or "")
 		local attachmentName = attachment:get_full_name()
 		--if it's already attached then just return
@@ -1581,14 +1673,13 @@ function M.attachToRawController(attachment, gripHand, detachFromParent, allowRe
 		--if meshAttachmentList[meshName] ==  nil then
 			meshAttachmentList[meshName] = {mesh = nil, attachments={}}
 		--end
-		meshAttachmentList[meshName].attachments[attachmentName] = {attachment=attachment,  detachFromParent = detachFromParent, attachType = M.AttachType.RAW_CONTROLLER, gripHand = gripHand}
+		meshAttachmentList[meshName].attachments[attachmentName] = {attachment=attachment, detachFromParentOnRelease = options.detachFromParentOnRelease, maintainWorldPositionOnDetachFromParent = options.maintainWorldPositionOnDetachFromParent, attachType = M.AttachType.RAW_CONTROLLER, gripHand = gripHand}
 
-		--print("Detaching", detachFromParent, attachment, attachment.AttachParent)
-		if detachFromParent == true and attachment ~= nil and attachment.AttachParent ~= nil then
-			if allowReattach then
-				meshAttachmentList[meshName].attachments[attachmentName].parent = attachment.AttachParent
+		if options.reattachToOriginOnRelease == true and attachment ~= nil and attachment.AttachParent ~= nil then
+			meshAttachmentList[meshName].attachments[attachmentName].parent = attachment.AttachParent
+			if options.restoreTransformToOriginOnReattach == true then
 				meshAttachmentList[meshName].attachments[attachmentName].originalTransform = {}
-				if useZeroTransformOnReattach then
+				if options.useZeroTransformOnReattach or useZeroTransformOnReattach then
 					meshAttachmentList[meshName].attachments[attachmentName].originalTransform.rotation = uevrUtils.rotator(0,0,0)
 					meshAttachmentList[meshName].attachments[attachmentName].originalTransform.location = uevrUtils.vector(0,0,0)
 					meshAttachmentList[meshName].attachments[attachmentName].originalTransform.scale = uevrUtils.vector(1,1,1)
@@ -1598,23 +1689,26 @@ function M.attachToRawController(attachment, gripHand, detachFromParent, allowRe
 					meshAttachmentList[meshName].attachments[attachmentName].originalTransform.scale = attachment.RelativeScale3D
 				end
 			end
-			M.print("Detaching attachment from parent: " .. attachment.AttachParent:get_full_name())
-			attachment:DetachFromParent(false,false)
 		end
+
+		if options.detachFromOriginOnGrip == true then
+			attachment:DetachFromParent(options.maintainWorldPositionOnDetachFromOrigin or false, false)
+		end
+
 		M.print("Attaching " .. attachment:get_full_name() .. " to controller with ID " .. (gripHand and tostring(gripHand) or "nil"))
 		local state = UEVR_UObjectHook.get_or_add_motion_controller_state(attachment)
 		state:set_hand(gripHand)
-		state:set_permanent(allowReattach)
+		state:set_permanent(options.restoreTransformToOriginOnReattach == true)
 		meshAttachmentList[meshName].attachments[attachmentName].state = state
 
-		M.initAttachment(attachment, gripHand)
+		M.initAttachment(attachment, gripHand, options)
 		M.print("Attached attachment to raw controller")
 	else
 		M.print("Failed to attach attachment to raw controller")
 	end
 end
 
-function M.detach(attachment, parent, attachType, originalTransform)
+function M.detach(attachment, parent, attachType, originalTransform, detachFromParentOnRelease, maintainWorldPositionOnDetachFromParent)
 	--print("Detaching attachment", attachment, parent or nil, attachType)
 	if uevrUtils.getValid(attachment) ~= nil then
 		if attachType == M.AttachType.RAW_CONTROLLER then
@@ -1622,7 +1716,9 @@ function M.detach(attachment, parent, attachType, originalTransform)
 			UEVR_UObjectHook.remove_motion_controller_state(attachment)
 		end
 		M.print("Detaching attachment " .. attachment:get_full_name() .. (parent and (" and reattaching to parent: " .. parent:get_full_name()) or " did not reattach to parent because no parent existed"))
-		attachment:DetachFromParent(false,false)
+		if detachFromParentOnRelease == true then
+			attachment:DetachFromParent(maintainWorldPositionOnDetachFromParent, false)
+		end
 		if parent ~= nil then
 			if originalTransform ~= nil then
 				print("Restoring original transform on reattach", originalTransform.location.X, originalTransform.location.Y, originalTransform.location.Z,
@@ -1704,7 +1800,7 @@ local function detachAndCleanup(attachmentData, reattachToParent)
     end
 
     local parent = reattachToParent and attachmentData.parent or nil
-    M.detach(attachmentData.attachment, parent, attachmentData.attachType, attachmentData.originalTransform)
+    M.detach(attachmentData.attachment, parent, attachmentData.attachType, attachmentData.originalTransform, attachmentData.detachFromParentOnRelease, attachmentData.maintainWorldPositionOnDetachFromParent)
 end
 
 function M.detachAllAttachments()
@@ -1712,7 +1808,7 @@ function M.detachAllAttachments()
     for meshName, meshData in pairs(meshAttachmentList) do
         if meshData.attachments ~= nil then
             for attachmentName, attachmentData in pairs(meshData.attachments) do
-                detachAndCleanup(attachmentData, false)
+                detachAndCleanup(attachmentData, true)
             end
         end
     end
@@ -1720,6 +1816,7 @@ function M.detachAllAttachments()
 end
 
 function M.detachGripAttachments(gripHand)
+	--printMeshAttachmentList()
     if gripHand == nil then
         M.print("Failed to detach grip attachments: gripHand is nil")
         return
@@ -1748,24 +1845,25 @@ function M.detachGripAttachments(gripHand)
     cleanupEmptyMeshEntries()
 end
 
-function M.detachAttachmentFromMeshes(attachment, reattachToParent)
-    if uevrUtils.getValid(attachment) == nil then
-        M.print("Failed to detach attachment: invalid attachment")
-        return
-    end
+-- this is not used anywhere. Maybe superceded by detachGripAttachments?
+-- function M.detachAttachmentFromMeshes(attachment, reattachToParent)
+--     if uevrUtils.getValid(attachment) == nil then
+--         M.print("Failed to detach attachment: invalid attachment")
+--         return
+--     end
 
-    local attachmentName = attachment:get_full_name()
-    M.print("Detaching attachment from all meshes: " .. attachmentName)
+--     local attachmentName = attachment:get_full_name()
+--     M.print("Detaching attachment from all meshes: " .. attachmentName)
 
-    for meshName, meshData in pairs(meshAttachmentList) do
-        if meshData.attachments ~= nil and meshData.attachments[attachmentName] ~= nil then
-            detachAndCleanup(meshData.attachments[attachmentName], reattachToParent)
-            meshData.attachments[attachmentName] = nil
-        end
-    end
+--     for meshName, meshData in pairs(meshAttachmentList) do
+--         if meshData.attachments ~= nil and meshData.attachments[attachmentName] ~= nil then
+--             detachAndCleanup(meshData.attachments[attachmentName], reattachToParent)
+--             meshData.attachments[attachmentName] = nil
+--         end
+--     end
 
-    cleanupEmptyMeshEntries()
-end
+--     cleanupEmptyMeshEntries()
+-- end
 
 function M.detachAttachmentsFromMesh(mesh)
     local meshName = type(mesh) == "string" and mesh or
@@ -1781,7 +1879,7 @@ function M.detachAttachmentsFromMesh(mesh)
 
     if meshData ~= nil and meshData.attachments ~= nil then
         for attachmentName, attachmentData in pairs(meshData.attachments) do
-            detachAndCleanup(attachmentData, false)
+            detachAndCleanup(attachmentData, true)
         end
         meshAttachmentList[meshName] = nil
     end
@@ -1847,12 +1945,12 @@ function M.setAnimationIDs(animationIDList)
 			local parent = attachmentOffsets[i]["parent"]
 			local child = attachmentOffsets[i]["child"]
 			local name = parent .. "_" .. child
-			configui.setSelections("attachment_" .. name .. "_grip_animation", animationLabels)
+			configui.setSelections(widgetPrefix .. name .. "_grip_animation", animationLabels)
 			local selectedID = attachmentOffsets[i]["animation"]
 			for j = 1, #animationIDs do
 				if selectedID == animationIDs[j] then
 					--dont think callback is needed here since we're just updating the configui to match existing settings
-					configui.setValue("attachment_" .. name .. "_grip_animation", j, true)
+					configui.setValue(widgetPrefix .. name .. "_grip_animation", j, true)
 				end
 			end
 		end
@@ -1864,8 +1962,18 @@ configui.onUpdate("use_uevr_attachments_strip_parent_name_numeric_suffix", funct
 end)
 
 local autoUpdateCallbackCreated = false
---local autoUpdateCurrentAttachment = nil
---local autoUpdateCurrentMesh = nil
+--options = {
+--	detachFromOriginOnGrip = true, 
+--	maintainWorldPositionOnDetachFromOrigin = false, 
+--	detachFromParentOnRelease = true, 
+--	maintainWorldPositionOnDetachFromParent = false, 
+--	reattachToOriginOnRelease = fale, 
+--	restoreTransformToOriginOnReattach = false, 
+--	useZeroTransformOnReattach = false,
+--	allowChildVisibilityHandling = true,
+--	allowChildHiddenInGameHandling = true,
+--	allowRenderInMainPassHandling = true
+--}
 function M.registerOnGripUpdateCallback(callback)
 	if not autoUpdateCallbackCreated then
 		uevrUtils.setInterval(gripUpdateTimeout, function()
@@ -1874,10 +1982,37 @@ function M.registerOnGripUpdateCallback(callback)
 			-- printMeshAttachmentList()
 			-- print("Left",activeGripAnimations[Handed.Left])
 			-- print("Right",activeGripAnimations[Handed.Right])
+			if detachFromParent == nil then
+				detachFromParent = {
+					detachFromOriginOnGrip = true,
+					maintainWorldPositionOnDetachFromOrigin = false,
+					detachFromParentOnRelease = true,
+					maintainWorldPositionOnDetachFromParent = false,
+					reattachToOriginOnRelease = allowReattach or false,
+					restoreTransformToOriginOnReattach = allowReattach or false,
+					useZeroTransformOnReattach = false,
+					allowChildVisibilityHandling = true,
+					allowChildHiddenInGameHandling = true,
+					allowRenderInMainPassHandling = true
+				}
+			elseif type(detachFromParent) == "boolean" then
+				detachFromParent = {
+					detachFromOriginOnGrip = detachFromParent,
+					maintainWorldPositionOnDetachFromOrigin = false,
+					detachFromParentOnRelease = detachFromParent,
+					maintainWorldPositionOnDetachFromParent = false,
+					reattachToOriginOnRelease = allowReattach or false,
+					restoreTransformToOriginOnReattach = allowReattach or false,
+					useZeroTransformOnReattach = false,
+					allowChildVisibilityHandling = true,
+					allowChildHiddenInGameHandling = true,
+					allowRenderInMainPassHandling = true
+				}
+			end
 
-			--print(attachment, mesh, autoUpdateCurrentAttachment)
-			if detachFromParent == nil then detachFromParent = true end
-			if allowReattach == nil then allowReattach = false end
+			-- --print(attachment, mesh, autoUpdateCurrentAttachment)
+			-- if detachFromParent == nil then detachFromParent = true end
+			-- if allowReattach == nil then allowReattach = false end
 
 			-- detach them first so switchiing left to right isnt affected
 			if rightAttachment == nil then
@@ -1891,18 +2026,18 @@ function M.registerOnGripUpdateCallback(callback)
 			if rightAttachment == nil then
 				--M.detachGripAttachments(Handed.Right)
 			elseif rightMesh == nil then
-				M.attachToRawController(rightAttachment, Handed.Right, detachFromParent, allowReattach)
+				M.attachToRawController(rightAttachment, Handed.Right, detachFromParent)
 			else
-				M.attachToMesh(rightAttachment, rightMesh, rightSocketName, Handed.Right, detachFromParent, allowReattach)
+				M.attachToMesh(rightAttachment, rightMesh, rightSocketName, Handed.Right, detachFromParent)
 			end
 
 			-- if leftAttachment is nil then remove all left grip attachments
 			if leftAttachment == nil then
 				--M.detachGripAttachments(Handed.Left)
 			elseif leftMesh == nil then
-				M.attachToRawController(leftAttachment, Handed.Left, detachFromParent, allowReattach)
+				M.attachToRawController(leftAttachment, Handed.Left, detachFromParent)
 			else
-				M.attachToMesh(leftAttachment, leftMesh, leftSocketName, Handed.Left, detachFromParent, allowReattach)
+				M.attachToMesh(leftAttachment, leftMesh, leftSocketName, Handed.Left, detachFromParent)
 			end
 
 			-- print("After")
