@@ -1,7 +1,17 @@
 local uevrUtils = require("libs/uevr_utils")
 local particles = require("libs/particles")
+local linetracer = require("libs/linetracer")
 
 local M = {}
+
+M.LengthType = {
+    FIXED = 1,
+    CAMERA = 2,
+    LEFT_CONTROLLER = 3,
+    RIGHT_CONTROLLER = 4,
+    HUD = 5,
+    CUSTOM = 6
+}
 
 local laserLengthPerecentage = 1.0 --global multiplier for laser length 0.0 - 1.0
 
@@ -23,14 +33,49 @@ function M.new(options)
         laserColor = normalizeColor(options.laserColor or "#0000FFFF"),
         relativePosition = options.relativePosition or uevrUtils.vector(0,0,0),
         target = options.target or nil,
+        lengthSettings = {
+            type = (options.lengthSettings and options.lengthSettings.type) or M.LengthType.FIXED,
+            fixedLength = (options.lengthSettings and options.lengthSettings.fixedLength) or 50,
+            lengthPercentage = (options.lengthSettings and options.lengthSettings.lengthPercentage) or 1.0,
+            customTargetingFunctionID = (options.lengthSettings and options.lengthSettings.customTargetingFunctionID) or nil,
+            customTargetingOptions = {
+                collisionChannel = (options.lengthSettings and options.lengthSettings.customTargetingOptions and options.lengthSettings.customTargetingOptions.collisionChannel) or 0,
+                traceComplex = (options.lengthSettings and options.lengthSettings.customTargetingOptions and options.lengthSettings.customTargetingOptions.traceComplex) or false,
+                maxDistance = (options.lengthSettings and options.lengthSettings.customTargetingOptions and options.lengthSettings.customTargetingOptions.maxDistance) or 10000,
+                ignoreActors = (options.lengthSettings and options.lengthSettings.customTargetingOptions and options.lengthSettings.customTargetingOptions.ignoreActors) or {},
+                includeFullDetails = (options.lengthSettings and options.lengthSettings.customTargetingOptions and options.lengthSettings.customTargetingOptions.includeFullDetails) or false,
+                minHitDistance = (options.lengthSettings and options.lengthSettings.customTargetingOptions and options.lengthSettings.customTargetingOptions.minHitDistance) or 0,
+                customCallback = (options.lengthSettings and options.lengthSettings.customTargetingOptions and options.lengthSettings.customTargetingOptions.customCallback) or nil
+            }
+        },
     }, Laser)
 
     self:create() -- auto-create component
     return self
 end
 
+function Laser:lineTracerCallback(hitResult, hitLocation)
+    if hitLocation ~= nil then
+        self:setTargetLocation(hitLocation)
+    end
+    self.lastHitResult = hitResult
+end
+
+function Laser:getLastHitResult()
+    return self.lastHitResult
+end
+
+function Laser:getLineTraceType()
+    local lineTraceType = self.lengthSettings.type == M.LengthType.CAMERA and linetracer.TraceType.CAMERA or
+        self.lengthSettings.type == M.LengthType.LEFT_CONTROLLER and linetracer.TraceType.LEFT_CONTROLLER or
+        self.lengthSettings.type == M.LengthType.RIGHT_CONTROLLER and linetracer.TraceType.RIGHT_CONTROLLER or
+        self.lengthSettings.type == M.LengthType.HUD and linetracer.TraceType.HUD or
+        nil
+    return lineTraceType
+end
+
 function Laser:create()
-    if self.component == nil then
+     if self.component == nil then
         self.component = uevrUtils.create_component_of_class("Class /Script/Engine.CapsuleComponent")
         local c = uevrUtils.getValid(self.component)
         if c ~= nil then
@@ -47,7 +92,9 @@ function Laser:create()
             c:SetRenderCustomDepth(true)
             c:SetCustomDepthStencilValue(100)
             c:SetCustomDepthStencilWriteMask(ERendererStencilMask.ERSM_255)
-            --c:SetCapsuleHalfHeight(50, false) -- give it an initial length so it can be seen
+            --if self.lengthSettings.type == M.LengthType.FIXED then
+                c:SetCapsuleHalfHeight(50, false) -- give it an initial length so it can be seen
+            --end
             c.RelativeRotation = uevrUtils.rotator(90, 0, 0)
             self:setRelativePosition(uevrUtils.vector(0,0,0))
         end
@@ -65,18 +112,29 @@ function Laser:create()
         end
     end
 
-    return self.component
-end
-
-function Laser:attachTo(mesh, socketName, attachType, weld)
-    local c = uevrUtils.getValid(self.component)
-    local m = uevrUtils.getValid(mesh)
-    if c ~= nil and m ~= nil then
-		return c:K2_AttachTo(m, uevrUtils.fname_from_string(socketName or ""), attachType or 0, weld or false)
+    if self.lengthSettings.type ~= M.LengthType.FIXED then
+        self.lineTraceType = self:getLineTraceType()
+        if self.lineTraceType == nil then --its a custom type
+        --if theres no custom callback then treat it as fixed
+            if self.lengthSettings.customTargetingOptions.customCallback == nil then
+                print("No custom callback found for laser line tracer, defaulting to FIXED length")
+                self.lineTraceType = M.LengthType.FIXED
+            end
+            self.lineTraceType = self.lengthSettings.customTargetingFunctionID or tostring(self) -- just need a unique id
+        end
+        if self.lineTraceType ~= M.LengthType.FIXED then
+            --print("Subscribing laser line tracer: " .. tostring(self.lineTraceType))
+            linetracer.subscribe(tostring(self), self.lineTraceType,
+            function(hitResult, hitLocation)
+                return self:lineTracerCallback(hitResult, hitLocation)
+            end, self.lengthSettings.customTargetingOptions, 1)
+        end
     end
-end
 
-function Laser:getComponent()
+    if self.lengthSettings.type == M.LengthType.FIXED then
+        self:setLength(self.lengthSettings.fixedLength)
+    end
+
     return self.component
 end
 
@@ -91,6 +149,25 @@ function Laser:destroy()
         self.targetComponent:destroy()
         self.targetComponent = nil
     end
+    linetracer.unsubscribe(tostring(self))
+end
+
+function Laser:attachTo(mesh, socketName, attachType, weld)
+    local c = uevrUtils.getValid(self.component)
+    local m = uevrUtils.getValid(mesh)
+    if c ~= nil and m ~= nil then
+		return c:K2_AttachTo(m, uevrUtils.fname_from_string(socketName or ""), attachType or 0, weld or false)
+    end
+end
+
+function Laser:getComponent()
+    return self.component
+end
+
+function Laser:updateCustomTargetingOptions(options)
+    if options == nil then return end
+
+    linetracer.updateOptions(tostring(self), self.lineTraceType, options)
 end
 
 function Laser:updatePointer(origin, target)
@@ -133,7 +210,7 @@ end
 function Laser:setLength(length)
     local c = uevrUtils.getValid(self.component)
     if c ~= nil then
-        c:SetCapsuleHalfHeight((length / 2) * laserLengthPerecentage, false)
+        c:SetCapsuleHalfHeight((length / 2) * (laserLengthPerecentage * (self.lengthSettings.lengthPercentage or 1.0) / 2), false)
     end
 end
 
@@ -200,7 +277,7 @@ function Laser:setTargetLocation(location)
     --         particleComponent:SetRenderInMainPass(true)
     --         particleComponent.bRenderInDepthPass = true
     --     end
- 
+
     -- end
     -- if debugSphereComponent ~= nil then
     --     debugSphereComponent:K2_SetWorldLocation(location, false, reusable_hit_result, false)

@@ -139,7 +139,6 @@ local configui = require("libs/configui")
 local controllers = require("libs/controllers")
 local scope = require('libs/scope')
 local laser = require('libs/laser')
-local linetracer = require('libs/linetracer')
 
 --local debugger = require("libs/uevr_debug")
 
@@ -920,45 +919,59 @@ end
 
 
 --- Lasers ---------------------------------------------
-local function leftLineTracerCallback(hitResult, hitLocation)
-	if hitLocation and attachmentLasers[Handed.Left] ~= nil then
-		attachmentLasers[Handed.Left]:setTargetLocation(hitLocation)
-	end
-end
 
-local function rightLineTracerCallback(hitResult, hitLocation)
-	if hitLocation and attachmentLasers[Handed.Right] ~= nil then
-		attachmentLasers[Handed.Right]:setTargetLocation(hitLocation)
-	end
-end
+--- The line trace is only used for determining the distance
+--- so we know how what the length the laser should be. That is
+--- why it doesnt matter if we choose camera or controller based line tracing.
+--- Target location isnt important, just the distance to it.
+--- Caveat: If the laser is using a particle system as the target, then line trace type matters
+--- because the target location is used to position the particle system.
+--- TODO - can this line tracer code be moved to the laser module? (DONE)
+--- Line Tracer ---------------------------
+-- local function leftLineTracerCallback(hitResult, hitLocation)
+-- 	if hitLocation and attachmentLasers[Handed.Left] ~= nil then
+-- 		attachmentLasers[Handed.Left]:setTargetLocation(hitLocation)
+-- 	end
+-- end
 
-local lineTracerSubscribed = {}
-lineTracerSubscribed[Handed.Left] = false
-lineTracerSubscribed[Handed.Right] = false
-local function subscribeToLineTracer(gripHand)
-	local lineTracerType = linetracer.TraceType.CAMERA
-	local options = {
-		collisionChannel = 0,
-		traceComplex = false,
-		minHitDistance = 0,
-		ignoreActors = {}
-	}
-	if lineTracerSubscribed[gripHand] ~= true then
-		lineTracerSubscribed[gripHand] = true
-		linetracer.subscribe("laser_module_" .. gripHand, lineTracerType, gripHand == Handed.Left and leftLineTracerCallback or rightLineTracerCallback, options, 0)
-	end
-end
+-- local function rightLineTracerCallback(hitResult, hitLocation)
+-- 	if hitLocation and attachmentLasers[Handed.Right] ~= nil then
+-- 		attachmentLasers[Handed.Right]:setTargetLocation(hitLocation)
+-- 	end
+-- end
 
-local function unsubscribeFromLineTracer(gripHand)
-	if lineTracerSubscribed[gripHand] then
-		linetracer.unsubscribe("laser_module_" .. gripHand)
-		lineTracerSubscribed[gripHand] = false
-	end
-end
+-- local lineTracerSubscribed = {}
+-- lineTracerSubscribed[Handed.Left] = false
+-- lineTracerSubscribed[Handed.Right] = false
+-- local function subscribeToLineTracer(gripHand)
+-- 	local lineTracerType = linetracer.TraceType.CAMERA
+-- 	local options = {
+-- 		collisionChannel = 0,
+-- 		traceComplex = false,
+-- 		minHitDistance = 0,
+-- 		ignoreActors = {}
+-- 	}
+-- 	if lineTracerSubscribed[gripHand] ~= true then
+-- 		lineTracerSubscribed[gripHand] = true
+-- 		linetracer.subscribe("laser_module_" .. gripHand, lineTracerType, gripHand == Handed.Left and leftLineTracerCallback or rightLineTracerCallback, options, 0)
+-- 	end
+-- end
+
+-- local function unsubscribeFromLineTracer(gripHand)
+-- 	if lineTracerSubscribed[gripHand] then
+-- 		linetracer.unsubscribe("laser_module_" .. gripHand)
+-- 		lineTracerSubscribed[gripHand] = false
+-- 	end
+-- end
+-- End Line Tracer---------------------------------------
 
 local function createLaserForAttachment(attachment, gripHand)
-	subscribeToLineTracer(gripHand)
-	attachmentLasers[gripHand] = laser.new({laserColor = laserColor, target = {type = "particle", options = {particleSystemAsset = "ParticleSystem /Game/Art/VFX/ParticleSystems/Weapons/Projectiles/Plasma/PS_Plasma_Ball.PS_Plasma_Ball", scale = {0.04, 0.04, 0.04}, autoActivate = true}}})
+	--subscribeToLineTracer(gripHand)
+	local lengthSettings = {
+        type = laser.LengthType.CAMERA,
+        lengthPercentage = 1.0
+    }
+	attachmentLasers[gripHand] = laser.new({laserColor = laserColor, lengthSettings = lengthSettings, target = {type = "particle", options = {particleSystemAsset = "ParticleSystem /Game/Art/VFX/ParticleSystems/Weapons/Projectiles/Plasma/PS_Plasma_Ball.PS_Plasma_Ball", scale = {0.04, 0.04, 0.04}, autoActivate = true}}})
 	attachmentLasers[gripHand]:attachTo(attachment)--, "Sight_Socket")
 	attachmentLasers[gripHand]:setLength(50)
 	attachmentLasers[gripHand]:setRelativePosition(M.getActiveAttachmentSightsPositionOffset(gripHand))
@@ -966,7 +979,7 @@ local function createLaserForAttachment(attachment, gripHand)
 end
 
 local function destroyLaserForGripHand(gripHand)
-	unsubscribeFromLineTracer(gripHand)
+	--unsubscribeFromLineTracer(gripHand)
 	if attachmentLasers[gripHand] ~= nil then
 		attachmentLasers[gripHand]:destroy()
 		attachmentLasers[gripHand] = nil

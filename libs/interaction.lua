@@ -147,6 +147,7 @@ Usage
 local uevrUtils = require("libs/uevr_utils")
 local configui = require("libs/configui")
 local controllers = require("libs/controllers")
+local laser = require("libs/laser")
 -- local ui = require("libs/ui")
 
 local M = {}
@@ -388,32 +389,89 @@ local developerWidgets = spliceableInlineArray{
 	},
 }
 
-local function createLaserComponent()
-    if laserComponent == nil then
-        laserComponent = uevrUtils.create_component_of_class("Class /Script/Engine.CapsuleComponent")
-        if laserComponent ~= nil then
-            laserComponent:SetCapsuleSize(0.1, 0, true)
-            laserComponent:SetVisibility(true, true)
-            laserComponent:SetHiddenInGame(false, false)
-            laserComponent.bAutoActivate = true
-            laserComponent:SetGenerateOverlapEvents(false)
-            laserComponent:SetCollisionEnabled(ECollisionEnabled.NoCollision)
-            laserComponent:SetRenderInMainPass(true)
-            laserComponent.bRenderInDepthPass = true
-            laserComponent.ShapeColor = uevrUtils.hexToColor(laserColor)
+-- local lineTraceStartLocation = uevrUtils.vector(0,0,0)
+-- local lineTraceEndLocation = uevrUtils.vector(0,0,0)
+local function getLineTraceOrigins()
+    if uevrUtils.getValid(widgetInteractionComponent) == nil or widgetInteractionComponent.K2_GetComponentLocation == nil then return nil, nil end
+    return widgetInteractionComponent:K2_GetComponentLocation(), widgetInteractionComponent:K2_GetComponentRotation()
+ end
 
-            laserComponent:SetRenderCustomDepth(true)
-            laserComponent:SetCustomDepthStencilValue(100)
-            laserComponent:SetCustomDepthStencilWriteMask(ERendererStencilMask.ERSM_255)
-            --uevrUtils.set_component_relative_rotation(component, uevrUtils.rotator(0, 0, 90))
-        end
+-- local function lineTracerCallback(hitResult, hitLocation)
+-- 	-- Update reticule position based on hit
+-- 	if hitLocation then
+-- 		lineTraceEndLocation = hitLocation
+-- 	end
+--     if hitResult ~= nil then
+--         uevrUtils.executeUEVRCallbacks("on_interaction_hit", hitResult)
+--     end
+-- end
+
+-- local lineTracerSubscribed = false
+-- local function updateLineTracerSubscription()
+-- 	local lineTracerType = "interaction" --using a custom type
+-- 	local options = {
+-- 		collisionChannel = meshTraceChannel,
+-- 		traceComplex = true,
+-- 		maxDistance = meshInteractionDistance,
+-- 		ignoreActors = meshIgnorePawn and {pawn} or {},
+--         includeFullDetails = true,
+--         customCallback = getLineTraceOrigins
+-- 	}
+-- 	if lineTracerSubscribed then --if already subscribed, just update options
+-- 		linetracer.updateOptions("interaction_module", lineTracerType, options)
+-- 	else
+-- 		lineTracerSubscribed = true
+-- 		linetracer.subscribe("interaction_module", lineTracerType, lineTracerCallback, options, 1)
+-- 	end
+-- end
+
+-- local function unsubscribeFromLineTracer()
+-- 	if lineTracerSubscribed then
+-- 		linetracer.unsubscribe("reticule_module")
+-- 		lineTracerSubscribed = false
+-- 	end
+-- end
+
+local function getCurrentLinetraceOptions()
+    return {
+        collisionChannel = meshTraceChannel,
+        traceComplex = true,
+        maxDistance = meshInteractionDistance,
+        ignoreActors = meshIgnorePawn and {pawn} or {},
+        includeFullDetails = true,
+        minHitDistance = 0,
+        customCallback = getLineTraceOrigins,
+    }
+end
+
+local function updateLaserComponentOptions()
+    if laserComponent ~= nil then
+        laserComponent:updateCustomTargetingOptions(getCurrentLinetraceOptions())
     end
+end
+
+local function createLaserComponent()
+    local lengthSettings = {
+        type = laser.LengthType.CUSTOM, -- laser.LengthType.FIXED,
+        --fixedLength = 100,
+        lengthPercentage = 1.0,
+        customTargetingFunctionID = "interaction",
+        customTargetingOptions = getCurrentLinetraceOptions()
+    }
+    if laserComponent == nil then
+         laserComponent = laser.new({laserColor = laserColor, lengthSettings = lengthSettings}) --, target = {type = "particle", options = {particleSystemAsset = "ParticleSystem /Game/Art/VFX/ParticleSystems/Weapons/Projectiles/Plasma/PS_Plasma_Ball.PS_Plasma_Ball", scale = {0.04, 0.04, 0.04}, autoActivate = true}}})
+    end
+    if laserComponent ~= nil then
+        laserComponent:attachTo(widgetInteractionComponent)
+    end
+
     return laserComponent
 end
 
 local function destroyLaserComponent()
     if laserComponent ~= nil then
-        uevrUtils.destroyComponent(laserComponent, true, true)
+        laserComponent:destroy()
+        --uevrUtils.destroyComponent(laserComponent, true, true)
         laserComponent = nil
     end
 end
@@ -450,6 +508,7 @@ local function destroyWidgetInteractionComponent()
         uevrUtils.destroyComponent(trackerComponent, true, true)
         trackerComponent = nil
     end
+    destroyLaserComponent()
 end
 
 -- local function registerCallback(callbackName, callbackFunc)
@@ -515,7 +574,7 @@ end
 function M.create()
     createWidgetInteractionComponent(false)
     if showInteractionLaser then
-        createLaserComponent()
+        laserComponent = createLaserComponent()
     end
     controllers.attachComponentToController(interactionAttachment, widgetInteractionComponent)
     uevrUtils.set_component_relative_transform(widgetInteractionComponent, interactionLocationOffset, interactionRotationOffset)
@@ -578,7 +637,8 @@ function M.setLaserColor(val)
     laserColor = uevrUtils.intToHexString(val)
     --print("LaserColor", laserColor)
     if laserComponent ~= nil then
-        laserComponent.ShapeColor = uevrUtils.hexToColor(laserColor)
+        laserComponent:setLaserColor(laserColor)
+        --laserComponent.ShapeColor = uevrUtils.hexToColor(laserColor)
     end
 end
 
@@ -604,28 +664,31 @@ function M.setInteractionType(val)
     
     if interactionType == M.InteractionType.None then
         destroyWidgetInteractionComponent()
-        destroyLaserComponent()
     end
 end
 
 function M.setMeshInteractionDistance(val)
     meshInteractionDistance = val
     configui.setValue("meshInteractionDistance", val, true)
+    updateLaserComponentOptions()
 end
 
 function M.setMeshTraceChannel(val)
     meshTraceChannel = val
     configui.setValue("meshTraceChannel", val, true)
+    updateLaserComponentOptions()
 end
 
 function M.setMeshIgnorePawn(val)
     meshIgnorePawn = val
     configui.setValue("meshIgnorePawn", val, true)
+    updateLaserComponentOptions()
 end
 
 function M.setMeshEnableHitTesting(val)
     meshEnableHitTesting = val
     configui.setValue("meshEnableHitTesting", val, true)
+    updateLaserComponentOptions()
 end
 
 function M.setInteractionLocationOffset(...)
@@ -646,7 +709,6 @@ function M.setInteractionAttachment(val)
     interactionAttachment = val
     configui.setValue("interactionAttachment", val + 1, true)
     destroyWidgetInteractionComponent()
-    destroyLaserComponent()
 end
 
 function M.setAllowMouseUpdate(val)
@@ -914,32 +976,30 @@ end
     -- end
 --end
 
-local function lineTrace()
-    if uevrUtils.getValid(widgetInteractionComponent) == nil or widgetInteractionComponent.K2_GetComponentLocation == nil then return nil, nil end
 
-    local originPosition = widgetInteractionComponent:K2_GetComponentLocation()
-    local originDirection = widgetInteractionComponent:GetForwardVector()
- 	local endLocation = originPosition + (originDirection * meshInteractionDistance)
+-- local function lineTrace()
+--     if uevrUtils.getValid(widgetInteractionComponent) == nil or widgetInteractionComponent.K2_GetComponentLocation == nil then 
+--         unsubscribeFromLineTracer()
+--     else
+--         updateLineTracerSubscription()
+--     end
+
+--     -- if uevrUtils.getValid(widgetInteractionComponent) == nil or widgetInteractionComponent.K2_GetComponentLocation == nil then return nil, nil end
+
+--     -- local originPosition = widgetInteractionComponent:K2_GetComponentLocation()
+--     -- local originDirection = widgetInteractionComponent:GetForwardVector()
+--  	-- local endLocation = originPosition + (originDirection * meshInteractionDistance)
 	
-    if meshEnableHitTesting == true then
-        local ignore_actors = meshIgnorePawn and {pawn} or {}
-        local hitResult = uevrUtils.getLineTraceHitResult(originPosition, originDirection, meshTraceChannel, true, ignore_actors, 0, meshInteractionDistance, true)
-        if hitResult ~= nil then
-            endLocation = {X=hitResult.Location.X, Y=hitResult.Location.Y, Z=hitResult.Location.Z}
-            uevrUtils.executeUEVRCallbacks("on_interaction_hit", hitResult)
-        end
-        -- local world = uevrUtils.get_world()
-        -- if world ~= nil then
-        --     local hit = kismet_system_library:LineTraceSingle(world, originPosition, endLocation, meshTraceChannel, true, ignore_actors, 0, reusable_hit_result, true, zero_color, zero_color, 1.0)
-        --     if hit and reusable_hit_result.Distance > 0 then
-        --         endLocation = {X=reusable_hit_result.Location.X, Y=reusable_hit_result.Location.Y, Z=reusable_hit_result.Location.Z}
-        --         uevrUtils.executeUEVRCallbacks("on_interaction_hit", reusable_hit_result)
-        --         --executeCallbacks("on_hit", reusable_hit_result)
-        --     end
-        -- end
-    end
-	return originPosition, endLocation
-end
+--     -- if meshEnableHitTesting == true then
+--     --     local ignore_actors = meshIgnorePawn and {pawn} or {}
+--     --     local hitResult = uevrUtils.getLineTraceHitResult(originPosition, originDirection, meshTraceChannel, true, ignore_actors, 0, meshInteractionDistance, true)
+--     --     if hitResult ~= nil then
+--     --         endLocation = {X=hitResult.Location.X, Y=hitResult.Location.Y, Z=hitResult.Location.Z}
+--     --         uevrUtils.executeUEVRCallbacks("on_interaction_hit", hitResult)
+--     --     end
+--     -- end
+-- 	-- return originPosition, endLocation
+-- end
 -- struct FHitResult final
 -- {
 -- public:
@@ -964,30 +1024,30 @@ end
 -- 	class FName                                   BoneName;                                          // 0x0078(0x0008)(ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
 -- 	class FName                                   MyBoneName;                                        // 0x0080(0x0008)(ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
 -- };
-local function updateLaserPointer(origin, target)
-    if widgetInteractionComponent ~= nil and uevrUtils.getValid(laserComponent) ~= nil and origin ~= nil and target ~= nil then
-        ---@cast laserComponent -nil
-        --local screenLocation = widgetInteractionComponent:Get2DHitLocation()
-        --print(screenLocation.X,screenLocation.Y)
-        --local playerController = uevr.api:get_player_controller(0)
-        --playerController:SetMouseLocation(screenLocation.X, screenLocation.Y)
+-- local function updateLaserPointer(origin, target)
+--     if widgetInteractionComponent ~= nil and uevrUtils.getValid(laserComponent) ~= nil and origin ~= nil and target ~= nil then
+--         ---@cast laserComponent -nil
+--         --local screenLocation = widgetInteractionComponent:Get2DHitLocation()
+--         --print(screenLocation.X,screenLocation.Y)
+--         --local playerController = uevr.api:get_player_controller(0)
+--         --playerController:SetMouseLocation(screenLocation.X, screenLocation.Y)
 
-        --local hitDistance = widgetInteractionComponent:GetHoveredWidgetComponent() ~= nil and (widgetInteractionComponent:GetLastHitResult().Distance + laserLengthOffset) or defaultLength
-        local hitDistance = kismet_math_library:Vector_Distance(origin, target) + laserLengthOffset
-        laserComponent:SetCapsuleHalfHeight(hitDistance / 2, false);
-        --laserComponent:K2_SetRelativeLocation( uevrUtils.vector((hitDistance / 2) + laserLocationOffset, 0, 0 ), false, reusable_hit_result, false)
-        laserComponent:K2_SetWorldLocation( uevrUtils.vector(origin.X + ((target.X-origin.X)/2), origin.Y + ((target.Y-origin.Y)/2), origin.Z + ((target.Z-origin.Z)/2)), false, reusable_hit_result, false)
-        local rotation = kismet_math_library:Conv_VectorToRotator(uevrUtils.vector(target.X-origin.X,target.Y-origin.Y,target.Z-origin.Z))
-        rotation.Pitch = rotation.Pitch + 90
-        laserComponent:K2_SetWorldRotation(rotation, false, reusable_hit_result, false)
-        laserComponent:SetVisibility(true, false)
-        -- laserComponent.bHiddenInGame = false
-        -- laserComponent.bRenderInMainPass = true
-        -- laserComponent.bRenderInDepthPass = true
-        -- laserComponent.bVisible = true
-        -- print("Visible")
-    end
-end
+--         --local hitDistance = widgetInteractionComponent:GetHoveredWidgetComponent() ~= nil and (widgetInteractionComponent:GetLastHitResult().Distance + laserLengthOffset) or defaultLength
+--         local hitDistance = kismet_math_library:Vector_Distance(origin, target) + laserLengthOffset
+--         laserComponent:SetCapsuleHalfHeight(hitDistance / 2, false);
+--         --laserComponent:K2_SetRelativeLocation( uevrUtils.vector((hitDistance / 2) + laserLocationOffset, 0, 0 ), false, reusable_hit_result, false)
+--         --laserComponent:K2_SetWorldLocation( uevrUtils.vector(origin.X + ((target.X-origin.X)/2), origin.Y + ((target.Y-origin.Y)/2), origin.Z + ((target.Z-origin.Z)/2)), false, reusable_hit_result, false)
+--         local rotation = kismet_math_library:Conv_VectorToRotator(uevrUtils.vector(target.X-origin.X,target.Y-origin.Y,target.Z-origin.Z))
+--         rotation.Pitch = rotation.Pitch + 90
+--         laserComponent:K2_SetWorldRotation(rotation, false, reusable_hit_result, false)
+--         laserComponent:SetVisibility(true, false)
+--         -- laserComponent.bHiddenInGame = false
+--         -- laserComponent.bRenderInMainPass = true
+--         -- laserComponent.bRenderInDepthPass = true
+--         -- laserComponent.bVisible = true
+--         -- print("Visible")
+--     end
+-- end
 
 local g_screenLocation = uevrUtils.vector_2(0,0)
 local function updateMouse(target)
@@ -1006,19 +1066,26 @@ end
 
 local wasHovering = false
 uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
-    if uevrUtils.getValid(widgetInteractionComponent) == nil then return end
-
-    --if trackerComponent ~= nil then trackerComponent:SetVisibility(false, false) end
-    if uevrUtils.getValid(laserComponent) ~= nil then 
-        ---@cast laserComponent -nil
-        laserComponent:SetVisibility(false, false) 
+    if uevrUtils.getValid(widgetInteractionComponent) == nil then
+        --unsubscribeFromLineTracer()
+        return
     end
 
+    --if trackerComponent ~= nil then trackerComponent:SetVisibility(false, false) end
+ 
+    --if laserComponent ~= nil then  laserComponent:setVisibility(false) end
     if interactionType == M.InteractionType.Mesh then
-        local startLocation, endLocation = lineTrace()
+        --local startLocation, endLocation = lineTrace()
+        --updateLineTracerSubscription()
         --print(startLocation.X, startLocation.Y, startLocation.Z, endLocation.X, endLocation.Y, endLocation.Z)
-        updateLaserPointer(startLocation, endLocation)
-        updateMouse(endLocation)
+        --updateLaserPointer(lineTraceStartLocation, lineTraceEndLocation)
+        --if laserComponent ~= nil then laserComponent:setTargetLocation(lineTraceEndLocation) end
+        local hitResult = laserComponent ~= nil and laserComponent:getLastHitResult() or nil
+        if hitResult ~= nil then
+            uevrUtils.executeUEVRCallbacks("on_interaction_hit", hitResult)
+            updateMouse(uevrUtils.vector(hitResult.Location))
+        end
+        
     elseif interactionType == M.InteractionType.Widget or interactionType == M.InteractionType.MeshAndWidget then
 		--sometimes an error is thrown "property VirtualUserIndex is not found"t
         pcall(function()
@@ -1034,6 +1101,7 @@ uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
         local isHovering = widgetInteractionComponent.HoveredWidgetComponent ~= nil
         --print("isHovering", isHovering, widgetInteractionComponent.HoveredWidgetComponent)
         if isHovering then
+            --unsubscribeFromLineTracer()
                 --playerController.bShowMouseCursor = false
                 --widgetInteractionComponent.HoveredWidgetComponent.Widget["NeedClickSound?"] = false
             local hitResult = widgetInteractionComponent:GetLastHitResult()
@@ -1047,7 +1115,8 @@ uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
                     if projected ~= nil then
                         projected.Z = projected.Z + interactionZOffset
                         if trackerComponent ~= nil then trackerComponent:K2_SetWorldLocation(uevrUtils.vector(projected), false, reusable_hit_result, false) end
-                        updateLaserPointer(uevrUtils.vector(hitResult.TraceStart), projected)
+                        if laserComponent ~= nil then laserComponent:setTargetLocation(projected) end
+                        --updateLaserPointer(uevrUtils.vector(hitResult.TraceStart), projected)
                         updateMouse(projected)
                     end
                     --TODO does this hit result need to be cleaned?
@@ -1056,14 +1125,25 @@ uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
                 end
             end
         elseif interactionType == M.InteractionType.MeshAndWidget then
-            local startLocation, endLocation = lineTrace()
-            updateLaserPointer(startLocation, endLocation)
-            updateMouse(endLocation)
+            --local startLocation, endLocation = lineTrace()
+            --updateLineTracerSubscription()
+            --if laserComponent ~= nil then laserComponent:setTargetLocation(lineTraceEndLocation) end
+            --updateLaserPointer(lineTraceStartLocation, lineTraceEndLocation)
+            --updateMouse(lineTraceEndLocation)
+            local hitResult = laserComponent ~= nil and laserComponent:getLastHitResult() or nil
+            if hitResult ~= nil then
+                uevrUtils.executeUEVRCallbacks("on_interaction_hit", hitResult)
+                updateMouse(uevrUtils.vector(hitResult.Location))
+            end
+        else
+            --unsubscribeFromLineTracer()
         end
         -- if isHovering ~= wasHovering then
         --     onHoverChanged(isHovering)
         --     wasHovering = isHovering
         -- end
+    else
+        --unsubscribeFromLineTracer()
     end
 end)
 
@@ -1141,7 +1221,6 @@ uevrUtils.setInterval(1000, function()
 end)
 
 uevr.params.sdk.callbacks.on_script_reset(function()
-	destroyLaserComponent()
     destroyWidgetInteractionComponent()
 end)
 

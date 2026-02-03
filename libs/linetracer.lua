@@ -127,6 +127,7 @@ M.TraceType = {
     HMD = "hmd",
     LEFT_CONTROLLER = "left_controller",
     RIGHT_CONTROLLER = "right_controller",
+
 }
 
 -- LineTracer class
@@ -146,7 +147,7 @@ end
 -- subscriberID: unique identifier for this subscriber
 -- traceType: one of M.TraceType values
 -- callback: function(hitResult, hitLocation, hitNormal, hitActor) to receive results
--- options: { collisionChannel, ignoreActors, traceComplex, minHitDistance, maxDistance }
+-- options: { collisionChannel, ignoreActors, traceComplex, minHitDistance, maxDistance, customCallback }
 -- priority: higher values take precedence for options (default: 0)
 function M.subscribe(subscriberID, traceType, callback, options, priority)
     if activeSubscriptions[traceType] == nil then
@@ -218,85 +219,131 @@ function M.getSubscriberCount(traceType)
     return count
 end
 
--- Perform camera-based line trace
+-- -- Perform camera-based line trace
+-- local function performCameraTrace(options, hitResult)
+--     local playerController = uevr.api:get_player_controller(0)
+--     if playerController == nil then return nil end
+
+--     local playerCameraManager = playerController.PlayerCameraManager
+--     if playerCameraManager == nil or playerCameraManager.GetCameraRotation == nil then
+--         return nil
+--     end
+
+--     local cameraLocation = playerCameraManager:GetCameraLocation()
+--     local cameraRotation = playerCameraManager:GetCameraRotation()
+--     local forwardVector = kismet_math_library:GetForwardVector(cameraRotation)
+
+--     local result = uevrUtils.getLineTraceHitResult(
+--         cameraLocation,
+--         forwardVector,
+--         options.collisionChannel or 0,
+--         options.traceComplex or false,
+--         options.ignoreActors or {},
+--         options.minHitDistance,
+--         options.maxDistance or 10000,
+--         options.includeFullDetails or false,
+--         hitResult
+--     )
+
+--     return result
+-- end
+
+-- -- Perform HMD-based line trace
+-- local function performHMDTrace(options, hitResult)
+--     local hmdLocation = controllers.getControllerLocation(2)  -- 2 = HMD
+--     local hmdRotation = controllers.getControllerRotation(2)
+
+--     if hmdLocation == nil or hmdRotation == nil then
+--         return nil
+--     end
+
+--     local forwardVector = kismet_math_library:GetForwardVector(hmdRotation)
+
+--     local result = uevrUtils.getLineTraceHitResult(
+--         hmdLocation,
+--         forwardVector,
+--         options.collisionChannel or 0,
+--         options.traceComplex or false,
+--         options.ignoreActors or {},
+--         options.minHitDistance,
+--         options.maxDistance or 10000,
+--         options.includeFullDetails or false,
+--         hitResult
+--     )
+
+--     return result
+-- end
+
+-- -- Perform controller-based line trace
+-- local function performControllerTrace(handedness, options, hitResult)
+--     local controllerLocation = controllers.getControllerLocation(handedness)
+--     local controllerRotation = controllers.getControllerRotation(handedness)
+
+--     if controllerLocation == nil or controllerRotation == nil then
+--         return nil
+--     end
+
+--     local forwardVector = kismet_math_library:GetForwardVector(controllerRotation)
+
+--     local result = uevrUtils.getLineTraceHitResult(
+--         controllerLocation,
+--         forwardVector,
+--         options.collisionChannel or 0,
+--         options.traceComplex or false,
+--         options.ignoreActors or {},
+--         options.minHitDistance,
+--         options.maxDistance or 10000,
+--         options.includeFullDetails or false,
+--         hitResult
+--     )
+
+--     return result
+-- end
+
+local function traceFromLocationRotation(location, rotation, options, hitResult)
+    if location == nil or rotation == nil then
+        return nil
+    end
+
+    local forwardVector = kismet_math_library:GetForwardVector(rotation)
+
+    return uevrUtils.getLineTraceHitResult(
+        location,
+        forwardVector,
+        options.collisionChannel or 0,
+        options.traceComplex or false,
+        options.ignoreActors or {},
+        options.minHitDistance or 0,
+        options.maxDistance or 10000,
+        options.includeFullDetails or false,
+        hitResult
+    )
+end
+
 local function performCameraTrace(options, hitResult)
     local playerController = uevr.api:get_player_controller(0)
     if playerController == nil then return nil end
 
-    local playerCameraManager = playerController.PlayerCameraManager
-    if playerCameraManager == nil or playerCameraManager.GetCameraRotation == nil then
-        return nil
-    end
+    local pcm = playerController.PlayerCameraManager
+    if pcm == nil or pcm.GetCameraRotation == nil then return nil end
 
-    local cameraLocation = playerCameraManager:GetCameraLocation()
-    local cameraRotation = playerCameraManager:GetCameraRotation()
-    local forwardVector = kismet_math_library:GetForwardVector(cameraRotation)
-
-    local result = uevrUtils.getLineTraceHitResult(
-        cameraLocation,
-        forwardVector,
-        options.collisionChannel or 0,
-        options.traceComplex or false,
-        options.ignoreActors or {},
-        options.minHitDistance,
-        options.maxDistance or 10000,
-        options.includeFullDetails or false,
-        hitResult
-    )
-
-    return result
+    return traceFromLocationRotation( pcm:GetCameraLocation(), pcm:GetCameraRotation(), options, hitResult)
 end
 
--- Perform HMD-based line trace
 local function performHMDTrace(options, hitResult)
-    local hmdLocation = controllers.getControllerLocation(2)  -- 2 = HMD
-    local hmdRotation = controllers.getControllerRotation(2)
-
-    if hmdLocation == nil or hmdRotation == nil then
-        return nil
-    end
-
-    local forwardVector = kismet_math_library:GetForwardVector(hmdRotation)
-
-    local result = uevrUtils.getLineTraceHitResult(
-        hmdLocation,
-        forwardVector,
-        options.collisionChannel or 0,
-        options.traceComplex or false,
-        options.ignoreActors or {},
-        options.minHitDistance,
-        options.maxDistance or 10000,
-        options.includeFullDetails or false,
-        hitResult
-    )
-
-    return result
+    return traceFromLocationRotation(controllers.getControllerLocation(2), controllers.getControllerRotation(2), options, hitResult)
 end
 
--- Perform controller-based line trace
 local function performControllerTrace(handedness, options, hitResult)
-    local controllerLocation = controllers.getControllerLocation(handedness)
-    local controllerRotation = controllers.getControllerRotation(handedness)
+    return traceFromLocationRotation( controllers.getControllerLocation(handedness), controllers.getControllerRotation(handedness), options, hitResult)
+end
 
-    if controllerLocation == nil or controllerRotation == nil then
+local function performCustomTrace(options, hitResult)
+    if options.customCallback == nil then
         return nil
     end
-
-    local forwardVector = kismet_math_library:GetForwardVector(controllerRotation)
-
-    local result = uevrUtils.getLineTraceHitResult(
-        controllerLocation,
-        forwardVector,
-        options.collisionChannel or 0,
-        options.traceComplex or false,
-        options.ignoreActors or {},
-        options.minHitDistance,
-        options.maxDistance or 10000,
-        options.includeFullDetails or false,
-        hitResult
-    )
-
-    return result
+    local location, rotation = options.customCallback()
+    return traceFromLocationRotation(location, rotation, options, hitResult)
 end
 
 -- Execute a trace for a specific type and notify subscribers
@@ -333,6 +380,8 @@ local function executeTrace(traceType, subscribers)
         result = performControllerTrace(Handed.Left, mergedOptions, hitResult)
     elseif traceType == M.TraceType.RIGHT_CONTROLLER then
         result = performControllerTrace(Handed.Right, mergedOptions, hitResult)
+    else
+        result = performCustomTrace(mergedOptions, hitResult)
     end
 
     -- Notify all subscribers
@@ -366,7 +415,7 @@ function M.getLastResult(traceType)
 end
 
 -- Register tick callback
-uevrUtils.registerPostEngineTickCallback(function(engine, delta)
+uevrUtils.registerPreEngineTickCallback(function(engine, delta)
     M.update(delta)
 end)
 
