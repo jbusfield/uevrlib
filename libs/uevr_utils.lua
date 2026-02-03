@@ -3533,14 +3533,20 @@ function M.getLineTraceHitResult(originPosition, originDirection, collisionChann
 	if originPosition ~= nil and originDirection ~= nil then
 		if maxTraceDistance == nil then maxTraceDistance = 8192.0 end
 		local endLocation = originPosition + (originDirection * maxTraceDistance)
-		local ignore_actors = ignoreActors or {}
+		local validIgnoreActors = {}
+		for _, actor in ipairs(ignoreActors or {}) do
+			local valid = M.getValid(actor)
+			if valid then table.insert(validIgnoreActors, valid) end
+		end
 		if traceComplex == nil then traceComplex = false end
 		--if minHitDistance == nil then minHitDistance = 10 end
 		if collisionChannel == nil then collisionChannel = 0 end
 		local world = M.get_world()
 		if world ~= nil then
 			if hitResult == nil then hitResult = reusable_hit_result end
-			local hit = kismet_system_library:LineTraceSingle(world, originPosition, endLocation, collisionChannel, traceComplex, ignore_actors, 0, hitResult, true, zero_color, zero_color, 1.0)
+			--TODO this is sometimes throwing an exception i think because ignoreActors contains a pawn that is invalid
+			--either pcall to prevent crash or validated all members of ignoreActors before calling
+			local hit = kismet_system_library:LineTraceSingle(world, originPosition, endLocation, collisionChannel, traceComplex, validIgnoreActors, 0, hitResult, true, zero_color, zero_color, 1.0)
 			local exceedsMinDistance = true
 			if minHitDistance ~= nil then
 				local distance = M.vectorDistance(originPosition, M.vector(hitResult.Location))
@@ -3549,13 +3555,14 @@ function M.getLineTraceHitResult(originPosition, originDirection, collisionChann
 			--print(collisionChannel, traceComplex, maxTraceDistance, hit, reusable_hit_result.Distance, minHitDistance,reusable_hit_result.Location.X, reusable_hit_result.Location.Y, reusable_hit_result.Location.Z)
 			if hit and exceedsMinDistance then --reusable_hit_result.Distance > minHitDistance then
 				if includeFullDetails == true then
-					return M.getCleanHitResult(hitResult)
+					hitResult = M.getCleanHitResult(hitResult)
 				end
-				return hitResult
+				return hitResult, hitResult and M.vector(hitResult.Location) or endLocation
 			end
+			return nil, endLocation
 		end
 	end
-	return nil
+	return nil, nil
 end
 
 

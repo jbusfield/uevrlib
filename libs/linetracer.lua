@@ -402,31 +402,34 @@ local function executeTrace(traceType, subscribers)
     local hitResult = reusableHitResults[traceType]
 
     -- Perform the appropriate trace
+    -- linetrace returns a hitResult and a location vector. Even if the trace hits nothing, location is the end point of the trace
     local result = nil
+    local location = nil
     if traceType == M.TraceType.CAMERA then
-        result = performCameraTrace(mergedOptions, hitResult)
+        result, location = performCameraTrace(mergedOptions, hitResult)
     elseif traceType == M.TraceType.HMD then
-        result = performHMDTrace(mergedOptions, hitResult)
+        result, location = performHMDTrace(mergedOptions, hitResult)
     elseif traceType == M.TraceType.LEFT_CONTROLLER then
-        result = performControllerTrace(Handed.Left, mergedOptions, hitResult)
+        result, location = performControllerTrace(Handed.Left, mergedOptions, hitResult)
     elseif traceType == M.TraceType.RIGHT_CONTROLLER then
-        result = performControllerTrace(Handed.Right, mergedOptions, hitResult)
+        result, location = performControllerTrace(Handed.Right, mergedOptions, hitResult)
     else
-        result = performCustomTrace(mergedOptions, hitResult)
+        result, location = performCustomTrace(mergedOptions, hitResult)
     end
 
+    --print(location, result, traceType)
     -- Notify all subscribers
-    if result ~= nil then
+    --if result ~= nil then
         -- local hitLocation = result.Location or result.ImpactPoint
         -- local hitNormal = result.Normal or result.ImpactNormal
         -- local hitActor = result.HitObjectHandle and result.HitObjectHandle.Actor
 
         for subscriberID, subData in pairs(subscribers) do
             if subData.callback ~= nil then
-                subData.callback(result, uevrUtils.vector(hitResult.Location))
+                subData.callback(result, location)
             end
         end
-    end
+    --end
 end
 
 -- Update all active traces (call from tick)

@@ -389,48 +389,10 @@ local developerWidgets = spliceableInlineArray{
 	},
 }
 
--- local lineTraceStartLocation = uevrUtils.vector(0,0,0)
--- local lineTraceEndLocation = uevrUtils.vector(0,0,0)
 local function getLineTraceOrigins()
     if uevrUtils.getValid(widgetInteractionComponent) == nil or widgetInteractionComponent.K2_GetComponentLocation == nil then return nil, nil end
     return widgetInteractionComponent:K2_GetComponentLocation(), widgetInteractionComponent:K2_GetComponentRotation()
  end
-
--- local function lineTracerCallback(hitResult, hitLocation)
--- 	-- Update reticule position based on hit
--- 	if hitLocation then
--- 		lineTraceEndLocation = hitLocation
--- 	end
---     if hitResult ~= nil then
---         uevrUtils.executeUEVRCallbacks("on_interaction_hit", hitResult)
---     end
--- end
-
--- local lineTracerSubscribed = false
--- local function updateLineTracerSubscription()
--- 	local lineTracerType = "interaction" --using a custom type
--- 	local options = {
--- 		collisionChannel = meshTraceChannel,
--- 		traceComplex = true,
--- 		maxDistance = meshInteractionDistance,
--- 		ignoreActors = meshIgnorePawn and {pawn} or {},
---         includeFullDetails = true,
---         customCallback = getLineTraceOrigins
--- 	}
--- 	if lineTracerSubscribed then --if already subscribed, just update options
--- 		linetracer.updateOptions("interaction_module", lineTracerType, options)
--- 	else
--- 		lineTracerSubscribed = true
--- 		linetracer.subscribe("interaction_module", lineTracerType, lineTracerCallback, options, 1)
--- 	end
--- end
-
--- local function unsubscribeFromLineTracer()
--- 	if lineTracerSubscribed then
--- 		linetracer.unsubscribe("reticule_module")
--- 		lineTracerSubscribed = false
--- 	end
--- end
 
 local function getCurrentLinetraceOptions()
     return {
@@ -451,21 +413,23 @@ local function updateLaserComponentOptions()
 end
 
 local function createLaserComponent()
-    local lengthSettings = {
-        type = laser.LengthType.CUSTOM, -- laser.LengthType.FIXED,
-        --fixedLength = 100,
-        lengthPercentage = 1.0,
-        customTargetingFunctionID = "interaction",
-        customTargetingOptions = getCurrentLinetraceOptions()
-    }
-    if laserComponent == nil then
-         laserComponent = laser.new({laserColor = laserColor, lengthSettings = lengthSettings}) --, target = {type = "particle", options = {particleSystemAsset = "ParticleSystem /Game/Art/VFX/ParticleSystems/Weapons/Projectiles/Plasma/PS_Plasma_Ball.PS_Plasma_Ball", scale = {0.04, 0.04, 0.04}, autoActivate = true}}})
-    end
-    if laserComponent ~= nil then
-        laserComponent:attachTo(widgetInteractionComponent)
-    end
+    if interactionType ~= M.InteractionType.None then
+        local lengthSettings = {
+            type = laser.LengthType.CUSTOM, -- laser.LengthType.FIXED,
+            --fixedLength = 100,
+            lengthPercentage = 1.0,
+            customTargetingFunctionID = "interaction",
+            customTargetingOptions = getCurrentLinetraceOptions()
+        }
+        if laserComponent == nil then
+            laserComponent = laser.new({laserColor = laserColor, lengthSettings = lengthSettings}) --, target = {type = "particle", options = {particleSystemAsset = "ParticleSystem /Game/Art/VFX/ParticleSystems/Weapons/Projectiles/Plasma/PS_Plasma_Ball.PS_Plasma_Ball", scale = {0.04, 0.04, 0.04}, autoActivate = true}}})
+        end
+        if laserComponent ~= nil then
+            laserComponent:attachTo(widgetInteractionComponent)
+        end
 
-    return laserComponent
+        return laserComponent
+    end
 end
 
 local function destroyLaserComponent()

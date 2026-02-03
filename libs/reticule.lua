@@ -664,10 +664,10 @@ local function getOffsetWorldPosition(targetPos, targetRot, offsetX, offsetY)
 end
 
 local lastTargetLocation = uevrUtils.vector(0,0,0)
-local function lineTracerCallback(hitResult, hitLocation)
+local function lineTracerCallback(hitResult, targetLocation)
 	-- Update reticule position based on hit
-	if hitLocation then
-		lastTargetLocation = hitLocation
+	if targetLocation then
+		lastTargetLocation = targetLocation
 	end
 end
 
