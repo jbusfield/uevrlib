@@ -1,3 +1,111 @@
+--[[
+Usage
+	Drop the libs folder containing this file into your project folder
+	Add code like this in your script:
+		local scope = require("libs/scope")
+
+	This module implements an instance-based “scope / optic” effect using a SceneCapture2D
+	rendering into a RenderTarget2D, which is then displayed on an “ocular lens” mesh.
+
+	Scopes are managed per-weapon-type via `weaponTypeID`. Multiple scope instances can
+	exist at once (e.g., multiple weapons, multiple attachments). The module tracks active
+	instances and can automatically route input (zoom/brightness) to the scope closest to
+	the HMD.
+
+	The module is mainly designed to provide a scope configuration UI to other systems such
+	as attachments but it can be used standalone as well.
+
+	Available module functions:
+
+	scope.new(weaponTypeID, options) -> Scope
+		Creates a new scope instance for a given weapon type and auto-creates its components.
+		weaponTypeID: string key used for parameter persistence and instance grouping.
+		options: table (optional) passed through to Scope:create(options). Common fields:
+			disabled: bool (default from persisted "disable")
+			brightness: number
+			deactivateDistance: number (stored to "deactivate_distance")
+			hideOcularLensOnDisable: bool (stored to "hide_ocular_lens_on_disable")
+
+	scope.getConfigWidgets(prefix) -> table
+		Returns `configui` widget descriptors for editing scope parameters.
+		prefix: optional string to namespace widget IDs.
+
+	scope.createConfigCallbacks(weaponTypeID, prefix)
+		Registers `configui.onUpdate` callbacks that persist settings and update all active
+		scope instances for that weaponTypeID.
+
+	scope.getScopeCount() -> number
+		Returns total number of active scope instances.
+
+	scope.setAutoHandleInput(value)
+		Enables/disables automatic input routing (zoom/brightness) to the closest active scope.
+
+	scope.updateScopes(delta)
+		Updates active state for all scopes and, if autoHandleInput is enabled, applies zoom/
+		brightness input to the closest active scope.
+
+	scope.setDefaultPitchOffset(value)
+		Sets a pitch offset applied when positioning/rotating lens components.
+
+	scope.init(isDeveloperMode, logLevel)
+		Loads persisted parameters via paramManager.
+
+	Enums:
+		scope.AdjustMode.ZOOM / scope.AdjustMode.BRIGHTNESS
+
+	Scope instance methods (returned by scope.new):
+		scopeInstance:create(options) -> ocularLensComponent, objectiveLensComponent
+			(Re)creates the RenderTarget, ocular lens mesh, and SceneCapture component.
+		scopeInstance:destroy()
+		scopeInstance:attachTo(attachmentComponent)
+		scopeInstance:disable(value)
+		scopeInstance:isDisplaying() -> bool
+
+		Zoom/Brightness:
+			scopeInstance:setZoom(zoom)
+			scopeInstance:updateZoom(direction, delta)
+			scopeInstance:setBrightness(value)
+			scopeInstance:updateBrightness(direction, delta)
+
+		Lens transforms:
+			scopeInstance:setOcularLensScale(value)
+			scopeInstance:setObjectiveLensRelativeRotation(rot)
+			scopeInstance:setObjectiveLensRelativeLocation(vec)
+			scopeInstance:setOcularLensRelativeRotation(rot)
+			scopeInstance:setOcularLensRelativeLocation(vec)
+			scopeInstance:showDebugMeshes(value)
+
+		Components:
+			scopeInstance:getOcularLensComponent()
+			scopeInstance:getObjectiveLensComponent()
+	
+	Examples:
+		--create
+		attachmentScopes[gripHand] = scope.new(id)
+		attachmentScopes[gripHand]:attachTo(attachment)
+
+		--destroy
+		if attachmentScopes[gripHand] ~= nil then
+			attachmentScopes[gripHand]:destroy()
+			attachmentScopes[gripHand] = nil
+		end
+
+		--get scope ui widgets as part of another module's configuration
+		local scopeWidgets = scope.getConfigWidgets(widgetPrefix .. name .. "_")
+		for j = 1, #scopeWidgets do
+			table.insert(configDefinition[1]["layout"], scopeWidgets[j])
+		end
+
+
+	Notes:
+		- “min_fov” is the narrowest FOV (highest zoom), “max_fov” is the widest FOV (lowest zoom).
+		- Active state is automatically toggled based on HMD distance to the ocular lens
+		  ("deactivate_distance").
+		- This module registers an OnPreInputGetState callback to read thumbstick input and
+		  prevent snap turning while adjusting.
+
+]]--
+
 local uevrUtils = require("libs/uevr_utils")
 local controllers = require("libs/controllers")
 local configui = require("libs/configui")
