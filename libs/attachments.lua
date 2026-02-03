@@ -971,10 +971,11 @@ local function createLaserForAttachment(attachment, gripHand)
         type = laser.LengthType.CAMERA,
         lengthPercentage = 1.0
     }
-	attachmentLasers[gripHand] = laser.new({laserColor = laserColor, lengthSettings = lengthSettings, target = {type = "particle", options = {particleSystemAsset = "ParticleSystem /Game/Art/VFX/ParticleSystems/Weapons/Projectiles/Plasma/PS_Plasma_Ball.PS_Plasma_Ball", scale = {0.04, 0.04, 0.04}, autoActivate = true}}})
+	--attachmentLasers[gripHand] = laser.new({laserColor = laserColor, lengthSettings = lengthSettings, target = {type = "particle", options = {particleSystemAsset = "ParticleSystem /Game/Art/VFX/ParticleSystems/Weapons/Projectiles/Plasma/PS_Plasma_Ball.PS_Plasma_Ball", scale = {0.04, 0.04, 0.04}, autoActivate = true}}})
+	attachmentLasers[gripHand] = laser.new({laserColor = laserColor, lengthSettings = lengthSettings})
 	attachmentLasers[gripHand]:attachTo(attachment)--, "Sight_Socket")
-	attachmentLasers[gripHand]:setLength(50)
 	attachmentLasers[gripHand]:setRelativePosition(M.getActiveAttachmentSightsPositionOffset(gripHand))
+	--attachmentLasers[gripHand]:setLength(50)
 	return attachmentLasers[gripHand]
 end
 

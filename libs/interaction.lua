@@ -1,4 +1,4 @@
---Interaction component and laser pointer inspired by Gwizdek
+--Interaction component inspiration and code snippets courtesy of Gwizdek
 
 --[[ 
 Usage

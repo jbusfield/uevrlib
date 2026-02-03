@@ -1,3 +1,104 @@
+--Laser pointer inspiration and code snippets courtesy of Gwizdek
+
+--[[
+Usage
+    Drop the libs folder containing this file into your project folder
+    Add code like this in your script:
+        local laser = require("libs/laser")
+
+    This module provides a simple, reusable “laser pointer” implementation built from an
+    Engine `CapsuleComponent`. It supports fixed-length lasers as well as lasers whose
+    length/endpoint is driven by shared line traces via `libs/linetracer`.
+
+    If the laser is using a traced length mode, it subscribes to `linetracer` and updates
+    its endpoint each frame from the trace hit location. Optionally, it can spawn a target
+    effect (currently supports `type = "particle"`) that is positioned at the laser end.
+
+    Available functions:
+
+    laser.new(options) -> Laser
+        Creates a laser instance and auto-creates the underlying component.
+        options:
+            laserLengthOffset: number (default: 0)
+                Additional length added to computed hit distance.
+            laserColor: string|number (default: "#0000FFFF")
+                Hex string or integer color; applied to CapsuleComponent.ShapeColor.
+            relativePosition: FVector|table (default: vector(0,0,0))
+                Component relative offset before the internal “half-height” offset.
+            target: table|nil (optional)
+                { type = "particle", options = <particles.new options> }
+            lengthSettings: table (optional)
+                type: one of laser.LengthType (default: FIXED)
+                fixedLength: number (default: 50)
+                lengthPercentage: number (default: 1.0)
+                customTargetingFunctionID: string|nil
+                    Used as the `linetracer` traceType key when using CUSTOM targeting.
+                customTargetingOptions: table (optional)
+                    collisionChannel, traceComplex, maxDistance, ignoreActors,
+                    includeFullDetails, minHitDistance,
+                    customCallback
+
+        Notes:
+            - If lengthSettings.type is not FIXED, this module will subscribe to `linetracer`.
+            - For CUSTOM targeting, set `customTargetingOptions.customCallback` to a function
+              returning `(location, rotation)` each tick. Any traceType key not in
+              `linetracer.TraceType` will be treated as a custom trace.
+
+    laser.setLaserLengthPercentage(val)
+        Sets a global multiplier applied to all laser lengths (clamped 0.0–1.0).
+
+    laser.LengthType - enum:
+        FIXED, CAMERA, LEFT_CONTROLLER, RIGHT_CONTROLLER, HUD, CUSTOM
+        (Non-standard types fall back to CUSTOM behavior and require customCallback.)
+
+    Laser instance methods (returned by laser.new):
+        laser:getComponent() -> component
+        laser:destroy()
+        laser:attachTo(mesh, socketName, attachType, weld)
+        laser:updatePointer(origin, target)
+            Manually update laser transform/length between two world points.
+        laser:setTargetLocation(location)
+            Updates length based on distance from component to `location` and moves target effect.
+        laser:setLength(length)
+        laser:setRelativePosition(pos)
+        laser:setVisibility(isVisible)
+        laser:setLaserLengthOffset(val)
+        laser:setLaserColor(val)
+        laser:updateCustomTargetingOptions(options)
+        laser:getLastHitResult() -> hitResult|nil
+
+    Examples:
+        -- Fixed-length laser
+        local laser = require("libs/laser")
+        local myLaser = laser.new({
+            laserColor = "#00FFFFFF",
+            lengthSettings = { type = laser.LengthType.FIXED, fixedLength = 80 }
+        })
+        myLaser:attachTo(controllerMesh, "", 0, false)
+
+        -- Camera-traced laser 
+        local myLaser2 = laser.new({
+            laserColor = "#FF00FFFF",
+            lengthSettings = {
+                type = laser.LengthType.CAMERA,
+                customTargetingOptions = { collisionChannel = 0, maxDistance = 10000 }
+            }
+        })
+        myLaser2:attachTo(controller.getController(Handed.Right))
+
+        -- Camera-traced laser with a particle at the end
+        local myLaser3 = laser.new({
+            laserColor = "#FF00FFFF",
+            target = { type = "particle", options = { /* particles options */ } },
+            lengthSettings = {
+                type = laser.LengthType.CAMERA,
+                customTargetingOptions = { collisionChannel = 4, maxDistance = 10000 }
+            }
+        })
+        myLaser3:attachTo(controller.getController(Handed.Right))
+
+]]--
+
 local uevrUtils = require("libs/uevr_utils")
 local particles = require("libs/particles")
 local linetracer = require("libs/linetracer")
@@ -92,9 +193,7 @@ function Laser:create()
             c:SetRenderCustomDepth(true)
             c:SetCustomDepthStencilValue(100)
             c:SetCustomDepthStencilWriteMask(ERendererStencilMask.ERSM_255)
-            --if self.lengthSettings.type == M.LengthType.FIXED then
-                c:SetCapsuleHalfHeight(50, false) -- give it an initial length so it can be seen
-            --end
+            c:SetCapsuleHalfHeight(50, false) -- give it an initial length so it can be seen even if settings are bad
             c.RelativeRotation = uevrUtils.rotator(90, 0, 0)
             self:setRelativePosition(uevrUtils.vector(0,0,0))
         end
@@ -242,6 +341,16 @@ end
 function Laser:setTargetLocation(location)
     --calculate the distance between the laser's current location and the target location and set the distance from that
     local c = uevrUtils.getValid(self.component)
+    if c ~= nil and location ~= nil then
+        local cWorldLocation = c:K2_GetComponentLocation()
+        local hitDistance = kismet_math_library:Vector_Distance(cWorldLocation, location) + self.laserLengthOffset
+        self:setLength(hitDistance * 1.9) --not sure why 1.9 is the right number here. Maybe has to do with endcaps?
+        self:updateRelativePositionOffset()
+
+        if self.targetComponent ~= nil then
+            self.targetComponent:setWorldLocation(location)
+        end
+    end
 
     -- if particleComponent == nil then
     --     particleComponent = particles.new({
@@ -283,16 +392,6 @@ function Laser:setTargetLocation(location)
     --     debugSphereComponent:K2_SetWorldLocation(location, false, reusable_hit_result, false)
     -- end
 
-    if c ~= nil and location ~= nil then
-        local cWorldLocation = c:K2_GetComponentLocation()
-        local hitDistance = kismet_math_library:Vector_Distance(cWorldLocation, location) + self.laserLengthOffset
-        self:setLength(hitDistance * 1.9) --not sure why 1.9 is the right number here. Maybe has to do with endcaps?
-        self:updateRelativePositionOffset()
-
-        if self.targetComponent ~= nil then
-            self.targetComponent:setWorldLocation(location)
-        end
-    end
 
 end
 

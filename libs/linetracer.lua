@@ -6,19 +6,32 @@ Usage
 
     Line tracing is a common function in 3D applications. It is however, inefficient to
     have many line traces running every frame, that essentially do the same thing. This
-    module allows multiple subscribers to share line traces based on camera or controller.
-    The trace is only run a single time per frame for each camera or controller and the results are shared
+    module allows multiple subscribers to share line traces based on camera/HMD/controllers.
+    The trace is only run a single time per frame for each trace type and the results are shared
     with all subscribers, creating a very efficient system. If there are no subscribers, no traces are run.
-    Set includeFullDetails to true in the options in order to get back a fully populated hitResult  
-    including actor that was hit, etc.
+
+    Custom trace types are supported: if `traceType` is not one of `linetracer.TraceType.*`, it is treated
+    as a "custom" trace and `options.customCallback` must be provided. The callback should return
+    `(location, rotation)` each tick which will be used as the trace origin.
+
+    Set `includeFullDetails = true` in options if you need a fully populated hitResult (actor, normal, etc).
 
     Available functions:
 
     linetracer.subscribe(subscriberID, traceType, callback, options, priority) - subscribes to a line trace type
         subscriberID: unique identifier for this subscriber (string). Used to later unsubscribe
-        traceType: one of linetracer.TraceType.CAMERA, linetracer.TraceType.HMD, linetracer.TraceType.LEFT_CONTROLLER, or linetracer.TraceType.RIGHT_CONTROLLER
+        traceType:
+            - one of linetracer.TraceType.CAMERA, linetracer.TraceType.HMD, linetracer.TraceType.LEFT_CONTROLLER, linetracer.TraceType.RIGHT_CONTROLLER
+            - OR any other string key to create a custom trace type (requires options.customCallback)
         callback: function(hitResult, hitLocation) that receives trace results each frame
-        options: table containing { collisionChannel, ignoreActors, traceComplex, minHitDistance, maxDistance, includeFullDetails }
+        options: table containing:
+            collisionChannel: number (default: 0)
+            ignoreActors: table (default: {})
+            traceComplex: bool (default: false)
+            minHitDistance: number (default: 0)
+            maxDistance: number (default: 10000)
+            includeFullDetails: bool (default: false)
+            customCallback: function()->(location, rotation) (required for custom trace types)
         priority: (optional) higher priority subscribers control the trace options (default: 0)
         example:
             linetracer.subscribe("reticule_system", linetracer.TraceType.CAMERA, 
@@ -112,6 +125,24 @@ Usage
 
         -- Unsubscribe when done
         linetracer.unsubscribe("reticule_system", linetracer.TraceType.CAMERA)
+
+        -- Custom trace type (provide your own origin pose)
+        linetracer.subscribe("custom_aim", "my_custom_trace", --note that "my_custom_trace" is not a predefined type but can be used elsewhere to reuse this trace
+            function(hitResult, hitLocation)
+                if hitLocation then
+                    updateSomething(hitLocation)
+                end
+            end,
+            {
+                collisionChannel = 4,
+                maxDistance = 20000,
+                customCallback = function()
+                    -- Return (location, rotation) for trace origin
+                    return someLocation, someRotation
+                end
+            },
+            5
+        )
 
 ]]--
 
