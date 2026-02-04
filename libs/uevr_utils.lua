@@ -3502,7 +3502,14 @@ function M.getCleanHitResult(hitResult)
 		local FaceIndex = {}
 		local TraceStart = {}
 		local TraceEnd = {}
-		Statics:BreakHitResult(hitResult, bBlockingHit, bInitialOverlap, Time, Distance, Location, ImpactPoint, Normal, ImpactNormal, PhysMat, HitActor, HitComponent, HitBoneName, HitItem, ElementIndex, FaceIndex, TraceStart, TraceEnd )
+
+		--static void BreakHitResult(const struct FHitResult& Hit, bool* bBlockingHit, bool* bInitialOverlap, float* Time, float* Distance, struct FVector* Location, struct FVector* ImpactPoint, struct FVector* Normal, struct FVector* ImpactNormal, class UPhysicalMaterial** PhysMat, class AActor** HitActor, class UPrimitiveComponent** HitComponent, class FName* HitBoneName, class FName* BoneName, int32* HitItem, int32* ElementIndex, int32* FaceIndex, struct FVector* TraceStart, struct FVector* TraceEnd);
+		local success = pcall(function()
+			Statics:BreakHitResult(hitResult, bBlockingHit, bInitialOverlap, Time, Distance, Location, ImpactPoint, Normal, ImpactNormal, PhysMat, HitActor, HitComponent, HitBoneName, HitItem, ElementIndex, FaceIndex, TraceStart, TraceEnd )
+		end)
+		if not success then
+			M.print("BreakHitResult failed, falling back to hitResult fields", LogLevel.Warning)
+		end
 
 		local details = {}
 		details.FaceIndex = hitResult.FaceIndex
@@ -3544,8 +3551,6 @@ function M.getLineTraceHitResult(originPosition, originDirection, collisionChann
 		local world = M.get_world()
 		if world ~= nil then
 			if hitResult == nil then hitResult = reusable_hit_result end
-			--TODO this is sometimes throwing an exception i think because ignoreActors contains a pawn that is invalid
-			--either pcall to prevent crash or validated all members of ignoreActors before calling
 			local hit = kismet_system_library:LineTraceSingle(world, originPosition, endLocation, collisionChannel, traceComplex, validIgnoreActors, 0, hitResult, true, zero_color, zero_color, 1.0)
 			local exceedsMinDistance = true
 			if minHitDistance ~= nil then
