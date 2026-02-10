@@ -355,6 +355,43 @@ local function initOptionsDefaults(options_in, isWidget)
 	return options
 end
 
+local lastTargetLocation = uevrUtils.vector(0,0,0)
+local function lineTracerCallback(hitResult, targetLocation)
+	-- Update reticule position based on hit
+	if targetLocation then
+		lastTargetLocation = targetLocation
+	end
+end
+
+local lineTracerSubscribed = false
+local function updateLineTracerSubscription()
+	local lineTracerType = reticuleTargetMethod == M.ReticuleTargetMethod.CAMERA and linetracer.TraceType.CAMERA or (reticuleTargetMethod == M.ReticuleTargetMethod.LEFT_CONTROLLER and linetracer.TraceType.LEFT_CONTROLLER or linetracer.TraceType.RIGHT_CONTROLLER)
+	local options = {
+		collisionChannel = currentReticuleOptions.collisionChannel,
+		traceComplex = currentReticuleOptions.traceComplex,
+		minHitDistance = currentReticuleOptions.minHitDistance,
+		ignoreActors = currentReticuleOptions.ignoreActors
+	}
+	if reticuleTargetRotationOffset.Pitch == 0 and reticuleTargetRotationOffset.Yaw == 0 and reticuleTargetRotationOffset.Roll == 0 then
+		options.rotationOffset = nil
+	else
+		options.rotationOffset = reticuleTargetRotationOffset
+	end
+
+	if lineTracerSubscribed then --if already subscribed, just update options
+		linetracer.updateOptions("reticule_module", lineTracerType, options)
+	else
+		lineTracerSubscribed = true
+		linetracer.subscribe("reticule_module", lineTracerType, lineTracerCallback, options, 10)
+	end
+end
+
+local function unsubscribeFromLineTracer()
+	if lineTracerSubscribed then
+		linetracer.unsubscribeAll("reticule_module")
+		lineTracerSubscribed = false
+	end
+end
 
 function M.setParametersFileName(fileName)
     parametersFileName = fileName
@@ -368,6 +405,7 @@ local createDevConfigMonitor = doOnce(function()
 				if options ~= nil then
 					M.print("Reticule parameters changed via config UI, updating parameters of current reticule")
 					currentReticuleOptions = initOptionsDefaults(options, reticuleAutoCreationType == M.ReticuleType.WIDGET)
+					updateLineTracerSubscription()
 				else
 					M.print("Reticule parameters changed via config UI, creating new reticule")
 					M.destroy()
@@ -508,10 +546,21 @@ end
 
 function M.setTargetMethod(value)
 	reticuleTargetMethod = value
+
+	unsubscribeFromLineTracer()
+	updateLineTracerSubscription()
 end
 
 function M.setTargetRotationOffset(value)
 	reticuleTargetRotationOffset = value and uevrUtils.rotator(value) or uevrUtils.rotator({0,0,0})
+	updateLineTracerSubscription()
+
+	-- local lineTracerType = reticuleTargetMethod == M.ReticuleTargetMethod.CAMERA and linetracer.TraceType.CAMERA or (reticuleTargetMethod == M.ReticuleTargetMethod.LEFT_CONTROLLER and linetracer.TraceType.LEFT_CONTROLLER or linetracer.TraceType.RIGHT_CONTROLLER)
+	-- if reticuleTargetRotationOffset.Pitch == 0 and reticuleTargetRotationOffset.Yaw == 0 and reticuleTargetRotationOffset.Roll == 0 then
+	-- 	linetracer.setRotationOffset("reticule_module", lineTracerType, nil)
+	-- else
+	-- 	linetracer.setRotationOffset("reticule_module", lineTracerType, reticuleTargetRotationOffset)
+	-- end
 end
 
 function M.reset()
@@ -551,6 +600,8 @@ function M.createFromWidget(widget, options)
 			reticuleComponent.BoundsScale = 10 --without this object can disappear when small
 
 			uevrUtils.set_component_relative_transform(reticuleComponent, currentReticuleOptions.position, currentReticuleOptions.rotation, currentReticuleOptions.scale)
+
+			updateLineTracerSubscription()
 
 			M.print("Created widget reticule " .. reticuleComponent:get_full_name())
 		end
@@ -594,6 +645,8 @@ function M.createFromMesh(mesh, options)
 		reticuleComponent.BoundsScale = 10 -- without this object can disappear when small
 
 		uevrUtils.set_component_relative_transform(reticuleComponent, currentReticuleOptions.position, currentReticuleOptions.rotation, currentReticuleOptions.scale)
+
+		updateLineTracerSubscription()
 
 		M.print("Created mesh reticule " .. reticuleComponent:get_full_name())
 	else
@@ -663,39 +716,6 @@ local function getOffsetWorldPosition(targetPos, targetRot, offsetX, offsetY)
     return result
 end
 
-local lastTargetLocation = uevrUtils.vector(0,0,0)
-local function lineTracerCallback(hitResult, targetLocation)
-	-- Update reticule position based on hit
-	if targetLocation then
-		lastTargetLocation = targetLocation
-	end
-end
-
-local lineTracerSubscribed = false
-local function updateLineTracerSubscription()
-	local lineTracerType = reticuleTargetMethod == M.ReticuleTargetMethod.CAMERA and linetracer.TraceType.CAMERA or (reticuleTargetMethod == M.ReticuleTargetMethod.LEFT_CONTROLLER and linetracer.TraceType.LEFT_CONTROLLER or linetracer.TraceType.RIGHT_CONTROLLER)
-	local options = {
-		collisionChannel = currentReticuleOptions.collisionChannel,
-		traceComplex = currentReticuleOptions.traceComplex,
-		minHitDistance = currentReticuleOptions.minHitDistance,
-		ignoreActors = currentReticuleOptions.ignoreActors
-	}
-	if lineTracerSubscribed then --if already subscribed, just update options
-		linetracer.updateOptions("reticule_module", lineTracerType, options)
-	else
-		lineTracerSubscribed = true
-		linetracer.subscribe("reticule_module", lineTracerType, lineTracerCallback, options, 10)
-	end
-end
-
-local function unsubscribeFromLineTracer()
-	if lineTracerSubscribed then
-		linetracer.unsubscribe("reticule_module")
-		lineTracerSubscribed = false
-	end
-end
-
-
 function M.update(originLocation, targetLocation, drawDistance, scale, rotation, allowAutoHandle )
 	if allowAutoHandle ~= true then
 		autoHandleInput = false --if something else is calling this function then dont auto handle input
@@ -732,7 +752,7 @@ function M.update(originLocation, targetLocation, drawDistance, scale, rotation,
 		-- end
 
 		if targetLocation == nil then
-			updateLineTracerSubscription() -- targetLocation will be correct on the next tick
+			--updateLineTracerSubscription() -- targetLocation will be correct on the next tick
 			targetLocation = lastTargetLocation
 		else
 			unsubscribeFromLineTracer()
@@ -791,7 +811,7 @@ function M.update(originLocation, targetLocation, drawDistance, scale, rotation,
 			local hmdToTargetDirection = kismet_math_library:GetDirectionUnitVector(uevrUtils.vector(originLocation), uevrUtils.vector(targetLocation))
 			if drawDistance > distanceToTarget - reticuleCollisionOffset then drawDistance = distanceToTarget - reticuleCollisionOffset end --move target distance back slightly so reticule doesnt go through the target
 			temp_vec3f:set(hmdToTargetDirection.X,hmdToTargetDirection.Y,hmdToTargetDirection.Z)
-			
+
 			--this rotation is the relative rotation that keeps the reticule facing the user
 			local rot = kismet_math_library:Conv_VectorToRotator(temp_vec3f)
 			rot = uevrUtils.sumRotators(rot, currentReticuleOptions.rotation, rotation)

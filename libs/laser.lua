@@ -149,6 +149,9 @@ function M.new(options)
                 customCallback = (options.lengthSettings and options.lengthSettings.customTargetingOptions and options.lengthSettings.customTargetingOptions.customCallback) or nil
             }
         },
+        lineTracerCallbackFn = nil,
+        isActiveTrace = false,
+
     }, Laser)
 
     self:create() -- auto-create component
@@ -156,6 +159,7 @@ function M.new(options)
 end
 
 function Laser:lineTracerCallback(hitResult, hitLocation)
+    --print("Laser:lineTracerCallback called with hitResult =", hitResult, "hitLocation =", hitLocation)
     if hitLocation ~= nil then
         self:setTargetLocation(hitLocation)
     end
@@ -176,7 +180,7 @@ function Laser:getLineTraceType()
 end
 
 function Laser:create()
-     if self.component == nil then
+    if self.component == nil then
         self.component = uevrUtils.create_component_of_class("Class /Script/Engine.CapsuleComponent")
         local c = uevrUtils.getValid(self.component)
         if c ~= nil then
@@ -196,7 +200,14 @@ function Laser:create()
             c:SetCapsuleHalfHeight(50, false) -- give it an initial length so it can be seen even if settings are bad
             c.RelativeRotation = uevrUtils.rotator(90, 0, 0)
             self:setRelativePosition(uevrUtils.vector(0,0,0))
+
+            self.attachmentComponent = uevrUtils.create_component_of_class("Class /Script/Engine.SceneComponent")
+            if self.attachmentComponent ~= nil then
+                c:K2_AttachTo(self.attachmentComponent, uevrUtils.fname_from_string(""), 0, false)
+            end
+
         end
+
     end
     if self.target ~= nil then
         if self.targetComponent == nil then
@@ -212,6 +223,13 @@ function Laser:create()
     end
 
     if self.lengthSettings.type ~= M.LengthType.FIXED then
+        -- Create and store the callback function once
+        if self.lineTracerCallbackFn == nil then
+            self.lineTracerCallbackFn = function(hitResult, hitLocation)
+                return self:lineTracerCallback(hitResult, hitLocation)
+            end
+        end
+
         self.lineTraceType = self:getLineTraceType()
         if self.lineTraceType == nil then --its a custom type
         --if theres no custom callback then treat it as fixed
@@ -222,11 +240,11 @@ function Laser:create()
             self.lineTraceType = self.lengthSettings.customTargetingFunctionID or tostring(self) -- just need a unique id
         end
         if self.lineTraceType ~= M.LengthType.FIXED then
+            self.isActiveTrace = true
             --print("Subscribing laser line tracer: " .. tostring(self.lineTraceType))
             linetracer.subscribe(tostring(self), self.lineTraceType,
-            function(hitResult, hitLocation)
-                return self:lineTracerCallback(hitResult, hitLocation)
-            end, self.lengthSettings.customTargetingOptions, 1)
+            self.lineTracerCallbackFn,
+            self.lengthSettings.customTargetingOptions, 1)
         end
     end
 
@@ -248,11 +266,17 @@ function Laser:destroy()
         self.targetComponent:destroy()
         self.targetComponent = nil
     end
-    linetracer.unsubscribe(tostring(self))
+    if self.attachmentComponent ~= nil then
+        uevrUtils.destroyComponent(self.attachmentComponent, true, true)
+        self.attachmentComponent = nil
+    end
+    self.isActiveTrace = false
+    linetracer.unsubscribeAll(tostring(self))
 end
 
 function Laser:attachTo(mesh, socketName, attachType, weld)
-    local c = uevrUtils.getValid(self.component)
+    --local c = uevrUtils.getValid(self.component)
+    local c = uevrUtils.getValid(self.attachmentComponent)
     local m = uevrUtils.getValid(mesh)
     if c ~= nil and m ~= nil then
 		return c:K2_AttachTo(m, uevrUtils.fname_from_string(socketName or ""), attachType or 0, weld or false)
@@ -269,7 +293,10 @@ function Laser:updateCustomTargetingOptions(options)
     linetracer.updateOptions(tostring(self), self.lineTraceType, options)
 end
 
-function Laser:updatePointer(origin, target)
+-- Normally the laser will update itself via line tracer, but this allows manual updating
+-- Generally a good idea to disable line tracing when using this function with Laser:setActiveTrace(false)
+-- or use FIXED mode
+function Laser:draw(origin, target)
     local c = uevrUtils.getValid(self.component)
     if c ~= nil and origin ~= nil and target ~= nil then
         local hitDistance = kismet_math_library:Vector_Distance(origin, target) + self.laserLengthOffset
@@ -292,7 +319,7 @@ end
 
 function Laser:updateRelativePositionOffset()
     local c = uevrUtils.getValid(self.component)
-    if c ~= nil then
+    if c ~= nil and c.GetUnscaledCapsuleHalfHeight ~= nil then
         c.RelativeLocation = uevrUtils.vector(self.relativePosition)
         c.RelativeLocation.X = c.RelativeLocation.X + c:GetUnscaledCapsuleHalfHeight()
     end
@@ -305,10 +332,16 @@ function Laser:setRelativePosition(pos)
         self:updateRelativePositionOffset()
     end
 end
+function Laser:setRelativeRotation(rot)
+    local c = uevrUtils.getValid(self.attachmentComponent)
+    if c ~= nil then
+        c.RelativeRotation = rot
+    end
+end
 
 function Laser:setLength(length)
     local c = uevrUtils.getValid(self.component)
-    if c ~= nil then
+    if c ~= nil and c.SetCapsuleHalfHeight then
         c:SetCapsuleHalfHeight((length / 2) * (laserLengthPerecentage * (self.lengthSettings.lengthPercentage or 1.0) / 2), false)
     end
 end
@@ -323,6 +356,23 @@ function Laser:setVisibility(isVisible)
     end
 end
 
+function Laser:setActiveTrace(isActive)
+    --print("Laser:setActiveTrace called with isActive =",self, isActive)
+    if self.isActiveTrace == isActive then
+        return
+    end
+    self.isActiveTrace = isActive
+
+    if isActive and self.lineTraceType ~= M.LengthType.FIXED then
+        linetracer.subscribe(tostring(self), self.lineTraceType,
+            self.lineTracerCallbackFn,
+            self.lengthSettings.customTargetingOptions, 1)
+    else
+        linetracer.unsubscribeAll(tostring(self))
+    end
+
+end
+
 function Laser:setLaserLengthOffset(val)
     self.laserLengthOffset = val or 0
 end
@@ -335,13 +385,13 @@ function Laser:setLaserColor(val)
     end
 end
 
-
---local debugSphereComponent = nil
---local particleComponent = nil
+-- Note that this function does not actually draw the laser to the target location
+-- It finds the distance to the target location and sets the laser length accordingly
+-- If you want to draw a laser between two points, use Laser:draw(origin, target)
 function Laser:setTargetLocation(location)
     --calculate the distance between the laser's current location and the target location and set the distance from that
     local c = uevrUtils.getValid(self.component)
-    if c ~= nil and location ~= nil then
+    if c ~= nil and location ~= nil and c.K2_GetComponentLocation ~= nil then
         local cWorldLocation = c:K2_GetComponentLocation()
         local hitDistance = kismet_math_library:Vector_Distance(cWorldLocation, location) + self.laserLengthOffset
         self:setLength(hitDistance * 1.9) --not sure why 1.9 is the right number here. Maybe has to do with endcaps?

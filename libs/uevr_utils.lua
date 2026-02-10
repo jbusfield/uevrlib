@@ -146,7 +146,11 @@ Usage
 	uevrUtils.setLogToFile(val) - enables/disables logging to file in addition to console
 		example:
 			uevrUtils.setLogToFile(true)  -- Also write logs to file
-			
+	
+	uevrUtils.printStackTrace() - prints the current Lua stack trace to the log for debugging purposes
+		example:
+			uevrUtils.printStackTrace()  -- Useful for tracing the source of a function call
+
 	uevrUtils.print(str, logLevel) - prints a message with the specified log level (defaults to Debug)
 		example:
 			uevrUtils.print("Starting initialization", LogLevel.Info)
@@ -1371,6 +1375,25 @@ local function executeUEVRCallbacksWithPriorityBooleanResult(callbackName, ...)
 	return result, priority
 end
 
+-- Similar to executeUEVRCallbacksWithPriorityBooleanResult but for arbitrary return values.
+-- Each callback may return (value, priority). The highest-priority non-nil value wins.
+-- If multiple callbacks return the same priority, the last one executed wins.
+local function executeUEVRCallbacksWithPriorityResult(callbackName, ...)
+	local result = nil
+	local priority = 0
+	if uevrCallbacks[callbackName] ~= nil then
+		for i, entry in ipairs(uevrCallbacks[callbackName]) do
+			local funcResult, funcPriority = entry.func(table.unpack({...}))
+			if funcPriority == nil then funcPriority = 0 end
+			if funcResult ~= nil and funcPriority >= priority then
+				result = funcResult
+				priority = funcPriority
+			end
+		end
+	end
+	return result, priority
+end
+
 -- local function executeUEVRCallbacks(callbackName, ...)
 -- 	if uevrCallbacks[callbackName] ~= nil then
 -- 		for i, func in ipairs(uevrCallbacks[callbackName]) do
@@ -1389,6 +1412,10 @@ end
 
 function M.executeUEVRCallbacksWithPriorityBooleanResult(callbackName, ...)
 	return executeUEVRCallbacksWithPriorityBooleanResult(callbackName, ...)
+end
+
+function M.executeUEVRCallbacksWithPriorityResult(callbackName, ...)
+	return executeUEVRCallbacksWithPriorityResult(callbackName, ...)
 end
 
 local function hasUEVRCallbacks(callbackName)
@@ -1638,6 +1665,11 @@ function M.initUEVR(UEVR, callbackFunc)
 		executeUEVRCallbacks("postEngineTick", engine, delta)
 	end)
 
+	-- uevr.sdk.callbacks.on_lua_event(function(eventName, eventData)
+	-- 	updateLuaEvent(eventName, eventData)
+	-- end)
+
+
 	if callbackFunc ~= nil then
 		callbackFunc()
 	end
@@ -1664,6 +1696,10 @@ end
 
 function M.setLogToFile(val)
 	logToFile = val
+end
+
+function M.printStackTrace()
+    print(debug.traceback())
 end
 
 function M.print(str, logLevel)
@@ -2322,6 +2358,22 @@ function M.getAllActorsOfClass(className)
 	end
 	--print("getAllActorsOfClass",#actors)
 	return actors
+end
+
+-- TArray Support ----------------
+local tArrayExists, tArray = pcall(require, "libs/core/tarray")
+if tArrayExists == false then tArray = nil end
+local function checkTArrayExists()
+	if tArray == nil then
+		M.print("TArray module not loaded. Ensure libs/core/tarray.lua exists and the tarray_helper.dll file is in the plugins folder", LogLevel.Error)
+	end
+	return tArray ~= nil
+end
+---------------------------------
+
+function M.getSocketNames(object, callback)
+---@diagnostic disable-next-line: need-check-nil
+	if checkTArrayExists() then tArray.registerCallback(callback, "FName", object, "GetAllSocketNames()") end
 end
 
 --coutesy of Pande4360
@@ -3508,7 +3560,7 @@ function M.getCleanHitResult(hitResult)
 			Statics:BreakHitResult(hitResult, bBlockingHit, bInitialOverlap, Time, Distance, Location, ImpactPoint, Normal, ImpactNormal, PhysMat, HitActor, HitComponent, HitBoneName, HitItem, ElementIndex, FaceIndex, TraceStart, TraceEnd )
 		end)
 		if not success then
-			M.print("BreakHitResult failed, falling back to hitResult fields", LogLevel.Warning)
+			--M.print("BreakHitResult failed, falling back to hitResult fields", LogLevel.Warning)
 		end
 
 		local details = {}

@@ -69,6 +69,7 @@ local configui = require("libs/configui")
 local hands = require("libs/hands")
 local ui = require("libs/ui")
 local pawnModule = require("libs/pawn")
+local accessories = require("libs/accessories")
 
 local M = {}
 
@@ -88,17 +89,87 @@ local montageIDList = {}
 local meshMonitors = {}
 local disableMeshMonitoring = false
 
-local montageState = {hands = nil, leftArm = nil, rightArm = nil, pawnBody = nil, pawnArms = nil, pawnArmBones = nil, motionSicknessCompensation = nil, inputEnabled = nil}
+local montageState = {
+	hands = nil,
+	leftArm = nil,
+	rightArm = nil,
+	pawnBody = nil,
+	pawnArms = nil,
+	pawnArmBones = nil,
+	motionSicknessCompensation = nil,
+	inputEnabled = nil,
+	leftAccessory = nil,
+	rightAccessory = nil,
+}
+
+-- Accessory selections for montage accessory override combos.
+-- Index 1 is always "No effect"; indexes > 1 correspond to GUIDs in the parallel array.
+local accessorySelectionLabels = {"No effect"}
+local accessorySelectionGuids = {}
+
+local function refreshAccessorySelections()
+	accessorySelectionLabels = {"No effect"}
+	accessorySelectionGuids = {}
+
+	local map = nil
+	if accessories ~= nil and type(accessories.getAccessories) == "function" then
+		map = accessories.getAccessories()
+	end
+
+	if map ~= nil then
+		local guids = {}
+		for guid, _ in pairs(map) do
+			guids[#guids + 1] = guid
+		end
+		-- Stable ordering: sort by label then GUID.
+		table.sort(guids, function(a, b)
+			local la = tostring(map[a])
+			local lb = tostring(map[b])
+			if la == lb then
+				return tostring(a) < tostring(b)
+			end
+			return la < lb
+		end)
+
+		for _, guid in ipairs(guids) do
+			accessorySelectionGuids[#accessorySelectionGuids + 1] = guid
+			accessorySelectionLabels[#accessorySelectionLabels + 1] = tostring(map[guid])
+		end
+	end
+
+	-- Update selections if the UI is already created.
+	pcall(function()
+		configui.setSelections("leftAccessoryWhenActive", accessorySelectionLabels)
+		configui.setSelections("rightAccessoryWhenActive", accessorySelectionLabels)
+	end)
+end
+
+local function guidToAccessoryIndex(guid)
+	if guid == nil or guid == "" then return 1 end
+	for i = 1, #accessorySelectionGuids do
+		if accessorySelectionGuids[i] == guid then
+			return i + 1
+		end
+	end
+	return 1
+end
+
+local function accessoryIndexToGuid(index)
+	if index == nil or index <= 1 then return "" end
+	return accessorySelectionGuids[index - 1] or ""
+end
 
 local stateConfig = {
-    {stateKey = "hands", valueKey = "handsWhenActive"},
-    {stateKey = "leftArm", valueKey = "leftArmWhenActive"},
-    {stateKey = "rightArm", valueKey = "rightArmWhenActive"},
-    {stateKey = "pawnBody", valueKey = "pawnBodyWhenActive"},
-    {stateKey = "pawnArms", valueKey = "pawnArmsWhenActive"},
-    {stateKey = "pawnArmBones", valueKey = "pawnArmBonesWhenActive"},
-    {stateKey = "motionSicknessCompensation", valueKey = "motionSicknessCompensationWhenActive"},
-    {stateKey = "inputEnabled", valueKey = "inputWhenActive"},
+	{stateKey = "hands", valueKey = "handsWhenActive", kind = "tri"},
+	{stateKey = "leftArm", valueKey = "leftArmWhenActive", kind = "tri"},
+	{stateKey = "rightArm", valueKey = "rightArmWhenActive", kind = "tri"},
+	{stateKey = "pawnBody", valueKey = "pawnBodyWhenActive", kind = "tri"},
+	{stateKey = "pawnArms", valueKey = "pawnArmsWhenActive", kind = "tri"},
+	{stateKey = "pawnArmBones", valueKey = "pawnArmBonesWhenActive", kind = "tri"},
+	{stateKey = "motionSicknessCompensation", valueKey = "motionSicknessCompensationWhenActive", kind = "tri"},
+	{stateKey = "inputEnabled", valueKey = "inputWhenActive", kind = "tri"},
+	{stateKey = "leftAccessory", valueKey = "leftAccessoryWhenActive", kind = "accessory"},
+	{stateKey = "rightAccessory", valueKey = "rightAccessoryWhenActive", kind = "accessory"},
 }
 
 local currentLogLevel = LogLevel.Error
@@ -267,7 +338,39 @@ local developerWidgets = spliceableInlineArray{
 					initialValue = "0",
 					width = 35,
 				},
-            { widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },	
+				{
+					widgetType = "combo",
+					id = "leftAccessoryWhenActive",
+					label = "",
+					selections = {"No effect"},
+					initialValue = 1,
+					width = 150,
+				},
+				{ widgetType = "same_line" },
+				{
+					widgetType = "input_text",
+					id = "leftAccessoryWhenActivePriority",
+					label = " Left Accessory",
+					initialValue = "0",
+					width = 35,
+				},
+				{
+					widgetType = "combo",
+					id = "rightAccessoryWhenActive",
+					label = "",
+					selections = {"No effect"},
+					initialValue = 1,
+					width = 150,
+				},
+				{ widgetType = "same_line" },
+				{
+					widgetType = "input_text",
+					id = "rightAccessoryWhenActivePriority",
+					label = " Right Accessory",
+					initialValue = "0",
+					width = 35,
+				},
+            { widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },
             { widgetType = "unindent", width = 20 },
         {
             widgetType = "end_group",
@@ -308,6 +411,7 @@ local developerWidgets = spliceableInlineArray{
 }
 
 local function showMontageEditFields()
+	refreshAccessorySelections()
     local index = configui.getValue("knownMontageList")
     if index == nil then --or index == 1 then
         configui.setHidden("knowMontageSettings", true)
@@ -319,40 +423,77 @@ local function showMontageEditFields()
     if id ~= "" and parameters ~= nil and parameters["montagelist"] ~= nil and parameters["montagelist"][id] ~= nil then
         local data = parameters["montagelist"][id]
         if data ~= nil then
-            -- Initialize and set values for all state configs
-            for _, config in ipairs(stateConfig) do
-                local valueKey = config.valueKey
-                if data[valueKey] == nil then data[valueKey] = 1 end
-                configui.setValue(valueKey, data[valueKey], true)
-                
-                local priorityKey = valueKey .. "Priority"
-                if data[priorityKey] == nil or data[priorityKey] == "" then data[priorityKey] = "0" end
-                configui.setValue(priorityKey, data[priorityKey], true)
-            end
+			-- Initialize and set values for all state configs
+			for _, config in ipairs(stateConfig) do
+				local valueKey = config.valueKey
+				if config.kind == "tri" then
+					if data[valueKey] == nil then data[valueKey] = 1 end
+					configui.setValue(valueKey, data[valueKey], true)
+				elseif config.kind == "accessory" then
+					local guid = data[valueKey] or ""
+					configui.setValue(valueKey, guidToAccessoryIndex(guid), true)
+				end
+
+				local priorityKey = valueKey .. "Priority"
+				if data[priorityKey] == nil or data[priorityKey] == "" then data[priorityKey] = "0" end
+				configui.setValue(priorityKey, data[priorityKey], true)
+			end
         end
     end
 end
 
+-- local function updateMontageList()
+--     montageList = {}
+-- 	montageIDList = {}
+--     if parameters ~= nil and parameters["montagelist"] ~= nil then
+--         for id, data in pairs(parameters["montagelist"]) do
+--             if data ~= nil and data["label"] ~= nil then
+--                 table.insert(montageList, data["label"])
+--                 table.insert(montageIDList, id)
+--             end
+--         end
+-- 		--can only do this because key and label are the same
+--         table.sort(montageList)
+--         table.sort(montageIDList)
+
+--         --table.insert(montageList, 1, "Any")
+--         --table.insert(montageIDList, 1, "Any")
+--         configui.setSelections("knownMontageList", montageList)
+-- 		configui.setValue("knownMontageList", 1)
+
+-- 		showMontageEditFields()
+--     end
+-- end
+
 local function updateMontageList()
     montageList = {}
-	montageIDList = {}
+    montageIDList = {}
+
     if parameters ~= nil and parameters["montagelist"] ~= nil then
+        local entries = {}
         for id, data in pairs(parameters["montagelist"]) do
             if data ~= nil and data["label"] ~= nil then
-                table.insert(montageList, data["label"])
-                table.insert(montageIDList, id)
+                entries[#entries + 1] = { id = id, label = data["label"] }
             end
         end
-		--can only do this because key and label are the same
-        table.sort(montageList)
-        table.sort(montageIDList)
 
-        --table.insert(montageList, 1, "Any")
-        --table.insert(montageIDList, 1, "Any")
+        table.sort(entries, function(a, b)
+            local la = tostring(a.label)
+            local lb = tostring(b.label)
+            if la == lb then
+                return tostring(a.id) < tostring(b.id)
+            end
+            return la < lb
+        end)
+
+        for _, e in ipairs(entries) do
+            montageList[#montageList + 1] = e.label
+            montageIDList[#montageIDList + 1] = e.id
+        end
+
         configui.setSelections("knownMontageList", montageList)
-		configui.setValue("knownMontageList", 1)
-
-		showMontageEditFields()
+        configui.setValue("knownMontageList", 1)
+        showMontageEditFields()
     end
 end
 
@@ -419,11 +560,16 @@ local function updateCurrentMontageFields()
     if index ~= nil then --and index ~= 1 then
         local id = montageIDList[index]
         if id ~= "" and  parameters ~= nil and parameters["montagelist"] ~= nil and parameters["montagelist"][id] ~= nil then
-            for _, config in ipairs(stateConfig) do
-                local valueKey = config.valueKey
-                parameters["montagelist"][id][valueKey] = configui.getValue(valueKey)
-                parameters["montagelist"][id][valueKey .. "Priority"] = configui.getValue(valueKey .. "Priority")
-            end
+			for _, config in ipairs(stateConfig) do
+				local valueKey = config.valueKey
+				if config.kind == "tri" then
+					parameters["montagelist"][id][valueKey] = configui.getValue(valueKey)
+				elseif config.kind == "accessory" then
+					local idxVal = configui.getValue(valueKey)
+					parameters["montagelist"][id][valueKey] = accessoryIndexToGuid(idxVal)
+				end
+				parameters["montagelist"][id][valueKey .. "Priority"] = configui.getValue(valueKey .. "Priority")
+			end
             isParametersDirty = true
         end
     end
@@ -442,6 +588,20 @@ local function updateStateIfHigherPriority(data, stateKey, valueKey)
 	end
 end
 
+local function updateAccessoryStateIfHigherPriority(data, stateKey, valueKey)
+	local priority = tonumber(data[valueKey .. "Priority"]) or 0
+	local currentPriority = montageState[stateKey .. "Priority"] or 0
+	if priority >= currentPriority then
+		local guid = data[valueKey]
+		if guid == nil or guid == "" then
+			montageState[stateKey] = nil
+		else
+			montageState[stateKey] = guid
+		end
+		montageState[stateKey .. "Priority"] = priority
+	end
+end
+
 local function executeMontageChange(...)
 	uevrUtils.executeUEVRCallbacks("on_module_montage_change", table.unpack({...}))
 end
@@ -455,7 +615,11 @@ local function handleMontageChanged(montage, montageName, label)
 	if parameters ~= nil and montageName ~= nil and montageName ~= "" and parameters["montagelist"] ~= nil and parameters["montagelist"][montageName] ~= nil  then
 		local data = parameters["montagelist"][montageName]
 		for _, config in ipairs(stateConfig) do
-			updateStateIfHigherPriority(data, config.stateKey, config.valueKey)
+			if config.kind == "tri" then
+				updateStateIfHigherPriority(data, config.stateKey, config.valueKey)
+			elseif config.kind == "accessory" then
+				updateAccessoryStateIfHigherPriority(data, config.stateKey, config.valueKey)
+			end
 		end
 	end
 
@@ -590,6 +754,13 @@ function M.play(montage, label, rate, startTime, stopAllAnimations)
 	end
 end
 
+function M.pause(montage, label)
+	local animInstance, montageObject = getAnimInstanceForMontage(montage, label)
+	if animInstance ~= nil then
+		animInstance:Montage_Pause(montageObject)
+	end
+end
+
 function M.stop(montage, label, rate)
 	local animInstance, montageObject = getAnimInstanceForMontage(montage, label)
 	if animInstance ~= nil then
@@ -630,7 +801,7 @@ local function checkMonitoredMeshes()
 			end
 		end
 	end
-end	
+end
 
 function M.addMeshMonitor(label, meshDescriptor)
 	meshMonitors[meshDescriptor] = {label = label, descriptor = meshDescriptor, meshObject = uevrUtils.getObjectFromDescriptor(meshDescriptor, false)}
@@ -701,15 +872,15 @@ function M.addRecentMontage(montageName)
     --         break
     --     end
     -- end
-    
+
     -- Add to front
     table.insert(recentMontages, 1, montageName)
-    
+
     -- Trim if exceeds max size
     while #recentMontages > MAX_RECENT_MONTAGES do
         table.remove(recentMontages)
     end
-    
+
     M.print("Recent montage added: " .. montageName, LogLevel.Debug)
 end
 
@@ -773,6 +944,14 @@ end)
 
 uevrUtils.registerUEVRCallback("is_input_disabled", function()
 	return montageState["inputEnabled"] ~= nil and (not montageState["inputEnabled"]) or nil, montageState["inputEnabledPriority"]
+end)
+
+uevrUtils.registerUEVRCallback("active_left_accessory", function()
+	return montageState["leftAccessory"], montageState["leftAccessoryPriority"]
+end)
+
+uevrUtils.registerUEVRCallback("active_right_accessory", function()
+	return montageState["rightAccessory"], montageState["rightAccessoryPriority"]
 end)
 
 function M.registerMontageChangeCallback(func)

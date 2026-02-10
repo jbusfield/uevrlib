@@ -139,6 +139,7 @@ local configui = require("libs/configui")
 local controllers = require("libs/controllers")
 local scope = require('libs/scope')
 local laser = require('libs/laser')
+local accessories = require('libs/accessories')
 
 --local debugger = require("libs/uevr_debug")
 
@@ -190,6 +191,9 @@ local stripParentNameNumericSuffix = false
 local allowChildVisibilityHandling = true --attachments will set the visibility of child components based on this flag
 local useZeroTransformOnReattach = true --when reattaching an attachment, use zero transform instead of original transform
 
+local baseSettings = {
+	rotation = {0,0,0},
+}
 local currentLogLevel = LogLevel.Error
 function M.setLogLevel(val)
 	currentLogLevel = val
@@ -341,7 +345,7 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		table.insert(configDefinition[1]["layout"], { widgetType = "begin_group", id = widgetPrefix .. "scope_group_" .. name, isHidden = false })
 		table.insert(configDefinition[1]["layout"],
 			{
-				id = widgetPrefix .. "scope_settings_" .. name, label = "Settings", widgetType = "tree_node",
+				id = widgetPrefix .. "scope_settings_" .. name, label = "Scope Settings", widgetType = "tree_node",
 			}
 		)
 		local scopeWidgets = scope.getConfigWidgets(widgetPrefix .. name .. "_")
@@ -378,6 +382,12 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 				widgetType = "combo", selections = animationLabels, initialValue = selectedIndex
 			}
 		)
+
+		local accessoriesWidgets = accessories.getConfigWidgets(name, widgetPrefix .. name .. "_", 300)
+		for j = 1, #accessoriesWidgets do
+			table.insert(configDefinition[1]["layout"], accessoriesWidgets[j])
+		end
+
 		table.insert(configDefinition[1]["layout"],
             {
                 widgetType = "checkbox",
@@ -404,6 +414,8 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 		)
 
 		scope.createConfigCallbacks(name, widgetPrefix .. name .. "_")
+
+		accessories.createConfigCallbacks(name, widgetPrefix .. name .. "_")
 
 		configui.onUpdate(widgetPrefix .. name .. "_position", function(value)
 			M.updateAttachmentTransform(value, nil, nil, id)
@@ -468,6 +480,12 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 	)
 	table.insert(configDefinition[1]["layout"],
 		{
+			id = "uevr_attachment_base_rotation", label = "Base Rotation",
+			widgetType = "drag_float3", speed = .1, range = {-360, 360}, initialValue = baseSettings.rotation
+		}
+	)
+	table.insert(configDefinition[1]["layout"],
+		{
 			widgetType = "checkbox",
 			id = "use_uevr_attachments_strip_parent_name_numeric_suffix",
 			label = "Strip numeric suffix from parent attachment names",
@@ -517,6 +535,14 @@ function M.loadParameters(fileName)
 	end
 	if parameters["attachmentOffsets"] == nil then
 		parameters["attachmentOffsets"] = {}
+		isParametersDirty = true
+	end
+	if parameters["baseOffsets"] == nil then
+		parameters["baseOffsets"] = {location = {0,0,0}, rotation = {0,0,0}, scale = {1,1,1}}
+		isParametersDirty = true
+	end
+	if parameters["baseOffsets"]["rotation"] == nil then
+		parameters["baseOffsets"]["rotation"] = {0,0,0}
 		isParametersDirty = true
 	end
 	for i = 1, #parameters["attachmentOffsets"] do
@@ -596,6 +622,9 @@ function M.init(isDeveloperMode, logLevel, m_defaultLocation, m_defaultRotation,
         isDeveloperMode = uevrUtils.getDeveloperMode()
     end
 
+	scope.init()
+	accessories.init(nil, nil, M)
+
     if isDeveloperMode then
 		--backward compatibility
 		if json.load_file("attachments_config_dev.json") ~= nil then
@@ -607,7 +636,6 @@ function M.init(isDeveloperMode, logLevel, m_defaultLocation, m_defaultRotation,
         createDevMonitor()
     end
 
-	scope.init()
 end
 
 local function strip_after_last_underscore(str)
@@ -864,6 +892,7 @@ function M.getMeleeRotationOffset(id)
 			local rot = attachmentOffsets[i]["melee_rotation_offset"]
 			if rot ~= nil then
 				return uevrUtils.rotator(rot)
+				--return kismet_math_library:ComposeRotators(uevrUtils.rotator(rot),uevrUtils.rotator(parameters["baseOffsets"]["rotation"])) --uevrUtils.rotator(rot)
 			end
 		end
 	end
@@ -915,56 +944,22 @@ local function updateScopeForAttachmentID(id)
 		end
 	end
 end
+
+function M.getSocketsForAttachmentID(id, callback)
+	local attachmentDataArray = getAttachmentDataFromMeshAttachmentList(id)
+	if attachmentDataArray ~= nil and #attachmentDataArray > 0 then
+		for j = 1, #attachmentDataArray do
+			local attachmentData = attachmentDataArray[j]
+			if attachmentData ~= nil and uevrUtils.getValid(attachmentData.attachment) ~= nil and attachmentData.gripHand ~= nil then
+				uevrUtils.getSocketNames(attachmentData.attachment, callback)
+			end
+		end
+	end
+end
 --------------------------------------------------------
 
 
 --- Lasers ---------------------------------------------
-
---- The line trace is only used for determining the distance
---- so we know how what the length the laser should be. That is
---- why it doesnt matter if we choose camera or controller based line tracing.
---- Target location isnt important, just the distance to it.
---- Caveat: If the laser is using a particle system as the target, then line trace type matters
---- because the target location is used to position the particle system.
---- TODO - can this line tracer code be moved to the laser module? (DONE)
---- Line Tracer ---------------------------
--- local function leftLineTracerCallback(hitResult, hitLocation)
--- 	if hitLocation and attachmentLasers[Handed.Left] ~= nil then
--- 		attachmentLasers[Handed.Left]:setTargetLocation(hitLocation)
--- 	end
--- end
-
--- local function rightLineTracerCallback(hitResult, hitLocation)
--- 	if hitLocation and attachmentLasers[Handed.Right] ~= nil then
--- 		attachmentLasers[Handed.Right]:setTargetLocation(hitLocation)
--- 	end
--- end
-
--- local lineTracerSubscribed = {}
--- lineTracerSubscribed[Handed.Left] = false
--- lineTracerSubscribed[Handed.Right] = false
--- local function subscribeToLineTracer(gripHand)
--- 	local lineTracerType = linetracer.TraceType.CAMERA
--- 	local options = {
--- 		collisionChannel = 0,
--- 		traceComplex = false,
--- 		minHitDistance = 0,
--- 		ignoreActors = {}
--- 	}
--- 	if lineTracerSubscribed[gripHand] ~= true then
--- 		lineTracerSubscribed[gripHand] = true
--- 		linetracer.subscribe("laser_module_" .. gripHand, lineTracerType, gripHand == Handed.Left and leftLineTracerCallback or rightLineTracerCallback, options, 0)
--- 	end
--- end
-
--- local function unsubscribeFromLineTracer(gripHand)
--- 	if lineTracerSubscribed[gripHand] then
--- 		linetracer.unsubscribe("laser_module_" .. gripHand)
--- 		lineTracerSubscribed[gripHand] = false
--- 	end
--- end
--- End Line Tracer---------------------------------------
-
 local function createLaserForAttachment(attachment, gripHand)
 	--subscribeToLineTracer(gripHand)
 	local lengthSettings = {
@@ -975,6 +970,10 @@ local function createLaserForAttachment(attachment, gripHand)
 	attachmentLasers[gripHand] = laser.new({laserColor = laserColor, lengthSettings = lengthSettings})
 	attachmentLasers[gripHand]:attachTo(attachment)--, "Sight_Socket")
 	attachmentLasers[gripHand]:setRelativePosition(M.getActiveAttachmentSightsPositionOffset(gripHand))
+	local rot = parameters["baseOffsets"]["rotation"]
+	if rot ~= nil then
+		attachmentLasers[gripHand]:setRelativeRotation(uevrUtils.rotator(rot))
+	end
 	--attachmentLasers[gripHand]:setLength(50)
 	return attachmentLasers[gripHand]
 end
@@ -1072,6 +1071,7 @@ function M.getActiveAttachmentTransforms(hand)
 		if attachmentData.attachType ~= M.AttachType.RAW_CONTROLLER then
 			local location = attachmentData.attachment:K2_GetComponentLocation()
 			local rotation = attachmentData.attachment:K2_GetComponentRotation()
+			rotation = kismet_math_library:ComposeRotators(uevrUtils.rotator(parameters["baseOffsets"]["rotation"]), rotation)
 			local vector = uevrUtils.rotateVector(M.getActiveAttachmentSightsPositionOffset(hand), rotation)
 			location = location + vector
 
@@ -1096,6 +1096,9 @@ function M.getActiveAttachmentTransforms(hand)
 				attachmentLocalRotation.Roll = -attachmentLocalRotation.Roll
 				attachmentLocalRotation = kismet_math_library:ComposeRotators(attachmentLocalRotation, uevrUtils.rotator(0,-90,0))
 				rotation = kismet_math_library:ComposeRotators(attachmentLocalRotation, rotation)
+				--TODO probably need this
+				--rotation = kismet_math_library:ComposeRotators(uevrUtils.rotator(parameters["baseOffsets"]["rotation"]), rotation)
+
 				if (gunstockRotationOffset.Pitch == nil or gunstockRotationOffset.Pitch == 0) and (gunstockRotationOffset.Yaw == nil or gunstockRotationOffset.Yaw == 0) and (gunstockRotationOffset.Roll == nil or gunstockRotationOffset.Roll == 0) then
 					--do nothing
 				else
@@ -1306,13 +1309,14 @@ function M.updateAttachmentTransform(pos, rot, scale, id)
 					-- 	local final = kismet_math_library:ComposeRotators( uevrUtils.rotator(rot.X, rot.Y + 90, rot.Z), rotationOffset * 1)
 					-- 	attachState:set_rotation_offset(Vector3f.new( math.rad(final.Pitch), math.rad(final.Yaw),  math.rad(final.Roll)))
 					-- end
-					if rot ~= nil then attachState:set_rotation_offset(Vector3f.new( math.rad(rot.X - gunstockRotationOffset.Pitch), math.rad(rot.Y + 90 - gunstockRotationOffset.Yaw),  math.rad(rot.Z - gunstockRotationOffset.Roll))) end
+					local baseRotation = parameters["baseOffsets"]["rotation"]
+					if rot ~= nil then attachState:set_rotation_offset(Vector3f.new( math.rad(rot.X - gunstockRotationOffset.Pitch - baseRotation[1]), math.rad(rot.Y + 90 - gunstockRotationOffset.Yaw - baseRotation[2]),  math.rad(rot.Z - gunstockRotationOffset.Roll - baseRotation[3]))) end
 				end
 			end
 			if attachment ~= nil and (attachType == M.AttachType.MESH or attachType == M.AttachType.CONTROLLER) then
 				M.print("Setting attachment transform for attachment " .. tostring(attachment:get_full_name()))
 				if pos ~= nil then uevrUtils.set_component_relative_location(attachment, pos) end
-				if rot ~= nil then uevrUtils.set_component_relative_rotation(attachment, rot + gunstockRotationOffset) end
+				if rot ~= nil then uevrUtils.set_component_relative_rotation(attachment, rot + gunstockRotationOffset - uevrUtils.rotator(parameters["baseOffsets"]["rotation"])) end
 				if scale ~= nil then uevrUtils.set_component_relative_scale(attachment, scale) end
 			end
 		end
@@ -1558,7 +1562,7 @@ function M.attachToMesh(attachment, mesh, socketName, gripHand, options)
 	local success = false
 	--print(attachment:get_full_name(), mesh:get_full_name(), socketName, tostring(gripHand), tostring(detachFromParent), tostring(allowReattach))
 	if uevrUtils.getValid(attachment) ~= nil and uevrUtils.getValid(mesh) ~= nil  then
-		if options == nil then 
+		if options == nil then
 			options = {
 				detachFromOriginOnGrip = true,
 				maintainWorldPositionOnDetachFromOrigin = false,
@@ -1659,7 +1663,7 @@ end
 
 function M.attachToRawController(attachment, gripHand, options)
 	if uevrUtils.getValid(attachment) ~= nil then
-		if options == nil then 
+		if options == nil then
 			options = {
 				detachFromOriginOnGrip = true,
 				maintainWorldPositionOnDetachFromOrigin = false,
@@ -1973,6 +1977,14 @@ end
 
 configui.onUpdate("use_uevr_attachments_strip_parent_name_numeric_suffix", function(value)
 	M.setStripParentNameNumericSuffix(value)
+end)
+
+configui.onUpdate("uevr_attachment_base_rotation", function(value)
+	parameters["baseOffsets"]["rotation"] = {value.X, value.Y, value.Z}
+	isParametersDirty = true
+
+	if attachmentLasers[Handed.Left] then attachmentLasers[Handed.Left]:setRelativeRotation(uevrUtils.rotator(parameters["baseOffsets"]["rotation"])) end
+	if attachmentLasers[Handed.Right] then attachmentLasers[Handed.Right]:setRelativeRotation(uevrUtils.rotator(parameters["baseOffsets"]["rotation"])) end
 end)
 
 local autoUpdateCallbackCreated = false

@@ -263,7 +263,7 @@ local developerWidgets = spliceableInlineArray{
             {
                 widgetType = "checkbox",
                 id = widgetPrefix .. "delete_widget_override",
-                label = "Confirm",
+                label = "Allow Delete",
                 initialValue = false,
                 isHidden = true
             },

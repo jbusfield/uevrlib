@@ -847,6 +847,7 @@ EAttachmentRule = {
 
 function Scope:createOcularLens(renderTarget2D, options)
 	if options == nil then options = {} end
+	--TODO getting a value from configui seems wrong
 	if options.scale == nil then options.scale = configui.getValue("uevr_lib_scope_ocular_lens_scale") end
 	if options.brightness == nil then options.brightness = getParameter(self.weaponTypeID, "brightness") end
 

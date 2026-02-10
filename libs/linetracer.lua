@@ -215,13 +215,23 @@ function M.updateOptions(subscriberID, traceType, options, priority)
     return true
 end
 
+function M.setRotationOffset(subscriberID, traceType, rotator)
+    if activeSubscriptions[traceType] == nil or activeSubscriptions[traceType][subscriberID] == nil then
+        return false  -- Subscription doesn't exist
+    end
+    activeSubscriptions[traceType][subscriberID].options.rotationOffset = rotator
+end
+
 -- Unsubscribe from a trace type
 function M.unsubscribe(subscriberID, traceType)
+    --print("Linetracer: Unsubscribing subscriberID =", subscriberID, "from traceType =", traceType)
     if activeSubscriptions[traceType] ~= nil then
+        --print("Linetracer: Before unsubscribe, activeSubscriptions[traceType] =", traceType, activeSubscriptions[traceType][subscriberID])
         activeSubscriptions[traceType][subscriberID] = nil
 
         -- Clean up empty subscription tables
         if next(activeSubscriptions[traceType]) == nil then
+            --print("Linetracer: No more subscribers for traceType =", traceType, "removing entry")
             activeSubscriptions[traceType] = nil
         end
     end
@@ -229,7 +239,9 @@ end
 
 -- Unsubscribe from all trace types
 function M.unsubscribeAll(subscriberID)
+    --print("Linetracer: Unsubscribing all for subscriberID =", subscriberID)
     for traceType, _ in pairs(activeSubscriptions) do
+        --print("Linetracer: Unsubscribing from traceType =", traceType)
         M.unsubscribe(subscriberID, traceType)
     end
 end
@@ -336,6 +348,10 @@ local function traceFromLocationRotation(location, rotation, options, hitResult)
         return nil
     end
 
+    if options.rotationOffset ~= nil then
+	    rotation = kismet_math_library:ComposeRotators(options.rotationOffset, rotation)
+    end
+
     local forwardVector = kismet_math_library:GetForwardVector(rotation)
 
     return uevrUtils.getLineTraceHitResult(
@@ -425,6 +441,7 @@ local function executeTrace(traceType, subscribers)
         -- local hitActor = result.HitObjectHandle and result.HitObjectHandle.Actor
 
         for subscriberID, subData in pairs(subscribers) do
+            --print("Linetracer notifying subscriber:", subscriberID, "for trace type:", traceType)
             if subData.callback ~= nil then
                 subData.callback(result, location)
             end

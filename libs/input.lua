@@ -51,6 +51,7 @@ local decoupledYaw = nil
 local bodyRotationOffset = 0
 local bodyMesh = nil
 local pawnRotationModeOverride = nil
+local aimCameraOverride = nil
 
 --Normally body yaw only needs to be calculated for one eye only in on_early_calculate_stereo_view_offset
 --but in some cases, like Avowed when climbing, the body yaw needs to be calculated for both eyes or else the eyes desync
@@ -182,8 +183,8 @@ local cameraComponent = {
 						rotation = getAimOffsetAdjustedRotation(rotation)
 					end
 					--pcall( function() --gun for hire crashes here
-						self.component:K2_SetWorldRotation(rotation,false,reusable_hit_result,false)
-						self.component:K2_SetWorldLocation(location,false,reusable_hit_result,false)
+						self.component:K2_SetWorldRotation(rotation, false, reusable_hit_result, false)
+						self.component:K2_SetWorldLocation(location, false, reusable_hit_result, false)
 					--end)
 				end
 			elseif validWeapon then
@@ -200,8 +201,8 @@ local cameraComponent = {
 
 					if rotation ~= nil and location ~= nil then
 						--pcall( function() --gun for hire crashes here
-							self.component:K2_SetWorldRotation(rotation,false,reusable_hit_result,false)
-							self.component:K2_SetWorldLocation(location,false,reusable_hit_result,false)
+							self.component:K2_SetWorldRotation(rotation, false, reusable_hit_result, false)
+							self.component:K2_SetWorldLocation(location, false, reusable_hit_result, false)
 						--end)
 					end
 				end
@@ -451,7 +452,7 @@ updatePawnSettings = uevrUtils.profiler:wrap("updatePawnSettings", updatePawnSet
 local zeroRotator = uevrUtils.rotator(0,0,0)
 local function updateAim()
 
-	if cameraComponent:updateAim() == true then
+	if aimCameraOverride ~= true and cameraComponent:updateAim() == true then
 		-- if (aimRotationOffset.Pitch == nil or aimRotationOffset.Pitch == 0) and (aimRotationOffset.Yaw == nil or aimRotationOffset.Yaw == 0) and (aimRotationOffset.Roll == nil or aimRotationOffset.Roll == 0) then
 		-- 	cameraComponent:setRotation(zeroRotator)
 		-- else
@@ -701,6 +702,10 @@ end
 
 function M.setOverridePawnRotationMode(val)
 	pawnRotationModeOverride = val
+end
+
+function M.setAimCameraOverride(val)
+	aimCameraOverride = val
 end
 
 function M.setPawnPositionMode(val)

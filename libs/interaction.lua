@@ -280,7 +280,7 @@ local developerWidgets = spliceableInlineArray{
                 initialValue = meshIgnorePawn
             },
 
-        { widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },	
+        { widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },
 	    { widgetType = "begin_group", id = "widget_interaction", isHidden = false }, { widgetType = "new_line" }, { widgetType = "indent", width = 5 }, { widgetType = "text", label = "Widget Interaction" }, { widgetType = "begin_rect", },
             {
                 widgetType = "combo",
@@ -335,7 +335,7 @@ local developerWidgets = spliceableInlineArray{
                 range = {-20, 20},
                 initialValue = interactionZOffset
             },
-		{ widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },	
+		{ widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },
 	    { widgetType = "begin_group", id = "interaction_laser", isHidden = false }, { widgetType = "new_line" }, { widgetType = "indent", width = 5 }, { widgetType = "text", label = "Laser" }, { widgetType = "begin_rect", },
             {
                 widgetType = "checkbox",
@@ -624,8 +624,8 @@ function M.setInteractionType(val)
     configui.setHidden("interaction_laser", interactionType == M.InteractionType.None)
     configui.setHidden("interaction_settings", interactionType == M.InteractionType.None)
     configui.setHidden("interaction_mouse", interactionType == M.InteractionType.None)
-    
-    
+
+
     if interactionType == M.InteractionType.None then
         destroyWidgetInteractionComponent()
     end
@@ -864,7 +864,7 @@ end
 --             playerController.bEnableMouseOverEvents = true
 --             playerController.bEnableTouchOverEvents = true
 --             playerController.bEnableClickEvents = true
-            
+
 
 --             local currentMousePosition = WidgetLayoutLibrary:GetMousePositionOnViewport(uevrUtils.get_world())
 --             print("Current mouse", currentMousePosition.X, currentMousePosition.Y)
@@ -904,7 +904,7 @@ end
 -- 		-- 	print("mouse move error " .. response, LogLevel.Error)
 -- 		-- end
 
-         
+
 -- --UWidgetBlueprintLibrary
 -- 	--static void GetAllWidgetsOfClass(class UObject* WorldContextObject, TArray<class UUserWidget*>* FoundWidgets, TSubclassOf<class UUserWidget> WidgetClass, bool TopLevelOnly);
 -- 	--static struct FEventReply SetMousePosition(struct FEventReply& Reply, const struct FVector2D& NewMousePosition);
@@ -953,7 +953,7 @@ end
 --     -- local originPosition = widgetInteractionComponent:K2_GetComponentLocation()
 --     -- local originDirection = widgetInteractionComponent:GetForwardVector()
 --  	-- local endLocation = originPosition + (originDirection * meshInteractionDistance)
-	
+
 --     -- if meshEnableHitTesting == true then
 --     --     local ignore_actors = meshIgnorePawn and {pawn} or {}
 --     --     local hitResult = uevrUtils.getLineTraceHitResult(originPosition, originDirection, meshTraceChannel, true, ignore_actors, 0, meshInteractionDistance, true)
@@ -1035,21 +1035,17 @@ uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
         return
     end
 
-    --if trackerComponent ~= nil then trackerComponent:SetVisibility(false, false) end
- 
-    --if laserComponent ~= nil then  laserComponent:setVisibility(false) end
+    local laserVisible = false
+    local laserActiveTrace = interactionType == M.InteractionType.Mesh
     if interactionType == M.InteractionType.Mesh then
-        --local startLocation, endLocation = lineTrace()
-        --updateLineTracerSubscription()
-        --print(startLocation.X, startLocation.Y, startLocation.Z, endLocation.X, endLocation.Y, endLocation.Z)
-        --updateLaserPointer(lineTraceStartLocation, lineTraceEndLocation)
-        --if laserComponent ~= nil then laserComponent:setTargetLocation(lineTraceEndLocation) end
-        local hitResult = laserComponent ~= nil and laserComponent:getLastHitResult() or nil
-        if hitResult ~= nil then
-            uevrUtils.executeUEVRCallbacks("on_interaction_hit", hitResult)
-            updateMouse(uevrUtils.vector(hitResult.Location))
+        if meshEnableHitTesting then
+            local hitResult = laserComponent ~= nil and laserComponent:getLastHitResult() or nil
+            if hitResult ~= nil then
+                uevrUtils.executeUEVRCallbacks("on_interaction_hit", hitResult)
+                updateMouse(uevrUtils.vector(hitResult.Location))
+            end
         end
-        
+        laserVisible = true
     elseif interactionType == M.InteractionType.Widget or interactionType == M.InteractionType.MeshAndWidget then
 		--sometimes an error is thrown "property VirtualUserIndex is not found"t
         pcall(function()
@@ -1065,7 +1061,6 @@ uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
         local isHovering = widgetInteractionComponent.HoveredWidgetComponent ~= nil
         --print("isHovering", isHovering, widgetInteractionComponent.HoveredWidgetComponent)
         if isHovering then
-            --unsubscribeFromLineTracer()
                 --playerController.bShowMouseCursor = false
                 --widgetInteractionComponent.HoveredWidgetComponent.Widget["NeedClickSound?"] = false
             local hitResult = widgetInteractionComponent:GetLastHitResult()
@@ -1075,40 +1070,37 @@ uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
                     projected = projectIntersectionOntoOffsetPlane(hitResult.TraceStart, hitResult.TraceEnd, hitResult.ImpactPoint, hitResult.ImpactNormal, interactionDepthOffset)
                 end
                 if projected ~= nil then
+                    --print("Projected", projected.X, projected.Y, projected.Z)
                     projected = uevrUtils.vector(projected)
                     if projected ~= nil then
                         projected.Z = projected.Z + interactionZOffset
                         if trackerComponent ~= nil then trackerComponent:K2_SetWorldLocation(uevrUtils.vector(projected), false, reusable_hit_result, false) end
-                        if laserComponent ~= nil then laserComponent:setTargetLocation(projected) end
-                        --updateLaserPointer(uevrUtils.vector(hitResult.TraceStart), projected)
+                        --turn off laser line tracing and draw the laser ourselves
+                        if laserComponent ~= nil then laserComponent:draw(uevrUtils.vector(hitResult.TraceStart), projected) end
+                        laserVisible = true
                         updateMouse(projected)
                     end
                     --TODO does this hit result need to be cleaned?
                     uevrUtils.executeUEVRCallbacks("on_interaction_hit", hitResult)
-                    --executeCallbacks("on_hit", hitResult)
                 end
             end
         elseif interactionType == M.InteractionType.MeshAndWidget then
-            --local startLocation, endLocation = lineTrace()
-            --updateLineTracerSubscription()
-            --if laserComponent ~= nil then laserComponent:setTargetLocation(lineTraceEndLocation) end
-            --updateLaserPointer(lineTraceStartLocation, lineTraceEndLocation)
-            --updateMouse(lineTraceEndLocation)
-            local hitResult = laserComponent ~= nil and laserComponent:getLastHitResult() or nil
-            if hitResult ~= nil then
-                uevrUtils.executeUEVRCallbacks("on_interaction_hit", hitResult)
-                updateMouse(uevrUtils.vector(hitResult.Location))
+            if meshEnableHitTesting then
+                local hitResult = laserComponent ~= nil and laserComponent:getLastHitResult() or nil
+                if hitResult ~= nil then
+                    uevrUtils.executeUEVRCallbacks("on_interaction_hit", hitResult)
+                    updateMouse(uevrUtils.vector(hitResult.Location))
+                end
             end
-        else
-            --unsubscribeFromLineTracer()
+            laserVisible = true
+            laserActiveTrace = true
         end
-        -- if isHovering ~= wasHovering then
-        --     onHoverChanged(isHovering)
-        --     wasHovering = isHovering
-        -- end
-    else
-        --unsubscribeFromLineTracer()
     end
+    if laserComponent ~= nil then
+        laserComponent:setVisibility(laserVisible)
+        laserComponent:setActiveTrace(laserActiveTrace)
+    end
+
 end)
 
 
@@ -1139,7 +1131,7 @@ local keyStruct
 local wasButtonPressed = false
 uevr.sdk.callbacks.on_xinput_get_state(function(retval, user_index, state)
     if uevrUtils.getValid(widgetInteractionComponent) == nil then return end
-    
+
     local isButtonPressed = uevrUtils.isButtonPressed(state, XINPUT_GAMEPAD_A)
 	if isButtonPressed and isButtonPressed ~= wasButtonPressed then
 		-- if keyStruct == nil then keyStruct = uevrUtils.get_reuseable_struct_object("ScriptStruct /Script/InputCore.Key") end
