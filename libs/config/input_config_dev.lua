@@ -615,7 +615,7 @@ function M.init(m_paramManager)
 
 	paramManager:initProfileHandler(widgetPrefix, function(profileParams)
 		updateUI(profileParams)
-		setPawnCameraList(profileParams["aimCamera"])
+		setPawnCameraList(profileParams["aimCamera"], true)
 	end)
 
 	--updateUI(parameters)

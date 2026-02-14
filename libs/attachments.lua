@@ -59,6 +59,15 @@ Usage
                 print("Grip animation " .. animationID .. " activated for hand " .. gripHand)
             end)
 
+    attachments.registerAttachmentChangeCallback(callbackFunc) - registers a callback function that will be called when an attachment changes, 
+		for example when a new weapon is equipped.
+        example:
+            attachments.registerAttachmentChangeCallback(function(id, gripHand, attachment)
+                -- Handle attachmentchange
+                print("Attachment " .. id .. " activated for hand " .. gripHand)
+            end)
+
+			
     attachments.detachAttachmentFromMeshes(attachment, reattachToParent) - detaches an object from all meshes
         example:
             attachments.detachAttachmentFromMeshes(myAttachment, true)
@@ -2003,13 +2012,17 @@ local autoUpdateCallbackCreated = false
 function M.registerOnGripUpdateCallback(callback)
 	if not autoUpdateCallbackCreated then
 		uevrUtils.setInterval(gripUpdateTimeout, function()
-			local rightAttachment, rightMesh, rightSocketName, leftAttachment, leftMesh, leftSocketName, detachFromParent, allowReattach = callback()
+			local rightAttachment, rightMesh, rightSocketName, leftAttachment, leftMesh, leftSocketName, attachOptionsRight, attachOptionsLeft = callback()
 			-- print("Before")
 			-- printMeshAttachmentList()
 			-- print("Left",activeGripAnimations[Handed.Left])
 			-- print("Right",activeGripAnimations[Handed.Right])
-			if detachFromParent == nil then
-				detachFromParent = {
+			local allowReattach = nil
+			if attachOptionsLeft ~= nil and type(attachOptionsLeft) == "boolean" then
+				allowReattach = attachOptionsLeft
+			end
+			if attachOptionsRight == nil then
+				attachOptionsRight = {
 					detachFromOriginOnGrip = true,
 					maintainWorldPositionOnDetachFromOrigin = false,
 					detachFromParentOnRelease = true,
@@ -2021,11 +2034,11 @@ function M.registerOnGripUpdateCallback(callback)
 					allowChildHiddenInGameHandling = true,
 					allowRenderInMainPassHandling = true
 				}
-			elseif type(detachFromParent) == "boolean" then
-				detachFromParent = {
-					detachFromOriginOnGrip = detachFromParent,
+			elseif type(attachOptionsRight) == "boolean" then
+				attachOptionsRight = {
+					detachFromOriginOnGrip = attachOptionsRight,
 					maintainWorldPositionOnDetachFromOrigin = false,
-					detachFromParentOnRelease = detachFromParent,
+					detachFromParentOnRelease = attachOptionsRight,
 					maintainWorldPositionOnDetachFromParent = false,
 					reattachToOriginOnRelease = allowReattach or false,
 					restoreTransformToOriginOnReattach = allowReattach or false,
@@ -2035,7 +2048,33 @@ function M.registerOnGripUpdateCallback(callback)
 					allowRenderInMainPassHandling = true
 				}
 			end
-
+			if attachOptionsLeft == nil then
+				attachOptionsLeft = {
+					detachFromOriginOnGrip = true,
+					maintainWorldPositionOnDetachFromOrigin = false,
+					detachFromParentOnRelease = true,
+					maintainWorldPositionOnDetachFromParent = false,
+					reattachToOriginOnRelease = false,
+					restoreTransformToOriginOnReattach = false,
+					useZeroTransformOnReattach = false,
+					allowChildVisibilityHandling = true,
+					allowChildHiddenInGameHandling = true,
+					allowRenderInMainPassHandling = true
+				}
+			elseif type(attachOptionsLeft) == "boolean" then
+				attachOptionsLeft = {
+					detachFromOriginOnGrip = attachOptionsLeft,
+					maintainWorldPositionOnDetachFromOrigin = false,
+					detachFromParentOnRelease = attachOptionsLeft,
+					maintainWorldPositionOnDetachFromParent = false,
+					reattachToOriginOnRelease = allowReattach or false,
+					restoreTransformToOriginOnReattach = allowReattach or false,
+					useZeroTransformOnReattach = false,
+					allowChildVisibilityHandling = true,
+					allowChildHiddenInGameHandling = true,
+					allowRenderInMainPassHandling = true
+				}
+			end
 			-- --print(attachment, mesh, autoUpdateCurrentAttachment)
 			-- if detachFromParent == nil then detachFromParent = true end
 			-- if allowReattach == nil then allowReattach = false end
@@ -2052,18 +2091,18 @@ function M.registerOnGripUpdateCallback(callback)
 			if rightAttachment == nil then
 				--M.detachGripAttachments(Handed.Right)
 			elseif rightMesh == nil then
-				M.attachToRawController(rightAttachment, Handed.Right, detachFromParent)
+				M.attachToRawController(rightAttachment, Handed.Right, attachOptionsRight)
 			else
-				M.attachToMesh(rightAttachment, rightMesh, rightSocketName, Handed.Right, detachFromParent)
+				M.attachToMesh(rightAttachment, rightMesh, rightSocketName, Handed.Right, attachOptionsRight)
 			end
 
 			-- if leftAttachment is nil then remove all left grip attachments
 			if leftAttachment == nil then
 				--M.detachGripAttachments(Handed.Left)
 			elseif leftMesh == nil then
-				M.attachToRawController(leftAttachment, Handed.Left, detachFromParent)
+				M.attachToRawController(leftAttachment, Handed.Left, attachOptionsLeft)
 			else
-				M.attachToMesh(leftAttachment, leftMesh, leftSocketName, Handed.Left, detachFromParent)
+				M.attachToMesh(leftAttachment, leftMesh, leftSocketName, Handed.Left, attachOptionsLeft)
 			end
 
 			-- print("After")

@@ -1487,8 +1487,22 @@ local function updateCharacterHidden()
 	end
 end
 
+local isInCutsceneOverride = nil
+function M.setIsInCutsceneOverride(override)
+	isInCutsceneOverride = override
+end
 local function updateCutscene()
 	if on_cutscene_change ~= nil or hasUEVRCallbacks("on_cutscene_change") then --don't bother doing anything if nothing is listening
+		if isInCutsceneOverride ~= nil then
+			if isInCutscene ~= isInCutsceneOverride then
+				isInCutscene = isInCutsceneOverride
+				if on_cutscene_change ~= nil then
+					on_cutscene_change(isInCutscene)
+				end
+				executeUEVRCallbacks("on_cutscene_change", isInCutscene)
+			end
+			return
+		end
 		if M.getValid(pawn) ~= nil then
 			local playerController = pawn.Controller
 			if playerController ~= nil then
@@ -3385,6 +3399,7 @@ end
 
 --options are manualAttachment, relativeTransform, deferredFinish, parent, tag, removeFromViewport, twoSided, drawSize
 function M.createWidgetComponent(widget, options)
+	if options == nil then options = {} end
 	local component = nil
 	local widgetAlignment = nil
 	local className = nil
@@ -3395,7 +3410,9 @@ function M.createWidgetComponent(widget, options)
 		end
 
 		if M.getValid(widget) ~= nil then
-			widgetAlignment = widget:GetAlignmentInViewport()
+			if widget.GetAlignmentInViewport ~= nil then
+				widgetAlignment = widget:GetAlignmentInViewport()
+			end
 			component = M.create_component_of_class("Class /Script/UMG.WidgetComponent", options.manualAttachment, options.relativeTransform, options.deferredFinish, options.parent, options.tag)
 			if component ~= nil then
 				if options.removeFromViewport == true and widget.RemoveFromViewport ~= nil then

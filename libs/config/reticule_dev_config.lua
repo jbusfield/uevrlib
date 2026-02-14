@@ -870,7 +870,7 @@ end
 local function resetVisibilityTestWidget()
 	if visibilityTestReticuleWidget ~= nil and uevrUtils.getValid(visibilityTestReticuleWidget) ~= nil then
 		--reset previous widget visibility
-		if visibilityTestReticuleWidgetDefaultVisibility ~= nil then
+		if visibilityTestReticuleWidget.SetVisibility ~= nil and visibilityTestReticuleWidgetDefaultVisibility ~= nil then
 			visibilityTestReticuleWidget:SetVisibility(visibilityTestReticuleWidgetDefaultVisibility)
 		end
 		visibilityTestReticuleWidget = nil

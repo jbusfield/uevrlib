@@ -917,6 +917,13 @@ function M.setActiveReticule(id, force)
 end
 
 function M.setActiveReticuleByLabel(label, force)
+	if label == "None" then
+		parameters["currentReticuleID"] = nil
+		M.destroy()
+		M.reset()
+		setReticuleAutoCreationTypeFromParameters()
+		return
+	end
 	local newID = nil
 	if parameters ~= nil then
 		for i=1, #parameters["reticuleList"] do

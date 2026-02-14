@@ -2675,6 +2675,10 @@ end
 
 local function loadMesh(index)
 	selectedMeshName = profileMeshNames[index]
+	if configuration["profiles"][selectedProfileName] == nil then
+		configuration["profiles"][selectedProfileName] = {}
+		isConfigurationDirty = true
+	end
 	if configuration["profiles"][selectedProfileName][selectedMeshName] == nil then
 		configuration["profiles"][selectedProfileName][selectedMeshName] = {}
 		isConfigurationDirty = true

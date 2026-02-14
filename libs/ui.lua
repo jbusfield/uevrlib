@@ -329,7 +329,7 @@ local function updateUIState()
     end
     setCurrentViewportWidgetsStr(currentViewportWidgetsStr)
 
-    local currentGameStateText = "Current Game Statex: "
+    local currentGameStateText = "Current Game State: "
     local isInCutscene = uevrUtils.isInCutscene()
     local isPaused = uevrUtils.isGamePaused()
     local isCharacterHidden = uevrUtils.getValid(pawn,{ "Controller", "Character", "bHidden"}) or false
@@ -411,7 +411,11 @@ function M.init(isDeveloperMode, logLevel)
 		end)
     end
 
-    createGameStateMonitor()
+    enableCutsceneDetection()
+    enablePauseDetection()
+    enableCharacterHiddenDetection()
+
+    --createGameStateMonitor()
 end
 
 local createConfigMonitor = doOnce(function()

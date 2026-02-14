@@ -624,6 +624,8 @@ end
 
 function M.setCurrentProfile(profileID)
 	paramManager:setActiveProfile(profileID)
+	--if the profile changes, reset the camera component to ensure its using the correct settings
+	resetPawnSettings()
 end
 
 function M.setCurrentProfileByLabel(profileLabel)
@@ -643,6 +645,15 @@ function M.setDisabled(val)
 		--this ensures the camera gets reset to the current pawn orientation when input is re-enabled
 		decoupledYaw = nil
 		bodyRotationOffset = 0
+	end
+end
+
+function M.resetCapsuleComponent()
+	decoupledYaw = nil
+	bodyRotationOffset = 0
+	if rootComponent ~= nil then
+		rootComponent:K2_SetWorldRotation(uevrUtils.rotator(0,0,0),false,reusable_hit_result,false)
+		pawn:K2_SetActorRotation(uevrUtils.rotator(0,0,0), false, reusable_hit_result, false)
 	end
 end
 
