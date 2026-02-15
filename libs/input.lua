@@ -1222,7 +1222,7 @@ uevrUtils.registerLevelChangeCallback(function(level)
 	doFixSpatialAudio()
 end)
 
-uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, newLocation, newRotation)
+uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, newLocation, newRotation, newOffhandLocationOffset)
 	--only handle gunstock transform changes if aim method is left or right controller since
 	--if its left or right weapon, the weapon already has the gunstock adjustments applied
     local aimMethod = getParameter("aimMethod")

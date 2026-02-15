@@ -162,6 +162,7 @@ armsAnimationMeshes[Handed.Left] = {animating=false, mesh=nil, componentName=nil
 armsAnimationMeshes[Handed.Right] = {animating=false, mesh=nil, componentName=nil}
 local defaultAnimationMesh = nil
 
+local status = {}
 local accessoryStatus = {}
 
 local currentLogLevel = LogLevel.Error
@@ -895,7 +896,11 @@ function M.setFingerAngles(fingerIndex, jointIndex, angleID, angle, componentNam
 	end
 end
 
-uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, newLocation, newRotation)
+uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, newLocation, newRotation, newOffhandLocationOffset)
+	if status["offhandOffset"] == nil then status["offhandOffset"] = {} end
+	--print("gunstock_transform_change callback received for id: ", id, newOffhandLocationOffset.X, newOffhandLocationOffset.Y, newOffhandLocationOffset.Z, status["offhandOffset"])
+	status["offhandOffset"][id] = newOffhandLocationOffset
+
 	local initialRotation = uevrUtils.rotator(0,0,0)
 	if handDefinitions["Arms"] ~= nil and handDefinitions["Arms"]["InitialTransform"] ~= nil and handDefinitions["Arms"]["InitialTransform"]["right_hand"] ~= nil and handDefinitions["Arms"]["InitialTransform"]["right_hand"]["hand_r"] ~= nil and handDefinitions["Arms"]["InitialTransform"]["right_hand"]["hand_r"]["rotation"] ~= nil then
 		local rot = handDefinitions["Arms"]["InitialTransform"]["right_hand"]["hand_r"]["rotation"]
@@ -1186,6 +1191,7 @@ uevrUtils.registerPreLevelChangeCallback(function(level)
 	autoCreateConfigName = nil
 	autoCreateAnimationName = nil
 	accessoryStatus = {}
+	status = {}
 end)
 
 local function tryAutoCreateHands()
@@ -1290,7 +1296,7 @@ function M.attachHandToAccessory(handed, accessoryID, useMontageProximity)
             local location = accessoryStatus[statusKey]["location"]
             local rotation = accessoryStatus[statusKey]["rotation"]
             if parent ~= nil then
-				print("Restoring current hand attachment state for hand ", accessoryStatus[statusKey].location.X, accessoryStatus[statusKey].location.Y, accessoryStatus[statusKey].location.Z, accessoryStatus[statusKey].rotation.Pitch, accessoryStatus[statusKey].rotation.Yaw, accessoryStatus[statusKey].rotation.Roll)
+				--print("Restoring current hand attachment state for hand ", accessoryStatus[statusKey].location.X, accessoryStatus[statusKey].location.Y, accessoryStatus[statusKey].location.Z, accessoryStatus[statusKey].rotation.Pitch, accessoryStatus[statusKey].rotation.Yaw, accessoryStatus[statusKey].rotation.Roll)
                 hand:K2_AttachTo(parent, uevrUtils.fname_from_string(socket or ""), 0, false)
                 uevrUtils.set_component_relative_transform(hand, location or {0,0,0}, rotation or {0,0,0})
            	end
@@ -1304,7 +1310,7 @@ function M.attachHandToAccessory(handed, accessoryID, useMontageProximity)
         local hand = M.getHandComponent(handed)
         if accessoryParams ~= nil and hand ~= nil then
             local currentAttachment = attachments.getCurrentGrippedAttachment(Handed.Right)
-           if currentAttachment ~= nil then
+           	if currentAttachment ~= nil then
 				--check proximity
 				local proximityOK = true
 				if useMontageProximity then proximityOK = checkMontageProximity(handed, accessoryParams, currentAttachment) end
@@ -1321,9 +1327,9 @@ function M.attachHandToAccessory(handed, accessoryID, useMontageProximity)
 						}
 					end
 
-					print("Saved current hand attachment state for hand ", accessoryStatus["hand_" .. tostring(handed)].location.X, accessoryStatus["hand_" .. tostring(handed)].location.Y, accessoryStatus["hand_" .. tostring(handed)].location.Z, accessoryStatus["hand_" .. tostring(handed)].rotation.Pitch, accessoryStatus["hand_" .. tostring(handed)].rotation.Yaw, accessoryStatus["hand_" .. tostring(handed)].rotation.Roll)
+					--print("Saved current hand attachment state for hand ", accessoryStatus["hand_" .. tostring(handed)].location.X, accessoryStatus["hand_" .. tostring(handed)].location.Y, accessoryStatus["hand_" .. tostring(handed)].location.Z, accessoryStatus["hand_" .. tostring(handed)].rotation.Pitch, accessoryStatus["hand_" .. tostring(handed)].rotation.Yaw, accessoryStatus["hand_" .. tostring(handed)].rotation.Roll)
 					local socketName = accessoryParams.socket_name or ""
-					print("Attaching hand to socket: " .. tostring(socketName), accessoryParams.attach_type)
+					M.print("Attaching hand to socket: " .. tostring(socketName), accessoryParams.attach_type)
 					hand:K2_AttachTo(currentAttachment, uevrUtils.fname_from_string(socketName), accessoryParams.attach_type or 0, false)
 					uevrUtils.set_component_relative_transform(hand, accessoryParams.location or {0,0,0}, accessoryParams.rotation or {0,0,0})
 
@@ -1400,9 +1406,9 @@ local function proximityAccessoryForHand(hand)
     local bestAccessoryID = nil
     local bestDistance = nil
 
-    for accessoryID, p in pairs(list) do
-        local activationHand = p.activation_hand or 1
-        local activationDistance = p.activation_distance or 0.0
+    for accessoryID, accessoryParams in pairs(list) do
+        local activationHand = accessoryParams.activation_hand or 1
+        local activationDistance = accessoryParams.activation_distance or 0.0
 
         -- activation_hand: 1=None, 2=Left, 3=Right, 4=Either
         local handOk =
@@ -1416,7 +1422,7 @@ local function proximityAccessoryForHand(hand)
 
             local targetLoc = nil
             local targetRot = nil
-            local socketName = p.socket_name or ""
+            local socketName = accessoryParams.socket_name or ""
 
             if socketName ~= "" and attachment.GetSocketLocation ~= nil then
 				targetRot = attachment:GetSocketRotation(uevrUtils.fname_from_string(socketName))
@@ -1427,7 +1433,17 @@ local function proximityAccessoryForHand(hand)
             end
 
             if targetLoc ~= nil then
-				targetLoc = targetLoc + uevrUtils.rotateVector(uevrUtils.vector(p.location or {0,0,0}), targetRot)
+				local loc = uevrUtils.vector(accessoryParams.location or {0,0,0})
+				if status["offhandOffset"] ~= nil and status["offhandOffset"][attachmentID] then
+					local offhandOffset = uevrUtils.vector(status["offhandOffset"][attachmentID])
+					if loc ~= nil and offhandOffset ~= nil then
+						--print("Applying offhand offset for attachment ", attachmentID, offhandOffset.X, offhandOffset.Y, offhandOffset.Z)
+						loc.X = loc.X + offhandOffset.X
+						loc.Y = loc.Y + offhandOffset.Y
+						loc.Z = loc.Z + offhandOffset.Z
+					end
+				end
+				targetLoc = targetLoc + uevrUtils.rotateVector(loc, targetRot)
                 local d = uevrUtils.distanceBetween(controllerLoc, targetLoc)
                 if d ~= nil and d <= activationDistance then
                     if bestDistance == nil or d < bestDistance then
@@ -1462,7 +1478,7 @@ local function checkAccessories(isMontage)
 	--M.print("Checked active right accessory: " .. tostring(activeRightAccessory) .. " with priority " .. tostring(priority))
     if activeRightAccessory ~= accessoryStatus["activeRightAccessory"] then
         accessoryStatus["activeRightAccessory"] = activeRightAccessory
-        print("Active right accessory changed to: " .. tostring(activeRightAccessory))
+        M.print("Active right accessory changed to: " .. tostring(activeRightAccessory))
         M.attachHandToAccessory(Handed.Right, activeRightAccessory, isMontage)
     end
 
@@ -1470,7 +1486,7 @@ local function checkAccessories(isMontage)
 	--M.print("Checked active left accessory: " .. tostring(activeLeftAccessory) .. " with priority " .. tostring(priority))
     if activeLeftAccessory ~= accessoryStatus["activeLeftAccessory"] then
         accessoryStatus["activeLeftAccessory"] = activeLeftAccessory
-        print("Active left accessory changed to: " .. tostring(activeLeftAccessory))
+        M.print("Active left accessory changed to: " .. tostring(activeLeftAccessory))
         M.attachHandToAccessory(Handed.Left, activeLeftAccessory, isMontage)
     end
 end

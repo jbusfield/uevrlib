@@ -1,3 +1,4 @@
+-- Inspired by letmein's work with Stalker-2
 local uevrUtils = require("libs/uevr_utils")
 local controllers = require("libs/controllers")
 local configui = require("libs/configui")

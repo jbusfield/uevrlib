@@ -191,6 +191,7 @@ local animationIDs = {"", "attachment_none"}
 --local activeAnimationID = false
 
 local gunstockRotationOffset = uevrUtils.rotator(0,0,0)
+local gunstockOffhandLocationOffset = uevrUtils.vector(0,0,0)
 
 local meshAttachmentList = {}
 local activeGripAnimations = {}
@@ -1371,8 +1372,9 @@ end
 -- 	gunstockRotationOffset = newRotation
 -- end)
 
-uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, location, rotation)
+uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, location, rotation, offhandLocationOffset)
 	gunstockRotationOffset = rotation
+	gunstockOffhandLocationOffset = offhandLocationOffset
 	local attachmentDataArray = getAttachmentDataFromMeshAttachmentList(id)
 	--local attachment, _, _ = getAttachmentDataFromMeshAttachmentList(id)
 	if attachmentDataArray ~= nil and #attachmentDataArray > 0 then
