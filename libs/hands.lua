@@ -901,15 +901,15 @@ uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, newLoca
 	--print("gunstock_transform_change callback received for id: ", id, newOffhandLocationOffset.X, newOffhandLocationOffset.Y, newOffhandLocationOffset.Z, status["offhandOffset"])
 	status["offhandOffset"][id] = newOffhandLocationOffset
 
-	local initialRotation = uevrUtils.rotator(0,0,0)
-	if handDefinitions["Arms"] ~= nil and handDefinitions["Arms"]["InitialTransform"] ~= nil and handDefinitions["Arms"]["InitialTransform"]["right_hand"] ~= nil and handDefinitions["Arms"]["InitialTransform"]["right_hand"]["hand_r"] ~= nil and handDefinitions["Arms"]["InitialTransform"]["right_hand"]["hand_r"]["rotation"] ~= nil then
-		local rot = handDefinitions["Arms"]["InitialTransform"]["right_hand"]["hand_r"]["rotation"]
-		initialRotation = uevrUtils.rotator(rot[1], rot[2], rot[3])
-	end
-	initialRotation.Pitch = initialRotation.Pitch - newRotation.Yaw
-	initialRotation.Yaw = initialRotation.Yaw + newRotation.Pitch
-	initialRotation.Roll = initialRotation.Roll - newRotation.Roll
-	animation.setBoneRotation(M.getHandComponent(Handed.Right), "hand_r", initialRotation, false)
+	-- local initialRotation = uevrUtils.rotator(0,0,0)
+	-- if handDefinitions["Arms"] ~= nil and handDefinitions["Arms"]["InitialTransform"] ~= nil and handDefinitions["Arms"]["InitialTransform"]["right_hand"] ~= nil and handDefinitions["Arms"]["InitialTransform"]["right_hand"]["hand_r"] ~= nil and handDefinitions["Arms"]["InitialTransform"]["right_hand"]["hand_r"]["rotation"] ~= nil then
+	-- 	local rot = handDefinitions["Arms"]["InitialTransform"]["right_hand"]["hand_r"]["rotation"]
+	-- 	initialRotation = uevrUtils.rotator(rot[1], rot[2], rot[3])
+	-- end
+	-- initialRotation.Pitch = initialRotation.Pitch - newRotation.Yaw
+	-- initialRotation.Yaw = initialRotation.Yaw + newRotation.Pitch
+	-- initialRotation.Roll = initialRotation.Roll - newRotation.Roll
+	-- animation.setBoneRotation(M.getHandComponent(Handed.Right), "hand_r", initialRotation, false)
 end)
 
 function M.printHandTranforms(transforms)
@@ -1242,8 +1242,12 @@ end)
 local function checkMontageProximity(hand, accessoryParams, currentAttachment)
 	local validDistance = true
 	local activationHand = accessoryParams.activation_hand or 1
+	if activationHand == 10 or (activationHand == 8 and hand == Handed.Left) or (activationHand == 9 and hand == Handed.Right) then
+		return true
+	end
+
 	local activationDistance = accessoryParams.activation_distance or 0.0
-	-- activation_hand: 1=None, 2=Left, 3=Right, 4=Either 5=Left with montage 6=Right with Montage 7=Either with montage
+	-- activation_hand: 1=None, 2=Left, 3=Right, 4=Either 5=Left with montage 6=Right with Montage 7=Either with montage 8=Left always 9=Right always 10=Either always
 	local handOk =
 		(activationHand == 7) or
 		(activationHand == 5 and hand == Handed.Left) or
@@ -1408,6 +1412,13 @@ local function proximityAccessoryForHand(hand)
 
     for accessoryID, accessoryParams in pairs(list) do
         local activationHand = accessoryParams.activation_hand or 1
+
+		--if using one of the "always" options then just use this as the best option
+		if activationHand == 10 or (activationHand == 8 and hand == Handed.Left) or (activationHand == 9 and hand == Handed.Right) then
+			bestAccessoryID = accessoryID
+			break
+		end
+
         local activationDistance = accessoryParams.activation_distance or 0.0
 
         -- activation_hand: 1=None, 2=Left, 3=Right, 4=Either

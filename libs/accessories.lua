@@ -221,21 +221,21 @@ function M.getConfigWidgets(id, prefix, width)
                 },
                 {
                     widgetType = "drag_float3",
-                    id = prefix .. "accessory_item_rotation",
-                    label = "Rotation",
+                    id = prefix .. "accessory_item_location",
+                    label = "Position",
                     speed = 0.1,
-                    range = {-180, 180},
-                    initialValue = parameterDefaults["rotation"],
+                    range = {-100, 100},
+                    initialValue = parameterDefaults["location"],
                     isHidden = false,
                     width = width
                 },
                 {
                     widgetType = "drag_float3",
-                    id = prefix .. "accessory_item_location",
-                    label = "Location",
+                    id = prefix .. "accessory_item_rotation",
+                    label = "Rotation",
                     speed = 0.1,
-                    range = {-100, 100},
-                    initialValue = parameterDefaults["location"],
+                    range = {-180, 180},
+                    initialValue = parameterDefaults["rotation"],
                     isHidden = false,
                     width = width
                 },
@@ -250,8 +250,8 @@ function M.getConfigWidgets(id, prefix, width)
                 {
                     widgetType = "combo",
                     id = prefix .. "accessory_item_activation_hand",
-                    label = "Activation Requirement",
-                    selections = {"None", "Left Hand Proximity", "Right Hand Proximity", "Either Hand Proximity", "Left Hand Proximity During Montage Only", "Right Hand Proximity During Montage Only", "Either Hand Proximity During Montage Only"},
+                        label = "Activation Requirement",
+                        selections = {"None", "Left Hand Proximity", "Right Hand Proximity", "Either Hand Proximity", "Left Hand Proximity During Montage Only", "Right Hand Proximity During Montage Only", "Either Hand Proximity During Montage Only", "Left Hand Always", "Right Hand Always", "Either Hand Always"},
                     initialValue = 1,
                     width = width
                 },
@@ -481,7 +481,7 @@ function M.createConfigCallbacks(id, prefix)
     configui.onUpdate(prefix .. "accessory_item_activation_hand", function(value)
         local accessoryID = getAccessoryID(id, prefix)
         if accessoryID ~= nil then saveParameter(id, accessoryID, "activation_hand", value, true) end
-        configui.setHidden(prefix .. "accessory_item_activation_distance", value == 1)
+        configui.setHidden(prefix .. "accessory_item_activation_distance", value == 1 or value == 8 or value == 9 or value == 10)
     end)
 
     configui.onUpdate(prefix .. "accessory_item_activation_distance", function(value)

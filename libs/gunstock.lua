@@ -312,7 +312,19 @@ local function updateDefaultAttachmentTransforms(pos, rot, scale, offhandLocatio
     end
 end
 
+local function updateSelectedColors(id)
+	for i = 1, #parameters["attachments"] do
+		local p_id = parameters["attachments"][i].id
+		configui.setColor(widgetPrefix .. p_id, "#FFFFFFFF")
+	end
+
+    if id ~= nil then
+	    configui.setColor(widgetPrefix .. id, "#0088FFFF")
+    end
+end
+
 function M.setActive(id)
+    updateSelectedColors(id)
     if id == nil then return end
     activeAttachmentID = id
 
