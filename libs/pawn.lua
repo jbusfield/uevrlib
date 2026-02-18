@@ -441,10 +441,21 @@ uevrUtils.setInterval(2000, function()
 end)
 
 uevrUtils.registerPreLevelChangeCallback(function(level)
-	delay(2000, function()
-		pawnState = {}
-	end)
+	pawnState = {}
 end)
+
+--if using Visibility or HiddenInGame to hide meshes, there's a very good chance the game will override
+--our settings at some point, so we have to keep reapplying them to ensure they stay hidden. 
+--The "render in pass" are less likely to cause issues so we dont waste time with those for now.
+--Could make this an adiitional setting within the visibility settings for whether to use polling or not
+uevrUtils.setInterval(300, function()
+	if getParameter("hideSettingsVisibility") == true or getParameter("hideSettingsHiddenInGame") == true then
+		pawnState.hideArmsMesh = nil
+		pawnState.hideAnimationArms = nil
+		pawnState.hideBodyMesh = nil
+	end
+end)
+
 
 return M
 

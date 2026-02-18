@@ -17,7 +17,11 @@ local parameterDefaults = {
     attach_type = 0,
     location = {0, 0, 0},
     rotation = {0, 0, 0},
-
+    activation_hand = 1,
+    activation_distance = 0.0,
+    start_time = 0.0,
+    end_time = 0.0,
+    grip_animation = "",
 }
 
 local currentLogLevel = LogLevel.Error
@@ -35,14 +39,55 @@ local parametersFileName = "accessories_parameters"
 local parameters = {}
 local paramManager = paramModule.new(parametersFileName, parameters, true)
 
--- Module-level parameter functions (shared by weapon type ID)
-local function saveParameter(attachmentID, accessoryID, key, value, persist)
-	paramManager:set({"accessories", attachmentID, accessoryID, key}, value, persist)
+local function buildDefaultMarker()
+    return uevrUtils.deepCopyTable(parameterDefaults)
 end
 
-local function getParameter(attachmentID, accessoryID, key)
-	local value = paramManager:get({"accessories", attachmentID, accessoryID, key})
-    return value or parameterDefaults[key]
+local function saveAccessoryField(attachmentID, accessoryID, key, value, persist)
+    paramManager:set({"accessories", attachmentID, accessoryID, key}, value, persist)
+end
+
+local function getAccessoryField(attachmentID, accessoryID, key)
+    return paramManager:get({"accessories", attachmentID, accessoryID, key})
+end
+
+local function saveMarkerField(attachmentID, accessoryID, markerIndex, key, value, persist)
+    markerIndex = markerIndex or 1
+    paramManager:set({"accessories", attachmentID, accessoryID, "markers", markerIndex, key}, value, persist)
+end
+
+local function getMarkerField(attachmentID, accessoryID, markerIndex, key)
+    markerIndex = markerIndex or 1
+    local value = paramManager:get({"accessories", attachmentID, accessoryID, "markers", markerIndex, key})
+    return value ~= nil and value or parameterDefaults[key]
+end
+
+local function ensureAccessoryHasMarkers(attachmentID, accessoryID, persist)
+    local acc = paramManager:get({"accessories", attachmentID, accessoryID})
+    if acc == nil then return nil end
+
+    if type(acc.markers) ~= "table" then
+        -- migrate from old flat fields into a single marker
+        local marker = buildDefaultMarker()
+        for key, defaultValue in pairs(parameterDefaults) do
+            local v = acc[key]
+            if v ~= nil then
+                marker[key] = v
+            else
+                marker[key] = defaultValue
+            end
+        end
+        acc = {
+            label = acc.label or accessoryID,
+            markers = { marker }
+        }
+        paramManager:set({"accessories", attachmentID, accessoryID}, acc, persist)
+    elseif #acc.markers == 0 then
+        acc.markers = { buildDefaultMarker() }
+        paramManager:set({"accessories", attachmentID, accessoryID, "markers"}, acc.markers, persist)
+    end
+
+    return acc
 end
 
 -- Constructor for new scope instance
@@ -289,6 +334,54 @@ function M.getConfigWidgets(id, prefix, width)
                     initialValue = false
                 },
                 {
+                    widgetType = "combo",
+                    id = prefix .. "accessory_marker_picker",
+                    label = " ",
+                    selections = {"Marker 1"},
+                    initialValue = 1,
+                    width = width - 150
+                },
+                { widgetType = "same_line" },
+                {
+                    widgetType = "button",
+                    id = prefix .. "accessory_marker_add_button",
+                    label = "Add Marker",
+                    size = {100,24},
+                },
+                { widgetType = "same_line" },
+                {
+                    widgetType = "button",
+                    id = prefix .. "accessory_marker_delete_button",
+                    label = "Delete Marker",
+                    size = {110,24},
+                    isHidden = true
+                },
+                { widgetType = "same_line" },{ widgetType = "text" , label = "" }, --dont sameline the start timeif delete button is hidden
+                { widgetType = "indent", width = 10 },
+                {
+                    widgetType = "drag_float",
+                    id = prefix .. "accessory_start_time",
+                    label = "",
+                    speed = 0.1,
+                    range = {0, 1000},
+                    initialValue = parameterDefaults["start_time"],
+                    isHidden = false,
+                    width = 80
+                },
+                { widgetType = "same_line", },
+                { widgetType = "text", label = "to " },
+                { widgetType = "same_line", },
+                {
+                    widgetType = "drag_float",
+                    id = prefix .. "accessory_end_time",
+                    label = "Montage Time Range (secs)",
+                    speed = 0.1,
+                    range = {0, 1000},
+                    initialValue = parameterDefaults["end_time"],
+                    isHidden = false,
+                    width = 80
+                },
+                {
                     widgetType = "tree_node",
                     id = prefix .. "accessory_item_socket_finder_tool",
                     initialOpen = false,
@@ -365,29 +458,6 @@ function M.getConfigWidgets(id, prefix, width)
                     width = width
                 },
                 {
-                    widgetType = "drag_float",
-                    id = prefix .. "accessory_start_time",
-                    label = "",
-                    speed = 0.1,
-                    range = {0, 1000},
-                    initialValue = parameterDefaults["start_time"],
-                    isHidden = false,
-                    width = 100
-                },
-                { widgetType = "same_line", },
-                { widgetType = "text", label = " to " },
-                { widgetType = "same_line", },
-                {
-                    widgetType = "drag_float",
-                    id = prefix .. "accessory_end_time",
-                    label = "Montage Time Range (secs)",
-                    speed = 0.1,
-                    range = {0, 1000},
-                    initialValue = parameterDefaults["end_time"],
-                    isHidden = false,
-                    width = 100
-                },
-                {
                     widgetType = "combo",
                     id = prefix .. "accessory_item_grip_animation",
                     label = "Grip Animation",
@@ -413,6 +483,7 @@ function M.getConfigWidgets(id, prefix, width)
                     isHidden = true,
                     width = width
 				},
+                { widgetType = "unindent", width = 10 },
                 { widgetType = "indent", width = 140 },
                 {
                     widgetType = "button",
@@ -465,31 +536,74 @@ local function refreshSocketList(id, prefix)
     end
 end
 
+local function refreshMarkerList(attachmentID, prefix, accessoryID)
+    if accessoryID == nil or accessoryID == "none" then
+        configui.setSelections(prefix .. "accessory_marker_picker", {"Marker 1"})
+        configui.setValue(prefix .. "accessory_marker_picker", 1, true)
+        configui.setHidden(prefix .. "accessory_marker_delete_button", true)
+        return
+    end
+
+    local acc = ensureAccessoryHasMarkers(attachmentID, accessoryID, true)
+    local markerCount = 1
+    if acc ~= nil and type(acc.markers) == "table" and #acc.markers > 0 then
+        markerCount = #acc.markers
+    end
+
+    local labels = {}
+    for i = 1, markerCount do
+        labels[i] = "Marker " .. tostring(i)
+    end
+
+    configui.setSelections(prefix .. "accessory_marker_picker", labels)
+    local currentIndex = configui.getValue(prefix .. "accessory_marker_picker") or 1
+    if currentIndex > markerCount then currentIndex = markerCount end
+    if currentIndex < 1 then currentIndex = 1 end
+    configui.setValue(prefix .. "accessory_marker_picker", currentIndex, true)
+    configui.setHidden(prefix .. "accessory_marker_delete_button", markerCount <= 1)
+end
+
+local function getSelectedMarkerIndex(prefix)
+    local idx = configui.getValue(prefix .. "accessory_marker_picker")
+    if idx == nil or idx < 1 then return 1 end
+    return idx
+end
+
+local function setUIForMarker(attachmentID, prefix, accessoryID, markerIndex)
+    if accessoryID == nil or accessoryID == "none" then return end
+    markerIndex = markerIndex or 1
+    ensureAccessoryHasMarkers(attachmentID, accessoryID, false)
+
+    configui.setValue(prefix .. "accessory_item_label", getAccessoryField(attachmentID, accessoryID, "label") or "", true)
+    configui.setValue(prefix .. "accessory_item_socket_name", getMarkerField(attachmentID, accessoryID, markerIndex, "socket_name") or "", true)
+    configui.setValue(prefix .. "accessory_item_attach_type", (getMarkerField(attachmentID, accessoryID, markerIndex, "attach_type") or 0) + 1, true)
+    configui.setValue(prefix .. "accessory_item_location", getMarkerField(attachmentID, accessoryID, markerIndex, "location") or {0.0, 0.0, 0.0}, true)
+    configui.setValue(prefix .. "accessory_item_rotation", getMarkerField(attachmentID, accessoryID, markerIndex, "rotation") or {0.0, 0.0, 0.0}, true)
+    configui.setValue(prefix .. "accessory_item_activation_hand", getMarkerField(attachmentID, accessoryID, markerIndex, "activation_hand") or 1, true)
+    configui.setValue(prefix .. "accessory_item_activation_distance", getMarkerField(attachmentID, accessoryID, markerIndex, "activation_distance") or 0.0, true)
+    configui.setHidden(prefix .. "accessory_item_activation_distance", (getMarkerField(attachmentID, accessoryID, markerIndex, "activation_hand") or 1) == 1)
+    configui.setValue(prefix .. "accessory_start_time", getMarkerField(attachmentID, accessoryID, markerIndex, "start_time") or 0.0, true)
+    configui.setValue(prefix .. "accessory_end_time", getMarkerField(attachmentID, accessoryID, markerIndex, "end_time") or 0.0, true)
+
+    local gripAnimationID = getMarkerField(attachmentID, accessoryID, markerIndex, "grip_animation") or ""
+    local index = 1
+    for i, idx in ipairs(animationIDs) do
+        if idx == gripAnimationID then
+            index = i
+            break
+        end
+    end
+    configui.setValue(prefix .. "accessory_item_grip_animation", index, true)
+end
+
 local function setUIForAccessory(id, prefix, accessoryID)
     --print("Setting UI for accessory ID: " .. tostring(accessoryID))
     configui.setHidden(prefix .. "accessory_group", accessoryID == "none")
     if accessoryID ~= "none" then
         refreshSocketList(id, prefix)
-
-        configui.setValue(prefix .. "accessory_item_label", getParameter(id, accessoryID, "label") or "", true)
-        configui.setValue(prefix .. "accessory_item_socket_name", getParameter(id, accessoryID, "socket_name") or "", true)
-        configui.setValue(prefix .. "accessory_item_attach_type", (getParameter(id, accessoryID, "attach_type") or 0) + 1, true)
-        configui.setValue(prefix .. "accessory_item_location", getParameter(id, accessoryID, "location") or {0.0, 0.0, 0.0}, true)
-        configui.setValue(prefix .. "accessory_item_rotation", getParameter(id, accessoryID, "rotation") or {0.0, 0.0, 0.0}, true)
-        configui.setValue(prefix .. "accessory_item_activation_hand", getParameter(id, accessoryID, "activation_hand") or 1, true)
-        configui.setValue(prefix .. "accessory_item_activation_distance", getParameter(id, accessoryID, "activation_distance") or 0.0, true)
-        configui.setHidden(prefix .. "accessory_item_activation_distance", (getParameter(id, accessoryID, "activation_hand") or 1) == 1)
-        
-        -- Set grip animation combo to the stored value
-        local gripAnimationID = getParameter(id, accessoryID, "grip_animation") or ""
-        local index = 1  -- Default to "None" (index 1)
-        for i, idx in ipairs(animationIDs) do
-            if idx == gripAnimationID then
-                index = i
-                break
-            end
-        end
-        configui.setValue(prefix .. "accessory_item_grip_animation", index, true)
+        refreshMarkerList(id, prefix, accessoryID)
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        setUIForMarker(id, prefix, accessoryID, markerIndex)
     end
 end
 
@@ -540,7 +654,8 @@ local function updateGripAnimationUI()
         --get the current stored value and re-set it to update index
         local accessoryID = getAccessoryID(param.id, param.prefix)
         if accessoryID ~= nil then
-            local gripAnimationID = getParameter(param.id, accessoryID, "grip_animation") or ""
+			local markerIndex = getSelectedMarkerIndex(param.prefix)
+			local gripAnimationID = getMarkerField(param.id, accessoryID, markerIndex, "grip_animation") or ""
             local index = -1
             for i, id in ipairs(animationIDs) do
                 if id == gripAnimationID then
@@ -561,6 +676,7 @@ local preview = {
     enabled = false,
     handed = Handed.Right,   -- choose which hand to preview
     accessoryID = nil,       -- GUID string
+    markerIndex = 1,
 }
 
 -- Register once (module scope). This makes preview “win” by returning a huge priority.
@@ -579,7 +695,7 @@ end)
 
 local function pokePreviewChanged()
     -- hands.lua listens for this and re-applies attachments (even if GUID didn’t change)
-    uevrUtils.executeUEVRCallbacks("on_accessory_preview_changed", preview.handed, preview.accessoryID, preview.enabled)
+    uevrUtils.executeUEVRCallbacks("on_accessory_preview_changed", preview.handed, preview.accessoryID, preview.enabled, preview.markerIndex or 1)
 end
 
 function M.createConfigCallbacks(id, prefix)
@@ -588,6 +704,7 @@ function M.createConfigCallbacks(id, prefix)
         if preview.enabled then
             local current = getAccessoryID(id, prefix)
             if current == preview.accessoryID then
+                preview.markerIndex = getSelectedMarkerIndex(prefix) or 1
                 pokePreviewChanged()
             end
         end
@@ -596,7 +713,7 @@ function M.createConfigCallbacks(id, prefix)
     prefix = prefix or ""
     configui.onUpdate(prefix .. "accessory_item_label", function(value)
         local accessoryID = getAccessoryID(id, prefix)
-        if accessoryID ~= nil then saveParameter(id, accessoryID, "label", value, true) end
+		if accessoryID ~= nil then saveAccessoryField(id, accessoryID, "label", value, true) end
 
         accessoriesMap[id]["labels"][configui.getValue(prefix .. "accessory_picker")] = value
         configui.setSelections(prefix .. "accessory_picker", accessoriesMap[id]["labels"])
@@ -604,47 +721,55 @@ function M.createConfigCallbacks(id, prefix)
 
     configui.onUpdate(prefix .. "accessory_item_socket_name", function(value)
         local accessoryID = getAccessoryID(id, prefix)
-        if accessoryID ~= nil then saveParameter(id, accessoryID, "socket_name", value, true) end
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        if accessoryID ~= nil then saveMarkerField(id, accessoryID, markerIndex, "socket_name", value, true) end
         pokeIfPreviewingThisAccessory()
 	end)
 
     configui.onUpdate(prefix .. "accessory_item_attach_type", function(value)
         local accessoryID = getAccessoryID(id, prefix)
-        if accessoryID ~= nil then saveParameter(id, accessoryID, "attach_type", value - 1, true) end
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        if accessoryID ~= nil then saveMarkerField(id, accessoryID, markerIndex, "attach_type", value - 1, true) end
         pokeIfPreviewingThisAccessory()
 	end)
 
     configui.onUpdate(prefix .. "accessory_item_location", function(value)
         local accessoryID = getAccessoryID(id, prefix)
-        if accessoryID ~= nil then saveParameter(id, accessoryID, "location", {value.X, value.Y, value.Z}, true) end
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        if accessoryID ~= nil then saveMarkerField(id, accessoryID, markerIndex, "location", {value.X, value.Y, value.Z}, true) end
         pokeIfPreviewingThisAccessory()
     end)
 
     configui.onUpdate(prefix .. "accessory_item_rotation", function(value)
         local accessoryID = getAccessoryID(id, prefix)
-        if accessoryID ~= nil then saveParameter(id, accessoryID, "rotation", {value.Pitch, value.Yaw, value.Roll}, true) end
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        if accessoryID ~= nil then saveMarkerField(id, accessoryID, markerIndex, "rotation", {value.Pitch, value.Yaw, value.Roll}, true) end
         pokeIfPreviewingThisAccessory()
     end)
 
     configui.onUpdate(prefix .. "accessory_item_activation_hand", function(value)
         local accessoryID = getAccessoryID(id, prefix)
-        if accessoryID ~= nil then saveParameter(id, accessoryID, "activation_hand", value, true) end
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        if accessoryID ~= nil then saveMarkerField(id, accessoryID, markerIndex, "activation_hand", value, true) end
         configui.setHidden(prefix .. "accessory_item_activation_distance", value == 1 or value == 8 or value == 9 or value == 10)
     end)
 
     configui.onUpdate(prefix .. "accessory_start_time", function(value)
         local accessoryID = getAccessoryID(id, prefix)
-        if accessoryID ~= nil then saveParameter(id, accessoryID, "start_time", value, true) end
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        if accessoryID ~= nil then saveMarkerField(id, accessoryID, markerIndex, "start_time", value, true) end
     end)
 
     configui.onUpdate(prefix .. "accessory_end_time", function(value)
         local accessoryID = getAccessoryID(id, prefix)
-        if accessoryID ~= nil then saveParameter(id, accessoryID, "end_time", value, true) end
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        if accessoryID ~= nil then saveMarkerField(id, accessoryID, markerIndex, "end_time", value, true) end
     end)
 
     configui.onUpdate(prefix .. "accessory_item_activation_distance", function(value)
         local accessoryID = getAccessoryID(id, prefix)
-        if accessoryID ~= nil then saveParameter(id, accessoryID, "activation_distance", value, true) end
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        if accessoryID ~= nil then saveMarkerField(id, accessoryID, markerIndex, "activation_distance", value, true) end
     end)
 
     configui.onCreateOrUpdate(prefix .. "accessory_picker", function(value)
@@ -654,10 +779,53 @@ function M.createConfigCallbacks(id, prefix)
 
         if preview.enabled then
             preview.accessoryID = (accessoryID ~= "none") and accessoryID or nil
+            preview.markerIndex = getSelectedMarkerIndex(prefix) or 1
             pokePreviewChanged()
         end
 
 	end)
+
+    configui.onUpdate(prefix .. "accessory_marker_picker", function(value)
+        local accessoryID = getAccessoryID(id, prefix)
+        if accessoryID ~= nil then
+            refreshMarkerList(id, prefix, accessoryID)
+            setUIForMarker(id, prefix, accessoryID, value)
+            pokeIfPreviewingThisAccessory()
+        end
+    end)
+
+    configui.onUpdate(prefix .. "accessory_marker_add_button", function()
+        local accessoryID = getAccessoryID(id, prefix)
+        if accessoryID == nil then return end
+        local acc = ensureAccessoryHasMarkers(id, accessoryID, true)
+        if acc == nil then return end
+        acc.markers = acc.markers or {}
+        local newIndex = #acc.markers + 1
+        acc.markers[newIndex] = buildDefaultMarker()
+        paramManager:set({"accessories", id, accessoryID, "markers"}, acc.markers, true)
+        refreshMarkerList(id, prefix, accessoryID)
+        configui.setValue(prefix .. "accessory_marker_picker", newIndex, true)
+        setUIForMarker(id, prefix, accessoryID, newIndex)
+        pokeIfPreviewingThisAccessory()
+    end)
+
+    configui.onUpdate(prefix .. "accessory_marker_delete_button", function()
+        local accessoryID = getAccessoryID(id, prefix)
+        if accessoryID == nil then return end
+        local acc = ensureAccessoryHasMarkers(id, accessoryID, true)
+        if acc == nil or type(acc.markers) ~= "table" or #acc.markers <= 1 then return end
+
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        if markerIndex < 1 or markerIndex > #acc.markers then return end
+        table.remove(acc.markers, markerIndex)
+        paramManager:set({"accessories", id, accessoryID, "markers"}, acc.markers, true)
+        refreshMarkerList(id, prefix, accessoryID)
+        local newIndex = markerIndex
+        if newIndex > #acc.markers then newIndex = #acc.markers end
+        configui.setValue(prefix .. "accessory_marker_picker", newIndex, true)
+        setUIForMarker(id, prefix, accessoryID, newIndex)
+        pokeIfPreviewingThisAccessory()
+    end)
 
     configui.onUpdate(prefix .. "accessory_new_button", function()
         -- Remove "none" if present, since we're adding a real accessory
@@ -689,10 +857,7 @@ function M.createConfigCallbacks(id, prefix)
 
         local params = {
             label = label,
-            socket_name = "",
-            attach_type = 0,
-            location = {0.0, 0.0, 0.0},
-            rotation = {0.0, 0.0, 0.0},
+            markers = { buildDefaultMarker() },
         }
         paramManager:set({"accessories", id, newAccessoryID}, params, true)
 
@@ -737,7 +902,8 @@ function M.createConfigCallbacks(id, prefix)
     configui.onUpdate(prefix .. "accessory_item_grip_animation", function(value)
         local gripAnimationID = animationIDs[value] or ""
         local accessoryID = getAccessoryID(id, prefix)
-        if accessoryID ~= nil then saveParameter(id, accessoryID, "grip_animation", gripAnimationID, true) end
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        if accessoryID ~= nil then saveMarkerField(id, accessoryID, markerIndex, "grip_animation", gripAnimationID, true) end
     end)
 
     -- Preview handlers
@@ -746,6 +912,7 @@ function M.createConfigCallbacks(id, prefix)
         preview.handed = Handed.Left
         preview.enabled = (checked == true) and (accessoryID ~= nil)
         preview.accessoryID = accessoryID
+        preview.markerIndex = getSelectedMarkerIndex(prefix) or 1
 
         pokePreviewChanged()
     end)
@@ -755,6 +922,7 @@ function M.createConfigCallbacks(id, prefix)
         preview.handed = Handed.Right
         preview.enabled = (checked == true) and (accessoryID ~= nil)
         preview.accessoryID = accessoryID
+        preview.markerIndex = getSelectedMarkerIndex(prefix) or 1
 
         pokePreviewChanged()
     end)
@@ -828,10 +996,75 @@ end
 
 function M.init(isDeveloperMode, logLevel, caller)
     paramManager:load()
+    -- migrate any legacy flat accessories into marker-based format
+    local accessoriesList = paramManager:get("accessories") or {}
+    for attachmentID, accessories in pairs(accessoriesList) do
+        for accessoryID, accessoryParams in pairs(accessories) do
+            if accessoryID ~= nil and accessoryParams ~= nil then
+                ensureAccessoryHasMarkers(attachmentID, accessoryID, true)
+            end
+        end
+    end
     --need this to get the attachment sockets but is there a better way?
     callerModule = caller
 end
 
+function M.getPrimaryMarkerParams(accessoryParams)
+	if accessoryParams == nil then return nil end
+	if type(accessoryParams.markers) == "table" then
+		return accessoryParams.markers[1]
+	end
+	return accessoryParams
+end
+
+function M.resolveMarkerParamsForTime(accessoryParams, currentTime)
+	if accessoryParams == nil then return nil, nil end
+	local markers = accessoryParams.markers
+	if type(markers) ~= "table" then
+		return accessoryParams, 1
+	end
+	if currentTime == nil then
+		return markers[1], 1
+	end
+
+	local hasAnyRange = false
+	local fallback = markers[1]
+	for i, marker in ipairs(markers) do
+		local startTime = marker.start_time or 0
+		local endTime = marker.end_time or 0
+		if startTime ~= 0 or endTime ~= 0 then
+			hasAnyRange = true
+			if currentTime >= startTime and currentTime <= endTime then
+				return marker, i
+			end
+		else
+			fallback = fallback or marker
+		end
+	end
+
+	if hasAnyRange then
+		return nil, nil
+	end
+	return fallback, 1
+end
+
+function M.accessoryHasTimeMarkers(accessoryParams)
+	if accessoryParams == nil then return false end
+	local markers = accessoryParams.markers
+	if type(markers) == "table" then
+		for _, marker in ipairs(markers) do
+			local startTime = marker.start_time or 0
+			local endTime = marker.end_time or 0
+			if startTime ~= 0 or endTime ~= 0 then
+				return true
+			end
+		end
+		return false
+	end
+	local startTime = accessoryParams["start_time"] or 0
+	local endTime = accessoryParams["end_time"] or 0
+	return (startTime ~= 0 or endTime ~= 0)
+end
 
 
 
