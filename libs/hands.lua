@@ -165,6 +165,12 @@ local defaultAnimationMesh = nil
 local status = {}
 local accessoryStatus = {}
 
+local gunstockOffsetsEnabled = false
+
+function M.setGunstockOffsetsEnabled(val)
+	gunstockOffsetsEnabled = val
+end
+
 local currentLogLevel = LogLevel.Error
 function M.setLogLevel(val)
 	currentLogLevel = val
@@ -898,8 +904,8 @@ end
 
 uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, newLocation, newRotation, newOffhandLocationOffset)
 	if status["offhandOffset"] == nil then status["offhandOffset"] = {} end
-	--print("gunstock_transform_change callback received for id: ", id, newOffhandLocationOffset.X, newOffhandLocationOffset.Y, newOffhandLocationOffset.Z, status["offhandOffset"])
 	status["offhandOffset"][id] = newOffhandLocationOffset
+	--print("gunstock_transform_change callback received for id: ", id, newOffhandLocationOffset.X, newOffhandLocationOffset.Y, newOffhandLocationOffset.Z, status["offhandOffset"])
 
 	-- local initialRotation = uevrUtils.rotator(0,0,0)
 	-- if handDefinitions["Arms"] ~= nil and handDefinitions["Arms"]["InitialTransform"] ~= nil and handDefinitions["Arms"]["InitialTransform"]["right_hand"] ~= nil and handDefinitions["Arms"]["InitialTransform"]["right_hand"]["hand_r"] ~= nil and handDefinitions["Arms"]["InitialTransform"]["right_hand"]["hand_r"]["rotation"] ~= nil then
@@ -910,6 +916,10 @@ uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, newLoca
 	-- initialRotation.Yaw = initialRotation.Yaw + newRotation.Pitch
 	-- initialRotation.Roll = initialRotation.Roll - newRotation.Roll
 	-- animation.setBoneRotation(M.getHandComponent(Handed.Right), "hand_r", initialRotation, false)
+	if gunstockOffsetsEnabled then
+		local hand = M.getHandComponent(Handed.Right)
+		hand.RelativeRotation = newRotation
+	end
 end)
 
 function M.printHandTranforms(transforms)
@@ -1308,7 +1318,8 @@ function M.attachHandToAccessory(handed, accessoryID, useMontageProximity)
         end
 		-- Reset grip animation to open hand
 		holdingAttachment[handed] = nil
-		M.updateAnimationState(handed)
+		M.updateAnimationState(Handed.Left)
+		M.updateAnimationState(Handed.Right)
     else
         local accessoryParams = accessories.getAccessoryParams(accessoryID)
         local hand = M.getHandComponent(handed)
@@ -1333,7 +1344,7 @@ function M.attachHandToAccessory(handed, accessoryID, useMontageProximity)
 
 					--print("Saved current hand attachment state for hand ", accessoryStatus["hand_" .. tostring(handed)].location.X, accessoryStatus["hand_" .. tostring(handed)].location.Y, accessoryStatus["hand_" .. tostring(handed)].location.Z, accessoryStatus["hand_" .. tostring(handed)].rotation.Pitch, accessoryStatus["hand_" .. tostring(handed)].rotation.Yaw, accessoryStatus["hand_" .. tostring(handed)].rotation.Roll)
 					local socketName = accessoryParams.socket_name or ""
-					M.print("Attaching hand to socket: " .. tostring(socketName), accessoryParams.attach_type)
+					--M.print("Attaching hand to socket: " .. tostring(socketName), accessoryParams.attach_type)
 					hand:K2_AttachTo(currentAttachment, uevrUtils.fname_from_string(socketName), accessoryParams.attach_type or 0, false)
 					uevrUtils.set_component_relative_transform(hand, accessoryParams.location or {0,0,0}, accessoryParams.rotation or {0,0,0})
 
@@ -1487,6 +1498,12 @@ end)
 local function checkAccessories(isMontage)
     local activeRightAccessory, priority = executeIsRightAccessoryCallback()
 	--M.print("Checked active right accessory: " .. tostring(activeRightAccessory) .. " with priority " .. tostring(priority))
+
+	--TODO maybe we only set to nil if activeRightAccessory matches the non-valid one?
+	--if gripping offhand and animation end prematurely by timing should go back to gripping handle
+	if status["montageMonitor"] and status["montageMonitor"][Handed.Right] and status["montageMonitor"][Handed.Right]["valid"] == false then
+		activeRightAccessory = nil
+	end
     if activeRightAccessory ~= accessoryStatus["activeRightAccessory"] then
         accessoryStatus["activeRightAccessory"] = activeRightAccessory
         M.print("Active right accessory changed to: " .. tostring(activeRightAccessory))
@@ -1495,6 +1512,9 @@ local function checkAccessories(isMontage)
 
     local activeLeftAccessory, priority = executeIsLeftAccessoryCallback()
 	--M.print("Checked active left accessory: " .. tostring(activeLeftAccessory) .. " with priority " .. tostring(priority))
+	if status["montageMonitor"] and status["montageMonitor"][Handed.Left] and status["montageMonitor"][Handed.Left]["valid"] == false then
+		activeLeftAccessory = nil
+	end
     if activeLeftAccessory ~= accessoryStatus["activeLeftAccessory"] then
         accessoryStatus["activeLeftAccessory"] = activeLeftAccessory
         M.print("Active left accessory changed to: " .. tostring(activeLeftAccessory))
@@ -1502,12 +1522,54 @@ local function checkAccessories(isMontage)
     end
 end
 
-uevrUtils.registerUEVRCallback("on_module_montage_change", function(montageObject, montageName, label)
+local function activateMontageMonitor(montageObject, animInstance, accessoryParams, handed)
+	status["montageMonitor"] = status["montageMonitor"] or {}
+	status["montageMonitor"][handed] = {}
+	status["montageMonitor"][handed]["montageObject"] = montageObject
+	status["montageMonitor"][handed]["animInstance"] = animInstance
+	status["montageMonitor"][handed]["accessoryParams"] = accessoryParams
+end
+
+local function checkSegmentedMontage(montageObject, montageName, label, animInstance)
+	local valid = true
+	if animInstance == nil then
+		print("Animation instance is nil in checkSegmentedMontage. Check comments in updateMontage() in uevrUtils")
+	else
+		local activeRightAccessory, priority = executeIsRightAccessoryCallback()
+		if activeRightAccessory ~= nil then
+			local accessoryParams = accessories.getAccessoryParams(activeRightAccessory)
+			if accessoryParams ~= nil then
+				local startTime = accessoryParams["start_time"] or 0
+				local endTime = accessoryParams["end_time"] or 0
+				if startTime ~= 0 or endTime ~= 0 then
+					activateMontageMonitor(montageObject, animInstance, accessoryParams, Handed.Right)
+				end
+			end
+		end
+		local activeLeftAccessory, priority = executeIsLeftAccessoryCallback()
+		if activeLeftAccessory ~= nil then
+			local accessoryParams = accessories.getAccessoryParams(activeLeftAccessory)
+			if accessoryParams ~= nil then
+				local startTime = accessoryParams["start_time"] or 0
+				local endTime = accessoryParams["end_time"] or 0
+				if startTime ~= 0 or endTime ~= 0 then
+					activateMontageMonitor(montageObject, animInstance, accessoryParams, Handed.Left)
+				end
+			end
+		end
+	end
+	return valid
+end
+
+uevrUtils.registerUEVRCallback("on_module_montage_change", function(montageObject, montageName, label, animInstance)
+	checkSegmentedMontage(montageObject, montageName, label, animInstance)
+
 	checkAccessories(montageName ~= nil and montageName ~= "") --sending this param allows for montage based proximity checks
 	if montageName == nil or montageName == "" then
 		--montage ended, if we had a proximity override active, re-check proximity to see if we need to re-apply it
 		accessoryStatus["leftProximityAnimationOverride"] = nil
 		accessoryStatus["rightProximityAnimationOverride"] = nil
+		status["montageMonitor"] = nil
 	end
 end)
 
@@ -1517,6 +1579,39 @@ uevrUtils.setInterval(300, function()
 end)
 -- ----------------------------------------------------------------
 
+uevrUtils.registerPostEngineTickCallback(function(engine, delta)
+	if status["montageMonitor"] ~= nil then
+		local changed = {
+			[Handed.Left] = false,
+			[Handed.Right] = false
+		}
+		for i = Handed.Left, Handed.Right do
+			if status["montageMonitor"][i] ~= nil then
+				local valid = true
+				local accessoryParams = status["montageMonitor"][i]["accessoryParams"]
+				local montageObject = status["montageMonitor"][i]["montageObject"]
+				local animInstance = status["montageMonitor"][i]["animInstance"]
+				if accessoryParams ~= nil and montageObject ~= nil and animInstance ~= nil then
+					local startTime = accessoryParams["start_time"] or 0
+					local endTime = accessoryParams["end_time"] or 0
+					if startTime ~= 0 or endTime ~= 0 then
+						local currentTime = animInstance:Montage_GetPosition(montageObject)
+						if currentTime < startTime or currentTime > endTime then
+							valid = false
+						end
+					end
+				end
+				if status["montageMonitor"][i]["valid"] ~= valid then
+					status["montageMonitor"][i]["valid"] = valid
+					changed[i] = true
+				end
+			end
+		end
+		if changed[Handed.Left] or changed[Handed.Right] then
+			checkAccessories(true)
+		end
+	end
+end)
 return M
 
 

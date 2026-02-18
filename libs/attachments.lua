@@ -190,6 +190,7 @@ local animationLabels = {"Default", "None"}
 local animationIDs = {"", "attachment_none"}
 --local activeAnimationID = false
 
+local gunstockOffsetsEnabled = true
 local gunstockRotationOffset = uevrUtils.rotator(0,0,0)
 local gunstockOffhandLocationOffset = uevrUtils.vector(0,0,0)
 
@@ -1373,16 +1374,18 @@ end
 -- end)
 
 uevrUtils.registerUEVRCallback("gunstock_transform_change", function(id, location, rotation, offhandLocationOffset)
-	gunstockRotationOffset = rotation
-	gunstockOffhandLocationOffset = offhandLocationOffset
-	local attachmentDataArray = getAttachmentDataFromMeshAttachmentList(id)
-	--local attachment, _, _ = getAttachmentDataFromMeshAttachmentList(id)
-	if attachmentDataArray ~= nil and #attachmentDataArray > 0 then
-		for j = 1, #attachmentDataArray do
-			local attachmentData = attachmentDataArray[j]
-			if attachmentData ~= nil and uevrUtils.getValid(attachmentData.attachment) ~= nil then
-				local loc, rot, scale = M.getAttachmentOffset(attachmentData.attachment)
-				M.updateAttachmentTransform(loc, rot, scale, id)
+	if gunstockOffsetsEnabled then
+		gunstockRotationOffset = rotation
+		gunstockOffhandLocationOffset = offhandLocationOffset
+		local attachmentDataArray = getAttachmentDataFromMeshAttachmentList(id)
+		--local attachment, _, _ = getAttachmentDataFromMeshAttachmentList(id)
+		if attachmentDataArray ~= nil and #attachmentDataArray > 0 then
+			for j = 1, #attachmentDataArray do
+				local attachmentData = attachmentDataArray[j]
+				if attachmentData ~= nil and uevrUtils.getValid(attachmentData.attachment) ~= nil then
+					local loc, rot, scale = M.getAttachmentOffset(attachmentData.attachment)
+					M.updateAttachmentTransform(loc, rot, scale, id)
+				end
 			end
 		end
 	end
@@ -2147,6 +2150,10 @@ function M.registerOnGripUpdateCallback(callback)
 			-- end
 		end)
 	end
+end
+
+function M.setGunstockOffsetsEnabled(val)
+	gunstockOffsetsEnabled = val
 end
 
 function M.registerOnScopeUpdateCallback(callback)

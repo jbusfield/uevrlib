@@ -179,9 +179,18 @@ local function doHideBodyMesh(val)
 	local mesh = M.getBodyMesh()
 	if mesh ~= nil then
 		M.print("Hiding body mesh: " .. tostring(val))
-		-- mesh:SetVisibility(not val, true)
-		-- mesh:SetHiddenInGame(val, true)
-		mesh:call("SetRenderInMainPass", not val)
+		if getParameter("hideSettingsVisibility") == true then
+			mesh:SetVisibility(not val, getParameter("hideSettingsVisibilityPropagate") == true)
+		end
+		if getParameter("hideSettingsHiddenInGame") == true then
+			mesh:SetHiddenInGame(val, getParameter("hideSettingsHiddenInGamePropagate") == true)
+		end
+		if getParameter("hideSettingsRenderInMainPass") ~= false then
+			mesh:call("SetRenderInMainPass", not val)
+		end
+		if getParameter("hideSettingsRenderInDepthPass") == true then
+			mesh:call("SetRenderInDepthPass", not val)
+		end
 		fixFOV()
 	end
 end
@@ -190,9 +199,18 @@ local function doHideArms(val)
 	local mesh = M.getArmsMesh()
 	if mesh ~= nil then
 		M.print("Hiding arms mesh: " .. tostring(val))
-		--mesh:SetVisibility(not val, true)
-		--mesh:SetHiddenInGame(val, true)
-		mesh:call("SetRenderInMainPass", not val)
+		if getParameter("hideSettingsVisibility") == true then
+			mesh:SetVisibility(not val, getParameter("hideSettingsVisibilityPropagate") == true)
+		end
+		if getParameter("hideSettingsHiddenInGame") == true then
+			mesh:SetHiddenInGame(val, getParameter("hideSettingsHiddenInGamePropagate") == true)
+		end
+		if getParameter("hideSettingsRenderInMainPass") ~= false then
+			mesh:call("SetRenderInMainPass", not val)
+		end
+		if getParameter("hideSettingsRenderInDepthPass") == true then
+			mesh:call("SetRenderInDepthPass", not val)
+		end
 		fixFOV()
 	end
 end
@@ -201,9 +219,18 @@ local function doHideAnimationArms(val)
 	local mesh = M.getArmsAnimationMesh()
 	if mesh ~= nil then
 		M.print("Hiding animation arms mesh: " .. tostring(val))
-		-- mesh:SetVisibility(not val, true)
-		-- mesh:SetHiddenInGame(val, true)
-		mesh:call("SetRenderInMainPass", not val)
+		if getParameter("hideSettingsVisibility") == true then
+			mesh:SetVisibility(not val, getParameter("hideSettingsVisibilityPropagate") == true)
+		end
+		if getParameter("hideSettingsHiddenInGame") == true then
+			mesh:SetHiddenInGame(val, getParameter("hideSettingsHiddenInGamePropagate") == true)
+		end
+		if getParameter("hideSettingsRenderInMainPass") ~= false then
+			mesh:call("SetRenderInMainPass", not val)
+		end
+		if getParameter("hideSettingsRenderInDepthPass") == true then
+			mesh:call("SetRenderInDepthPass", not val)
+		end
 		fixFOV()
 	end
 end
@@ -414,7 +441,9 @@ uevrUtils.setInterval(2000, function()
 end)
 
 uevrUtils.registerPreLevelChangeCallback(function(level)
-	pawnState = {}
+	delay(2000, function()
+		pawnState = {}
+	end)
 end)
 
 return M

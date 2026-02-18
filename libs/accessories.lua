@@ -63,22 +63,147 @@ end
 --[[
 accessories = {
     Inventory_W_J_PlasmaRifle_01_FP = {
-        432988_db_498 = {
-            label = "Scope",
-            socket_name = "scope_socket",
-            attach_type = "Keep Relative",
-            location = {0.0, 0.0, 0.0},
-            rotation = {0.0, 0.0, 0.0},
+        3f051aa9-1a9f-457c-8b6e-5662c49bb81e = {
+            label = "Trigger Grip",
+            activation_hand = 1,
+            attach_type = 0,
+            end_time = 0.0,
+            grip_animation = "rifle",
+            location = {
+                0.0,
+                0.0,
+                0.6000000238418579
+            },
+            rotation = {
+                0.0,
+                -11.399999618530273,
+                0.0
+            },
+            socket_name = "Grip_Socket"
         },
-        345243_ad_565 = {
-            label = "Laser Sight",
-            socket_name = "laser_socket",
-            attach_type = "Snap To Target",
-            location = {1.0, 0.0, 0.0},
-            rotation = {0.0, 90.0, 0.0},
+        806e7314-9496-42c5-83b0-c87a8b6f8d45 = {
+            label = "Offhand Grip",
+            activation_distance = 8.5,
+            activation_hand = 2,
+            attach_type = 0,
+            grip_animation = "rifle_offhand",
+            location = {
+                -7.0,
+                1.7000000476837158,
+                -5.199999809265137
+            },
+            rotation = {
+                14.399999618530273,
+                39.099998474121094,
+                -75.0
+            },
+            socket_name = "Barrel_Socket"
+        },
+        db74521a-d4ec-4d6d-80d4-28f1a35fa346 = {
+            label = "Reload",
+            attach_type = 0,
+            end_time = 1.2999999523162842,
+            label = "Reload",
+            location = {
+                -4.099999904632568,
+                0.800000011920929,
+                -7.300000190734863
+            },
+            rotation = {
+                43.5,
+                24.399999618530273,
+                29.399999618530273
+            },
+            socket_name = "Magazine_Socket"
         }
     }
 }
+
+accessories = {
+    Inventory_W_J_PlasmaRifle_01_FP = {
+        3f051aa9-1a9f-457c-8b6e-5662c49bb81e = {
+            label = "Trigger Grip",
+            markers = {
+                {
+                    activation_hand = 1,
+                    attach_type = 0,
+                    end_time = 0.0,
+                    grip_animation = "rifle",
+                    location = {
+                        0.0,
+                        0.0,
+                        0.6000000238418579
+                    },
+                    rotation = {
+                        0.0,
+                        -11.399999618530273,
+                        0.0
+                    },
+                    socket_name = "Grip_Socket"
+                }
+            }
+        },
+        806e7314-9496-42c5-83b0-c87a8b6f8d45 = {
+            label = "Offhand Grip",
+            markers = {
+                {
+                    activation_distance = 8.5,
+                    activation_hand = 2,
+                    attach_type = 0,
+                    grip_animation = "rifle_offhand",
+                    location = {
+                        -7.0,
+                        1.7000000476837158,
+                        -5.199999809265137
+                    },
+                    rotation = {
+                        14.399999618530273,
+                        39.099998474121094,
+                        -75.0
+                    },
+                    socket_name = "Barrel_Socket"
+                }
+            }
+        }
+        db74521a-d4ec-4d6d-80d4-28f1a35fa346 = {
+            label = "Reload",
+            markers = {
+                {
+                    attach_type = 0,
+                    end_time = 1.3,
+                    location = {
+                        -4.099999904632568,
+                        0.800000011920929,
+                        -7.300000190734863
+                    },
+                    rotation = {
+                        43.5,
+                        24.399999618530273,
+                        29.399999618530273
+                    },
+                    socket_name = "Magazine_Socket"
+                },
+                {
+                    attach_type = 0,
+                    start_time = 1.3,
+                    end_time = 2.0,
+                    location = {
+                        -1.099999904632568,
+                        0.800000011920929,
+                        -8.300000190734863
+                    },
+                    rotation = {
+                        22,
+                        27.399999618530273,
+                        21.399999618530273
+                    },
+                    socket_name = "Pullback_Socket"
+                },
+            }
+        }
+    }
+}
+
 ]]--
 
 local animationLabels = {"None"}
@@ -238,6 +363,29 @@ function M.getConfigWidgets(id, prefix, width)
                     initialValue = parameterDefaults["rotation"],
                     isHidden = false,
                     width = width
+                },
+                {
+                    widgetType = "drag_float",
+                    id = prefix .. "accessory_start_time",
+                    label = "",
+                    speed = 0.1,
+                    range = {0, 1000},
+                    initialValue = parameterDefaults["start_time"],
+                    isHidden = false,
+                    width = 100
+                },
+                { widgetType = "same_line", },
+                { widgetType = "text", label = " to " },
+                { widgetType = "same_line", },
+                {
+                    widgetType = "drag_float",
+                    id = prefix .. "accessory_end_time",
+                    label = "Montage Time Range (secs)",
+                    speed = 0.1,
+                    range = {0, 1000},
+                    initialValue = parameterDefaults["end_time"],
+                    isHidden = false,
+                    width = 100
                 },
                 {
                     widgetType = "combo",
@@ -482,6 +630,16 @@ function M.createConfigCallbacks(id, prefix)
         local accessoryID = getAccessoryID(id, prefix)
         if accessoryID ~= nil then saveParameter(id, accessoryID, "activation_hand", value, true) end
         configui.setHidden(prefix .. "accessory_item_activation_distance", value == 1 or value == 8 or value == 9 or value == 10)
+    end)
+
+    configui.onUpdate(prefix .. "accessory_start_time", function(value)
+        local accessoryID = getAccessoryID(id, prefix)
+        if accessoryID ~= nil then saveParameter(id, accessoryID, "start_time", value, true) end
+    end)
+
+    configui.onUpdate(prefix .. "accessory_end_time", function(value)
+        local accessoryID = getAccessoryID(id, prefix)
+        if accessoryID ~= nil then saveParameter(id, accessoryID, "end_time", value, true) end
     end)
 
     configui.onUpdate(prefix .. "accessory_item_activation_distance", function(value)

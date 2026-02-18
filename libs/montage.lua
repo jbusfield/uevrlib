@@ -606,7 +606,7 @@ local function executeMontageChange(...)
 	uevrUtils.executeUEVRCallbacks("on_module_montage_change", table.unpack({...}))
 end
 
-local function handleMontageChanged(montage, montageName, label)
+local function handleMontageChanged(montage, montageName, label, animInstance)
 	for _, config in ipairs(stateConfig) do
 		montageState[config.stateKey] = nil
 		montageState[config.stateKey .. "Priority"] = 0
@@ -623,7 +623,7 @@ local function handleMontageChanged(montage, montageName, label)
 		end
 	end
 
-	executeMontageChange(montage, montageName, label)
+	executeMontageChange(montage, montageName, label, animInstance)
 end
 
 uevrUtils.registerMontageChangeCallback(function(montage, montageName)
@@ -724,6 +724,8 @@ local function getAnimInstanceForMontage(montageObject, label)
 		end
 	end
 	if label == nil or label == "" or label == "Pawn" then
+		--there's a possibility Mesh doesnt exist. In that case we need to scan for all mesh children and I guess pick the first one
+		--same goes for the check in uevrUtils
 		return uevrUtils.getValid(pawn, {"Mesh","AnimScriptInstance"}), montageObject
 	else
 		for descriptor, monitor in pairs(meshMonitors) do
@@ -744,6 +746,15 @@ function M.setPlaybackRate(montage, label, rate)
 	if animInstance ~= nil then
 		animInstance:Montage_SetPlayRate(montageObject, rate or 1.0)
 		print("Set playback rate to " .. tostring(rate) .. " for montage " .. montageObject:get_full_name() .. " on " .. tostring(label))
+	end
+end
+
+function M.getPosition(montage, label)
+	local animInstance, montageObject = getAnimInstanceForMontage(montage, label)
+	if animInstance ~= nil then
+		local position = animInstance:Montage_GetPosition(montageObject)
+		--print("Current position for montage " .. montageObject:get_full_name() .. " on " .. tostring(label) .. " is " .. tostring(position))
+		return position
 	end
 end
 
@@ -796,7 +807,7 @@ local function checkMonitoredMeshes()
 				if monitor["currentMontage"] ~= playingMontage then
 					monitor["currentMontage"] = playingMontage
 					local montageName = playingMontage and uevrUtils.getShortName(playingMontage) or ""
-					handleMontageChanged(playingMontage, montageName, monitor.label)
+					handleMontageChanged(playingMontage, montageName, monitor.label, animInstance)
 				end
 			end
 		end

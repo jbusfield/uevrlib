@@ -1544,7 +1544,9 @@ local function updateMontage()
 				if on_montage_change ~= nil then
 					on_montage_change(currentMontage, montageName)
 				end
-				executeUEVRCallbacks("on_montage_change", currentMontage, montageName)
+				--there's a possibility Mesh doesnt exist. In that case we need to scan for all mesh children and I guess pick the first one
+				--same goes for the check in montage.lua. Inefficient though probably need to cache
+				executeUEVRCallbacks("on_montage_change", currentMontage, montageName, M.getValid(pawn, {"Mesh","AnimScriptInstance"}))
 			end
 		end
 	end

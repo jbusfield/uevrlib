@@ -964,6 +964,9 @@ uevrUtils.registerUEVRCallback("scope_active_change", function(isActive)
 	else
 		scopeHidden = false
 	end
+	if scopeHidden == false then
+		updateLineTracerSubscription()
+	end
 	--M.setHidden(isActive)
 end)
 

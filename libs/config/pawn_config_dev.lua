@@ -158,9 +158,65 @@ local function getConfigWidgets(m_paramManager)
 		{
 			widgetType = "tree_pop"
 		},
+		{
+			widgetType = "tree_node",
+			id = widgetPrefix .. "visibility_settings_tree",
+			initialOpen = false,
+			label = "Visibility Configuration"
+		},
+			{
+				widgetType = "text",
+				id = widgetPrefix .. "_visibility_help",
+				label = "When 'Hide' is checked, which pawn properties are affected?",
+				wrapped = true
+			},
+			{
+				widgetType = "checkbox",
+				id = widgetPrefix .. "hide_settings_visibility",
+				label = "Visibility",
+				initialValue = configDefaults["hideSettingsVisibility"] or false
+			},
+			{ widgetType = "same_line" },
+			{
+				widgetType = "checkbox",
+				id = widgetPrefix .. "hide_settings_visibility_propagate",
+				label = "Propagate to Children",
+				initialValue = configDefaults["hideSettingsVisibilityPropagate"] or false
+			},
+			{
+				widgetType = "checkbox",
+				id = widgetPrefix .. "hide_settings_hidden_in_game",
+				label = "Hidden In Game",
+				initialValue = configDefaults["hideSettingsHiddenInGame"] or false
+			},
+			{ widgetType = "same_line" },
+			{
+				widgetType = "checkbox",
+				id = widgetPrefix .. "hide_settings_hidden_in_game_propagate",
+				label = "Propagate to Children",
+				initialValue = configDefaults["hideSettingsHiddenInGamePropagate"] or false
+			},
+			{
+				widgetType = "checkbox",
+				id = widgetPrefix .. "hide_settings_render_in_main_pass",
+				label = "Render In Main Pass",
+				initialValue = configDefaults["hideSettingsRenderInMainPass"] or true
+			},
+			{
+				widgetType = "checkbox",
+				id = widgetPrefix .. "hide_settings_render_in_depth_pass",
+				label = "Render In Depth Pass",
+				initialValue = configDefaults["hideSettingsRenderInDepthPass"] or false
+			},
+			{ widgetType = "new_line" },
+		{
+			widgetType = "tree_pop"
+		},
 		{ widgetType = "new_line" },
 		expandArray(m_paramManager.getProfilePostConfigurationWidgets, widgetPrefix),
 		{ widgetType = "new_line" },
+
+
 		{
 			widgetType = "tree_node",
 			id = widgetPrefix .. "help_tree",
@@ -323,6 +379,32 @@ configui.onCreateOrUpdate(widgetPrefix .. "pawnArmsFOVFix", function(value)
 	--M.setArmsMeshFOVFixID(value)
     updateSetting("armsMeshFOVFixID", value)
 end)
+
+configui.onCreateOrUpdate(widgetPrefix .. "hide_settings_visibility", function(value)
+	--M.hideAnimationArms(value)
+    updateSetting("hideSettingsVisibility", value)
+end)
+configui.onCreateOrUpdate(widgetPrefix .. "hide_settings_visibility_propagate", function(value)
+	--M.hideAnimationArms(value)
+	updateSetting("hideSettingsVisibilityPropagate", value)
+end)
+configui.onCreateOrUpdate(widgetPrefix .. "hide_settings_hidden_in_game", function(value)
+	--M.hideAnimationArms(value)
+	updateSetting("hideSettingsHiddenInGame", value)
+end)
+configui.onCreateOrUpdate(widgetPrefix .. "hide_settings_hidden_in_game_propagate", function(value)
+	--M.hideAnimationArms(value)
+	updateSetting("hideSettingsHiddenInGamePropagate", value)
+end)
+configui.onCreateOrUpdate(widgetPrefix .. "hide_settings_render_in_main_pass", function(value)
+	--M.hideAnimationArms(value)
+	updateSetting("hideSettingsRenderInMainPass", value)
+end)
+configui.onCreateOrUpdate(widgetPrefix .. "hide_settings_render_in_depth_pass", function(value)
+	--M.hideAnimationArms(value)
+	updateSetting("hideSettingsRenderInDepthPass", value)
+end)
+
 
 local createDevMonitor = doOnce(function()
 	uevrUtils.registerLevelChangeCallback(function(level)
