@@ -165,6 +165,19 @@ local defaultAnimationMesh = nil
 local status = {}
 local accessoryStatus = {}
 
+-- Toggle for verbose marker/montage diagnostics.
+-- Keep this false unless you are actively debugging marker timing/selection.
+local MARKER_DEBUG = false
+local function markerDebugPrint(msg)
+	if MARKER_DEBUG then
+		print(msg)
+	end
+end
+
+if MARKER_DEBUG then
+	print("[MarkerDebug] hands.lua loaded; MARKER_DEBUG enabled")
+end
+
 local gunstockOffsetsEnabled = false
 
 function M.setGunstockOffsetsEnabled(val)
@@ -1266,7 +1279,10 @@ local function checkMontageProximity(hand, accessoryParams, currentAttachment)
 	if handOk and activationHand ~= 1 and activationDistance ~= nil and activationDistance > 0 then
 		validDistance = false
 		local controllerLoc = controllers.getControllerLocation(hand)
-		if controllerLoc == nil then return false end
+		if controllerLoc == nil then
+			markerDebugPrint("[MarkerDebug] Proximity failed: controllerLoc nil; hand=" .. tostring(hand))
+			return false
+		end
 
 		local targetLoc = nil
 		local targetRot = nil
@@ -1285,7 +1301,14 @@ local function checkMontageProximity(hand, accessoryParams, currentAttachment)
 			local d = uevrUtils.distanceBetween(controllerLoc, targetLoc)
 			if d ~= nil and d <= activationDistance then
 				validDistance = true
+			else
+				markerDebugPrint("[MarkerDebug] Proximity failed: hand=" .. tostring(hand) ..
+					" d=" .. tostring(d) ..
+					" activationDistance=" .. tostring(activationDistance) ..
+					" socket=" .. tostring(socketName))
 			end
+		else
+			markerDebugPrint("[MarkerDebug] Proximity failed: targetLoc nil; hand=" .. tostring(hand) .. " socket=" .. tostring(socketName))
 		end
 	end
 	return validDistance
@@ -1349,6 +1372,7 @@ function M.attachHandToAccessory(handed, accessoryID, useMontageProximity, animI
         local hand = M.getHandComponent(handed)
 		local statusKey = "hand_" .. tostring(handed)
         if hand ~= nil and hand.K2_AttachTo ~= nil and accessoryStatus[statusKey] ~= nil then
+			markerDebugPrint("[MarkerDebug] Detaching hand=" .. tostring(handed) .. " (restoring previous parent/socket)")
             --restore previous state
             local parent = accessoryStatus[statusKey]["parent"]
             local socket = accessoryStatus[statusKey]["socket"]
@@ -1365,14 +1389,48 @@ function M.attachHandToAccessory(handed, accessoryID, useMontageProximity, animI
 		holdingAttachment[handed] = nil
     else
 		--print("Attaching hand ", handed, " to accessory ", accessoryID)
-        local accessoryParams = accessories.getAccessoryParams(accessoryID)
         local hand = M.getHandComponent(handed)
-        if accessoryParams ~= nil and hand ~= nil then
+		if hand ~= nil then
             local currentAttachment = attachments.getCurrentGrippedAttachment(Handed.Right)
            	if currentAttachment ~= nil then
+				local attachmentID = attachments.getAttachmentIDFromAttachment(currentAttachment)
+				local accessoryParams = (attachmentID ~= nil and attachmentID ~= "") and accessories.getAccessoryParamsForAttachment(attachmentID, accessoryID) or nil
+				if accessoryParams == nil then
+					accessoryParams = accessories.getAccessoryParams(accessoryID)
+					if accessoryParams ~= nil then
+						markerDebugPrint("[MarkerDebug] WARNING: accessoryID=" .. tostring(accessoryID) .. " not found under attachmentID=" .. tostring(attachmentID) .. "; using global lookup")
+					end
+				end
+
+				if accessoryParams == nil then
+					return
+				end
 				--check if we're using timelines with montages and if so, check if we have a valid time
-				local markerParams = resolveAccessoryMarkerParamsForAttach(accessoryParams, useMontageProximity, animInstance, montageObject, markerIndexOverride)
+				local markerParams = nil
+				local markerIndex = nil
+				markerParams, markerIndex = resolveAccessoryMarkerParamsForAttach(accessoryParams, useMontageProximity, animInstance, montageObject, markerIndexOverride)
 				if markerParams == nil then
+					local currentTime = nil
+					if useMontageProximity and animInstance ~= nil and montageObject ~= nil and animInstance.Montage_GetPosition ~= nil then
+						local ok, t = pcall(function()
+							return animInstance:Montage_GetPosition(montageObject)
+						end)
+						if ok then currentTime = t end
+					end
+					markerDebugPrint("[MarkerDebug] Marker resolve returned nil; detaching. hand=" .. tostring(handed) ..
+						" accessoryID=" .. tostring(accessoryID) ..
+						" useMontageProximity=" .. tostring(useMontageProximity) ..
+						" time=" .. tostring(currentTime) ..
+						" markerIndexOverride=" .. tostring(markerIndexOverride))
+					local markers = accessoryParams and accessoryParams.markers
+					if type(markers) == "table" and #markers > 0 then
+						for idx, m in ipairs(markers) do
+							markerDebugPrint("[MarkerDebug]  marker[" .. tostring(idx) .. "] start=" .. tostring(m.start_time) ..
+								" end=" .. tostring(m.end_time) ..
+								" socket=" .. tostring(m.socket_name) ..
+								" grip_animation=" .. tostring(m.grip_animation))
+						end
+					end
 					-- outside any marker time range; detach
 					M.attachHandToAccessory(handed, nil)
 					return
@@ -1382,6 +1440,11 @@ function M.attachHandToAccessory(handed, accessoryID, useMontageProximity, animI
 				local proximityOK = true
 				if useMontageProximity then proximityOK = checkMontageProximity(handed, markerParams, currentAttachment) end
 				if proximityOK then
+					markerDebugPrint("[MarkerDebug] Attaching hand=" .. tostring(handed) ..
+						" accessoryID=" .. tostring(accessoryID) ..
+						" markerIndex=" .. tostring(markerIndex) ..
+						" socket=" .. tostring(markerParams.socket_name or "") ..
+						" grip_animation=" .. tostring(markerParams.grip_animation))
 					local statusKey = "hand_" .. tostring(handed)
 					-- Only snapshot the base state once per activation chain.
 					-- If we overwrite this while already attached, restore will be broken.
@@ -1605,26 +1668,83 @@ local function activateMontageMonitor(montageObject, animInstance, accessoryID, 
 end
 
 local function checkSegmentedMontage(montageObject, montageName, label, animInstance)
+	markerDebugPrint("[MarkerDebug] Montage change: montageName=" .. tostring(montageName) .. " label=" .. tostring(label))
 	if animInstance == nil then
 		print("Animation instance is nil in checkSegmentedMontage. Check comments in updateMontage() in uevrUtils")
 	else
+		local grippedAttachment = attachments.getCurrentGrippedAttachment(Handed.Right)
+		local grippedAttachmentID = attachments.getAttachmentIDFromAttachment(grippedAttachment)
 		local activeRightAccessory, priority = executeIsRightAccessoryCallback()
+		markerDebugPrint("[MarkerDebug] active_right_accessory returned id=" .. tostring(activeRightAccessory) .. " priority=" .. tostring(priority))
 		if activeRightAccessory ~= nil then
-			local accessoryParams = accessories.getAccessoryParams(activeRightAccessory)
-			if accessoryParams ~= nil then
-				if accessories.accessoryHasTimeMarkers(accessoryParams) then
-					activateMontageMonitor(montageObject, animInstance, activeRightAccessory, accessoryParams, Handed.Right)
+			local accessoryParams = (grippedAttachmentID ~= nil and grippedAttachmentID ~= "") and accessories.getAccessoryParamsForAttachment(grippedAttachmentID, activeRightAccessory) or nil
+			if accessoryParams == nil then
+				accessoryParams = accessories.getAccessoryParams(activeRightAccessory)
+				if accessoryParams ~= nil then
+					markerDebugPrint("[MarkerDebug] WARNING: Right accessoryID=" .. tostring(activeRightAccessory) .. " not found under attachmentID=" .. tostring(grippedAttachmentID) .. "; using global lookup")
 				end
 			end
+			if accessoryParams ~= nil then
+				if accessories.accessoryHasTimeMarkers(accessoryParams) then
+					markerDebugPrint("[MarkerDebug] Activating montage monitor: hand=Right accessoryID=" .. tostring(activeRightAccessory))
+					activateMontageMonitor(montageObject, animInstance, activeRightAccessory, accessoryParams, Handed.Right)
+				else
+					markerDebugPrint("[MarkerDebug] No time markers: hand=Right accessoryID=" .. tostring(activeRightAccessory))
+					local markers = accessoryParams.markers
+					if type(markers) == "table" and #markers > 0 then
+						for idx, m in ipairs(markers) do
+							markerDebugPrint("[MarkerDebug]  marker[" .. tostring(idx) .. "] start=" .. tostring(m.start_time) ..
+								" end=" .. tostring(m.end_time) ..
+								" socket=" .. tostring(m.socket_name) ..
+								" grip_animation=" .. tostring(m.grip_animation))
+						end
+					end
+				end
+			else
+				markerDebugPrint("[MarkerDebug] Accessory params nil: hand=Right accessoryID=" .. tostring(activeRightAccessory))
+			end
+		else
+			markerDebugPrint("[MarkerDebug] No active accessory: hand=Right")
+			local gripped = attachments.getCurrentGrippedAttachment(Handed.Right)
+			local grippedName = (gripped ~= nil and gripped.get_full_name ~= nil) and gripped:get_full_name() or tostring(gripped)
+			markerDebugPrint("[MarkerDebug] Current gripped attachment (Right hand)=" .. tostring(grippedName))
+			markerDebugPrint("[MarkerDebug] Current gripped attachmentID=" .. tostring(attachments.getAttachmentIDFromAttachment(gripped)))
 		end
 		local activeLeftAccessory, priority = executeIsLeftAccessoryCallback()
+		markerDebugPrint("[MarkerDebug] active_left_accessory returned id=" .. tostring(activeLeftAccessory) .. " priority=" .. tostring(priority))
 		if activeLeftAccessory ~= nil then
-			local accessoryParams = accessories.getAccessoryParams(activeLeftAccessory)
-			if accessoryParams ~= nil then
-				if accessories.accessoryHasTimeMarkers(accessoryParams) then
-					activateMontageMonitor(montageObject, animInstance, activeLeftAccessory, accessoryParams, Handed.Left)
+			local accessoryParams = (grippedAttachmentID ~= nil and grippedAttachmentID ~= "") and accessories.getAccessoryParamsForAttachment(grippedAttachmentID, activeLeftAccessory) or nil
+			if accessoryParams == nil then
+				accessoryParams = accessories.getAccessoryParams(activeLeftAccessory)
+				if accessoryParams ~= nil then
+					markerDebugPrint("[MarkerDebug] WARNING: Left accessoryID=" .. tostring(activeLeftAccessory) .. " not found under attachmentID=" .. tostring(grippedAttachmentID) .. "; using global lookup")
 				end
 			end
+			if accessoryParams ~= nil then
+				if accessories.accessoryHasTimeMarkers(accessoryParams) then
+					markerDebugPrint("[MarkerDebug] Activating montage monitor: hand=Left accessoryID=" .. tostring(activeLeftAccessory))
+					activateMontageMonitor(montageObject, animInstance, activeLeftAccessory, accessoryParams, Handed.Left)
+				else
+					markerDebugPrint("[MarkerDebug] No time markers: hand=Left accessoryID=" .. tostring(activeLeftAccessory))
+					local markers = accessoryParams.markers
+					if type(markers) == "table" and #markers > 0 then
+						for idx, m in ipairs(markers) do
+							markerDebugPrint("[MarkerDebug]  marker[" .. tostring(idx) .. "] start=" .. tostring(m.start_time) ..
+								" end=" .. tostring(m.end_time) ..
+								" socket=" .. tostring(m.socket_name) ..
+								" grip_animation=" .. tostring(m.grip_animation))
+						end
+					end
+				end
+			else
+				markerDebugPrint("[MarkerDebug] Accessory params nil: hand=Left accessoryID=" .. tostring(activeLeftAccessory))
+			end
+		else
+			markerDebugPrint("[MarkerDebug] No active accessory: hand=Left")
+			local gripped = attachments.getCurrentGrippedAttachment(Handed.Right)
+			local grippedName = (gripped ~= nil and gripped.get_full_name ~= nil) and gripped:get_full_name() or tostring(gripped)
+			markerDebugPrint("[MarkerDebug] Current gripped attachment (Right hand)=" .. tostring(grippedName))
+			markerDebugPrint("[MarkerDebug] Current gripped attachmentID=" .. tostring(attachments.getAttachmentIDFromAttachment(gripped)))
 		end
 	end
 end
@@ -1670,17 +1790,31 @@ uevrUtils.registerPostEngineTickCallback(function(engine, delta)
 					-- stop monitoring this hand
 					status["montageMonitor"][i] = nil
 				else
+					local prevValid = monitor["valid"]
+					local prevMarkerIndex = monitor["markerIndex"]
 					local markerParams = nil
 					markerParams, markerIndex = resolveAccessoryMarkerParamsForAttach(accessoryParams, true, animInstance, montageObject, nil, true)
 					valid = (markerParams ~= nil)
 
-					if monitor["valid"] ~= valid or monitor["markerIndex"] ~= markerIndex then
+					if prevValid ~= valid or prevMarkerIndex ~= markerIndex then
 						monitor["valid"] = valid
 						monitor["markerIndex"] = markerIndex
 						changed[i] = true
 					end
 
 					if changed[i] then
+						local currentTime = nil
+						if animInstance ~= nil and montageObject ~= nil and animInstance.Montage_GetPosition ~= nil then
+							local ok, t = pcall(function()
+								return animInstance:Montage_GetPosition(montageObject)
+							end)
+							if ok then currentTime = t end
+						end
+						markerDebugPrint("[MarkerDebug] Monitor change: hand=" .. tostring(i) ..
+							" accessoryID=" .. tostring(accessoryID) ..
+							" time=" .. tostring(currentTime) ..
+							" valid " .. tostring(prevValid) .. " -> " .. tostring(valid) ..
+							" markerIndex " .. tostring(prevMarkerIndex) .. " -> " .. tostring(markerIndex))
 						-- Apply changes even if accessoryID didn't change (marker swap).
 						local shouldAttach = valid and accessoryID or nil
 						M.attachHandToAccessory(i, shouldAttach, true, animInstance, montageObject, markerIndex)

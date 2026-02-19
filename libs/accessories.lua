@@ -933,12 +933,66 @@ end
 function M.getAccessories()
     local result = {}
     local accessoriesList = paramManager:get("accessories") or {}
+
+    -- Group by GUID so duplicates across attachments can be represented in the UI.
+    local grouped = {}
     for attachmentID, accessories in pairs(accessoriesList) do
         for accessoryID, accessoryParams in pairs(accessories) do
             M.print("Attachment ID: " .. tostring(attachmentID) .. " Accessory ID: " .. tostring(accessoryID), LogLevel.Debug)
-            result[accessoryID] = attachmentID .. " " .. accessoryParams.label
+
+            local g = grouped[accessoryID]
+            if g == nil then
+                g = { attachments = {}, labels = {} }
+                grouped[accessoryID] = g
+            end
+
+            g.attachments[#g.attachments + 1] = tostring(attachmentID)
+            local label = (accessoryParams and accessoryParams.label) or tostring(accessoryID)
+            g.labels[label] = true
         end
     end
+
+    local function sortedKeys(setTable)
+        local keys = {}
+        for k, _ in pairs(setTable or {}) do
+            keys[#keys + 1] = k
+        end
+        table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+        return keys
+    end
+
+    local function buildAttachmentSummary(attachments)
+        if type(attachments) ~= "table" or #attachments == 0 then
+            return ""
+        end
+        table.sort(attachments)
+
+        local maxShown = 3
+        local shown = {}
+        for i = 1, math.min(#attachments, maxShown) do
+            shown[#shown + 1] = attachments[i]
+        end
+        local extra = #attachments - #shown
+        local suffix = (extra > 0) and (" +" .. tostring(extra)) or ""
+        return table.concat(shown, ", ") .. suffix
+    end
+
+    for accessoryID, g in pairs(grouped) do
+        local labels = sortedKeys(g.labels)
+        local baseLabel = labels[1] or tostring(accessoryID)
+        if #labels > 1 then
+            -- If the same GUID was given different labels under different attachments, hint at that.
+            baseLabel = baseLabel .. " (varies)"
+        end
+
+        local attachmentSummary = buildAttachmentSummary(g.attachments)
+        if #g.attachments <= 1 then
+            result[accessoryID] = baseLabel .. " (" .. tostring(g.attachments[1] or "") .. ")"
+        else
+            result[accessoryID] = baseLabel .. " (" .. tostring(#g.attachments) .. " attachments: " .. attachmentSummary .. ")"
+        end
+    end
+
     return result
 end
 function M.getAccessoryParams(accessoryID)

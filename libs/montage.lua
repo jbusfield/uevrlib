@@ -607,6 +607,7 @@ local function executeMontageChange(...)
 end
 
 local function handleMontageChanged(montage, montageName, label, animInstance)
+	print("Montage changed: " .. tostring(montageName))
 	for _, config in ipairs(stateConfig) do
 		montageState[config.stateKey] = nil
 		montageState[config.stateKey .. "Priority"] = 0
@@ -626,8 +627,8 @@ local function handleMontageChanged(montage, montageName, label, animInstance)
 	executeMontageChange(montage, montageName, label, animInstance)
 end
 
-uevrUtils.registerMontageChangeCallback(function(montage, montageName)
-	handleMontageChanged(montage, montageName, "Pawn")
+uevrUtils.registerMontageChangeCallback(function(montage, montageName, animInstance)
+	handleMontageChanged(montage, montageName, "Pawn", animInstance)
 	-- if montageState["inputEnabled"] == 3 and montageName == nil then
 	-- 	delay(3000, function()
 	-- 		montageState["inputEnabled"] = nil
@@ -987,12 +988,7 @@ configui.onUpdate("knownMontageList", function(value)
 end)
 
 uevrUtils.registerPreLevelChangeCallback(function(level)
-	--disableMeshMonitoring added to help prevent crash but I dont think it actually does anything
-	disableMeshMonitoring = true
 	M.reset()
-	delay(10000, function()
-		disableMeshMonitoring = false
-	end)
 end)
 
 uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
