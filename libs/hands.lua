@@ -216,6 +216,19 @@ function M.registerIsAnimatingFromMeshCallback(func)
 	uevrUtils.registerUEVRCallback("is_hands_animating_from_mesh", func)
 end
 
+-- If an accessory marker has set an explicit grip animation (e.g. "sniper"),
+-- that pose must trump montage-driven CopyPoseFromSkeletalComponent.
+-- This must be accessory-scoped (NOT based on holdingAttachment, which is shared).
+uevrUtils.registerUEVRCallback("is_hands_animating_from_mesh", function(hand)
+	local gripOverride = accessoryStatus["gripAnimationOverride"]
+	if type(gripOverride) ~= "table" then return end
+	local entry = gripOverride[hand]
+	if type(entry) ~= "table" or entry.active ~= true then return end
+	local p = tonumber(entry.priority)
+	if p == nil then p = 1 end
+	return false, p
+end)
+
 local createInputHandler = doOnce(function()
 	attachments.registerOnGripAnimationCallback(function(gripAnimation, gripHand)
 		M.print("Grip animation changed to " .. (gripAnimation and tostring(gripAnimation) or "None") .. " for " .. (gripHand == Handed.Left and "Left" or "Right") .. " hand", LogLevel.Debug)
@@ -1168,16 +1181,19 @@ local isLeftAnimatingLast = nil
 local isRightAnimatingLast = nil
 uevr.sdk.callbacks.on_pre_engine_tick(function(engine, delta)
 	if M.exists() then
+		local isLeftAnimating = select(1, executeIsAnimatingFromMeshCallback(Handed.Left))
+		local isRightAnimating = select(1, executeIsAnimatingFromMeshCallback(Handed.Right))
+
 		--if accessory proximity testing has determined it needs to override animation behavior then use that, otherwise call the normal montage callback
 		--may want to set a priority for the accessory override to allow default behavior to have a higher priority but cant think of a use case right now
-		local isLeftAnimating = accessoryStatus["leftProximityAnimationOverride"]
-		if isLeftAnimating == nil then
-			isLeftAnimating = select(1, executeIsAnimatingFromMeshCallback(Handed.Left))
-		end
-		local isRightAnimating = accessoryStatus["rightProximityAnimationOverride"]
-		if isRightAnimating == nil then
-			isRightAnimating = select(1, executeIsAnimatingFromMeshCallback(Handed.Right))
-		end
+		-- local isLeftAnimating = accessoryStatus["leftProximityAnimationOverride"]
+		-- if isLeftAnimating == nil then
+		-- 	isLeftAnimating = select(1, executeIsAnimatingFromMeshCallback(Handed.Left))
+		-- end
+		-- local isRightAnimating = accessoryStatus["rightProximityAnimationOverride"]
+		-- if isRightAnimating == nil then
+		-- 	isRightAnimating = select(1, executeIsAnimatingFromMeshCallback(Handed.Right))
+		-- end
 
 		local left = isLeftAnimating
 		if isLeftAnimatingLast ~= nil and isLeftAnimating == nil then left = false end
@@ -1271,8 +1287,21 @@ local function checkMontageProximity(hand, accessoryParams, currentAttachment)
 	end
 
 	local activationDistance = accessoryParams.activation_distance or 0.0
-	-- activation_hand: 1=None, 2=Left, 3=Right, 4=Either 5=Left with montage 6=Right with Montage 7=Either with montage 8=Left always 9=Right always 10=Either always
+	-- activation_hand:
+	--  1=None
+	--  2=Left Hand Proximity
+	--  3=Right Hand Proximity
+	--  4=Either Hand Proximity
+	--  5=Left Hand Proximity During Montage Only
+	--  6=Right Hand Proximity During Montage Only
+	--  7=Either Hand Proximity During Montage Only
+	--  8=Left Hand Always
+	--  9=Right Hand Always
+	-- 10=Either Hand Always
 	local handOk =
+		(activationHand == 4) or
+		(activationHand == 2 and hand == Handed.Left) or
+		(activationHand == 3 and hand == Handed.Right) or
 		(activationHand == 7) or
 		(activationHand == 5 and hand == Handed.Left) or
 		(activationHand == 6 and hand == Handed.Right)
@@ -1387,6 +1416,10 @@ function M.attachHandToAccessory(handed, accessoryID, useMontageProximity, animI
         end
 		-- Reset grip animation to open hand
 		holdingAttachment[handed] = nil
+		if type(accessoryStatus["gripAnimationOverride"]) == "table" then
+			accessoryStatus["gripAnimationOverride"][handed] = nil
+		end
+		M.updateAnimationState(handed)
     else
 		--print("Attaching hand ", handed, " to accessory ", accessoryID)
         local hand = M.getHandComponent(handed)
@@ -1466,14 +1499,27 @@ function M.attachHandToAccessory(handed, accessoryID, useMontageProximity, animI
 					-- Set grip animation from accessory params
 					local gripAnim = markerParams.grip_animation
 					holdingAttachment[handed] = (gripAnim and gripAnim ~= "") and gripAnim or nil
+					accessoryStatus["gripAnimationOverride"] = accessoryStatus["gripAnimationOverride"] or {}
+					if type(gripAnim) == "string" and gripAnim ~= "" then
+						local p = tonumber(markerParams.grip_priority)
+						if p == nil then p = 1 end
+						accessoryStatus["gripAnimationOverride"][handed] = { active = true, priority = p }
+					else
+						accessoryStatus["gripAnimationOverride"][handed] = nil
+					end
 					M.updateAnimationState(handed)
 				elseif useMontageProximity then
 					--stop the current montage
-					if handed == Handed.Left then
-						accessoryStatus["leftProximityAnimationOverride"] = false
-					else
-						accessoryStatus["rightProximityAnimationOverride"] = false
+					holdingAttachment[handed] = nil
+					if type(accessoryStatus["gripAnimationOverride"]) == "table" then
+						accessoryStatus["gripAnimationOverride"][handed] = nil
 					end
+					M.updateAnimationState(handed)
+					-- if handed == Handed.Left then
+					-- 	accessoryStatus["leftProximityAnimationOverride"] = false
+					-- else
+					-- 	accessoryStatus["rightProximityAnimationOverride"] = false
+					-- end
 					--M.print("Hand is not within activation distance for this accessory.", LogLevel.Warning)
 				end
             end
@@ -1528,7 +1574,7 @@ end)
 -----------------------------------------------------------
 
 -- Proximity accessory activation ---------------------------------
-local PROXIMITY_ACCESSORY_PRIORITY = 0
+local PROXIMITY_ACCESSORY_PRIORITY = 1
 
 local function proximityAccessoryForHand(hand)
 	local attachmentHand = Handed.Right
@@ -1755,8 +1801,8 @@ uevrUtils.registerUEVRCallback("on_module_montage_change", function(montageObjec
 	checkAccessories(montageName ~= nil and montageName ~= "", animInstance, montageObject) --sending this param allows for montage based proximity checks
 	if montageName == nil or montageName == "" then
 		--montage ended, if we had a proximity override active, re-check proximity to see if we need to re-apply it
-		accessoryStatus["leftProximityAnimationOverride"] = nil
-		accessoryStatus["rightProximityAnimationOverride"] = nil
+		-- accessoryStatus["leftProximityAnimationOverride"] = nil
+		-- accessoryStatus["rightProximityAnimationOverride"] = nil
 		status["montageMonitor"] = nil
 		M.updateAnimationState(Handed.Left)
 		M.updateAnimationState(Handed.Right)

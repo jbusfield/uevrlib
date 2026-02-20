@@ -22,6 +22,7 @@ local parameterDefaults = {
     start_time = 0.0,
     end_time = 0.0,
     grip_animation = "",
+	grip_priority = 1,
 }
 
 local currentLogLevel = LogLevel.Error
@@ -38,6 +39,10 @@ end
 local parametersFileName = "accessories_parameters"
 local parameters = {}
 local paramManager = paramModule.new(parametersFileName, parameters, true)
+
+-- Shared clipboard for Copy/Paste UI actions.
+-- Add new clipboard features by storing additional keys in this table.
+local clipboard = {}
 
 local function buildDefaultMarker()
     return uevrUtils.deepCopyTable(parameterDefaults)
@@ -310,6 +315,68 @@ function M.getConfigWidgets(id, prefix, width)
             --     isHidden = true
             -- },
                 {
+                    widgetType = "tree_node",
+                    id = prefix .. "accessory_replication_tree",
+                    initialOpen = false,
+                    label = "Replication"
+                },
+					{
+						widgetType = "text",
+						id = prefix .. "accessory_replication_instructions",
+						label = "A single montage can sometimes affect multiple attachments. If you have already created another accessory for a specific montage, either select it from the list below and press Replicate or go to the other accessory's replication section and press Copy then come back here and press Paste. The montage will then affect this accessory as well.",
+						wrapped = true,
+                        width = width
+					},
+					{
+						widgetType = "text",
+						id = prefix .. "accessory_replication_automatic_label",
+						label = "Automatic",
+					},
+                    {
+                        widgetType = "combo",
+                        id = prefix .. "accessory_existing_guid",
+                        label = "Existing",
+                        selections = {"(none)"},
+                        initialValue = 1,
+                        width = width - 100
+                    },
+                    { widgetType = "same_line", },
+                    {
+                        widgetType = "button",
+                        id = prefix .. "accessory_replicate_button",
+                        label = "Replicate",
+                        size = {100,24},
+                    },
+					{
+						widgetType = "text",
+						id = prefix .. "accessory_replication_manual_label",
+						label = "Manual",
+					},
+                    {
+                        widgetType = "input_text",
+                        id = prefix .. "accessory_item_id",
+                        label = "Current ID",
+                        initialValue = "",
+                        isHidden = false,
+                        width = width - 100
+                    },
+                    {widgetType = "same_line"},
+                    {
+                        widgetType = "button",
+                        id = prefix .. "accessory_item_id_copy_button",
+                        label = "Copy",
+                        size = {60,22}
+                    },
+                    {widgetType = "same_line"},
+                    {
+                        widgetType = "button",
+                        id = prefix .. "accessory_item_id_paste_button",
+                        label = "Paste",
+                        size = {60,22}
+                    },
+                    { widgetType = "new_line" },
+                { widgetType = "tree_pop" },
+                {
                     widgetType = "input_text",
                     id = prefix .. "accessory_item_label",
                     label = "Label",
@@ -347,6 +414,20 @@ function M.getConfigWidgets(id, prefix, width)
                     id = prefix .. "accessory_marker_add_button",
                     label = "Add Marker",
                     size = {100,24},
+                },
+                { widgetType = "same_line" },
+                {
+                    widgetType = "button",
+                    id = prefix .. "accessory_marker_copy_button",
+                    label = "Copy",
+                    size = {60,24},
+                },
+                { widgetType = "same_line" },
+                {
+                    widgetType = "button",
+                    id = prefix .. "accessory_marker_paste_button",
+                    label = "Paste",
+                    size = {60,24},
                 },
                 { widgetType = "same_line" },
                 {
@@ -445,7 +526,21 @@ function M.getConfigWidgets(id, prefix, width)
                     range = {-100, 100},
                     initialValue = parameterDefaults["location"],
                     isHidden = false,
-                    width = width
+                    width = width - 80
+                },
+                { widgetType = "same_line" },
+                {
+                    widgetType = "button",
+                    id = prefix .. "accessory_item_location_copy_button",
+                    label = "Copy",
+                    size = {60,22}
+                },
+                { widgetType = "same_line" },
+                {
+                    widgetType = "button",
+                    id = prefix .. "accessory_item_location_paste_button",
+                    label = "Paste",
+                    size = {60,22}
                 },
                 {
                     widgetType = "drag_float3",
@@ -455,7 +550,21 @@ function M.getConfigWidgets(id, prefix, width)
                     range = {-180, 180},
                     initialValue = parameterDefaults["rotation"],
                     isHidden = false,
-                    width = width
+                    width = width - 80
+                },
+                { widgetType = "same_line" },
+                {
+                    widgetType = "button",
+                    id = prefix .. "accessory_item_rotation_copy_button",
+                    label = "Copy",
+                    size = {60,22}
+                },
+                { widgetType = "same_line" },
+                {
+                    widgetType = "button",
+                    id = prefix .. "accessory_item_rotation_paste_button",
+                    label = "Paste",
+                    size = {60,22}
                 },
                 {
                     widgetType = "combo",
@@ -463,8 +572,16 @@ function M.getConfigWidgets(id, prefix, width)
                     label = "Grip Animation",
                     selections = animationLabels,
                     initialValue = 1,
-                    width = width
+					width = width - 60
                 },
+				{ widgetType = "same_line" },
+				{
+					widgetType = "input_text",
+					id = prefix .. "accessory_item_grip_priority",
+					label = "Priority",
+					initialValue = "1",
+					width = 50,
+				},
                 {
                     widgetType = "combo",
                     id = prefix .. "accessory_item_activation_hand",
@@ -594,6 +711,10 @@ local function setUIForMarker(attachmentID, prefix, accessoryID, markerIndex)
         end
     end
     configui.setValue(prefix .. "accessory_item_grip_animation", index, true)
+
+	local gripPriority = getMarkerField(attachmentID, accessoryID, markerIndex, "grip_priority")
+	if gripPriority == nil then gripPriority = 1 end
+	configui.setValue(prefix .. "accessory_item_grip_priority", tostring(gripPriority), true)
 end
 
 local function setUIForAccessory(id, prefix, accessoryID)
@@ -698,6 +819,241 @@ local function pokePreviewChanged()
     uevrUtils.executeUEVRCallbacks("on_accessory_preview_changed", preview.handed, preview.accessoryID, preview.enabled, preview.markerIndex or 1)
 end
 
+-- Replication UI helpers ------------------------------------------------------
+-- This enables “one montage affects multiple attachments” by re-keying a local
+-- accessory to use an existing GUID (ID), while keeping the destination params.
+
+local function normalizeGuidInput(val)
+    local s = tostring(val or "")
+    s = s:gsub("%s+", "")
+    return s
+end
+
+-- General-purpose humanizer: does not rely on any game-specific prefixes.
+local function humanizeAttachmentID(value, maxLen)
+    local s = tostring(value or "")
+    -- if s == "" then return "" end
+
+    -- -- If the ID looks like a path/qualified name, keep only the last segment.
+    -- s = s:gsub("\\", "/")
+    -- s = s:match("([^/]+)$") or s
+    -- s = s:match("([^%.:]+)$") or s
+
+    -- -- Generic Unreal-ish cleanup (safe even if not Unreal).
+    -- s = s:gsub("^Default__", "")
+    -- s = s:gsub("_C$", "")
+
+    -- -- Normalize separators.
+    -- s = s:gsub("[_%-%+]+", " ")
+    -- s = s:gsub("[%[%]%(%){}]", " ")
+    -- s = s:gsub("%s+", " ")
+
+    -- -- Insert spaces for CamelCase and alnum boundaries.
+    -- s = s:gsub("(%l)(%u)", "%1 %2")
+    -- s = s:gsub("(%a)(%d)", "%1 %2")
+    -- s = s:gsub("(%d)(%a)", "%1 %2")
+
+    -- -- Trim.
+    -- s = s:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " ")
+
+    -- if maxLen ~= nil and #s > maxLen then
+    --     if maxLen <= 3 then return s:sub(1, maxLen) end
+    --     s = s:sub(1, maxLen - 3) .. "..."
+    -- end
+
+    return s
+end
+
+local function sortedKeys(setTable)
+    local arr = {}
+    for k, _ in pairs(setTable or {}) do
+        arr[#arr + 1] = tostring(k)
+    end
+    table.sort(arr)
+    return arr
+end
+
+local function countKeys(setTable)
+    local n = 0
+    for _, _ in pairs(setTable or {}) do n = n + 1 end
+    return n
+end
+
+local function buildExistingGuidDropdown()
+    local accessoriesList = paramManager:get("accessories") or {}
+
+    -- guid -> { labelsSet = { [label]=true }, attachments = { [attachmentID]=true } }
+    local grouped = {}
+    for attachmentID, accessories in pairs(accessoriesList) do
+        for guid, acc in pairs(accessories or {}) do
+            local g = grouped[guid]
+            if g == nil then
+                g = { labelsSet = {}, attachments = {} }
+                grouped[guid] = g
+            end
+            g.attachments[tostring(attachmentID)] = true
+            local label = (acc and acc.label) or tostring(guid)
+            g.labelsSet[tostring(label)] = true
+        end
+    end
+
+    local guids = {}
+    for guid, _ in pairs(grouped) do
+        guids[#guids + 1] = guid
+    end
+
+    -- Stable-ish ordering: by label then GUID.
+    table.sort(guids, function(a, b)
+        local ga = grouped[a]
+        local gb = grouped[b]
+        local la = (ga and sortedKeys(ga.labelsSet)[1]) or tostring(a)
+        local lb = (gb and sortedKeys(gb.labelsSet)[1]) or tostring(b)
+        if la == lb then
+            return tostring(a) < tostring(b)
+        end
+        return la < lb
+    end)
+
+    local labels = {"(none)"}
+    local values = {""}
+
+    local function buildAttachmentSummary(attachmentSet)
+        local ids = sortedKeys(attachmentSet)
+        if #ids == 0 then return "" end
+
+        local maxShown = 3
+        local shown = {}
+        for i = 1, math.min(#ids, maxShown) do
+            shown[#shown + 1] = humanizeAttachmentID(ids[i], 28)
+        end
+        local extra = #ids - #shown
+        if extra > 0 then
+            shown[#shown + 1] = "+" .. tostring(extra)
+        end
+        return table.concat(shown, ", ")
+    end
+
+    for _, guid in ipairs(guids) do
+        local g = grouped[guid]
+        local labelArr = sortedKeys(g.labelsSet)
+        local baseLabel = labelArr[1] or tostring(guid)
+        if #labelArr > 1 then
+            baseLabel = baseLabel .. " (varies)"
+        end
+
+        local attachmentCount = countKeys(g.attachments)
+        local where = buildAttachmentSummary(g.attachments)
+        if where ~= "" then
+            labels[#labels + 1] = baseLabel .. "  [" .. tostring(attachmentCount) .. "]  " .. where
+        else
+            labels[#labels + 1] = baseLabel .. "  [" .. tostring(attachmentCount) .. "]"
+        end
+        values[#values + 1] = guid
+    end
+
+    return labels, values
+end
+
+local function refreshReplicationDropdownUI(attachmentID, prefix)
+    local labels, values = buildExistingGuidDropdown()
+    accessoriesMap[attachmentID]["replicationExistingGuidValues"] = values
+    pcall(function()
+        configui.setSelections(prefix .. "accessory_existing_guid", labels)
+    end)
+end
+
+local function ensureAccessoryInPickerList(attachmentID, prefix, guid)
+    local ids = accessoriesMap[attachmentID]["ids"] or {}
+    for i, existing in ipairs(ids) do
+        if existing == guid then
+            configui.setValue(prefix .. "accessory_picker", i, true)
+            return true
+        end
+    end
+
+    -- Exists in params but not in UI list; add it.
+    local params = paramManager:get({"accessories", attachmentID, guid})
+    if params == nil then return false end
+
+    local label = (params and params.label) or tostring(guid)
+    accessoriesMap[attachmentID]["ids"][#accessoriesMap[attachmentID]["ids"] + 1] = guid
+    accessoriesMap[attachmentID]["labels"][#accessoriesMap[attachmentID]["labels"] + 1] = label
+    configui.setSelections(prefix .. "accessory_picker", accessoriesMap[attachmentID]["labels"])
+    configui.setValue(prefix .. "accessory_picker", #accessoriesMap[attachmentID]["ids"], true)
+    return true
+end
+
+local function replicateAccessoryGuidForCurrentSelection(attachmentID, prefix, targetGuid)
+    targetGuid = normalizeGuidInput(targetGuid)
+    if targetGuid == "" then
+        M.print("Replicate: no target GUID selected/pasted.", LogLevel.Warning)
+        return
+    end
+
+    local currentGuid = getAccessoryID(attachmentID, prefix)
+    if currentGuid == nil then
+        M.print("Replicate: no accessory selected.", LogLevel.Warning)
+        return
+    end
+    currentGuid = tostring(currentGuid)
+
+    if currentGuid == targetGuid then
+        M.print("Replicate: current GUID already matches target.", LogLevel.Debug)
+        return
+    end
+
+    -- If the target GUID already exists on this attachment, do not overwrite it.
+    local existingHere = paramManager:get({"accessories", attachmentID, targetGuid})
+    if existingHere ~= nil then
+        ensureAccessoryInPickerList(attachmentID, prefix, targetGuid)
+        setUIForAccessory(attachmentID, prefix, targetGuid)
+        configui.setValue(prefix .. "accessory_item_id", tostring(targetGuid), true)
+        if preview.enabled and preview.accessoryID == currentGuid then
+            preview.accessoryID = targetGuid
+            pokePreviewChanged()
+        end
+        M.print("Replicate: target GUID already exists here; switched selection.", LogLevel.Debug)
+        return
+    end
+
+    -- Destination params are preserved: copy from the currently-selected accessory.
+    local currentParams = ensureAccessoryHasMarkers(attachmentID, currentGuid, true)
+    if currentParams == nil then
+        M.print("Replicate: could not load current accessory params.", LogLevel.Error)
+        return
+    end
+
+    local newParams = uevrUtils.deepCopyTable(currentParams)
+    paramManager:set({"accessories", attachmentID, targetGuid}, newParams, true)
+    paramManager:set({"accessories", attachmentID, currentGuid}, nil, true)
+
+    -- Update picker arrays in-place (preserve row/ordering).
+    local ids = accessoriesMap[attachmentID]["ids"] or {}
+    local labels = accessoriesMap[attachmentID]["labels"] or {}
+    for i, guid in ipairs(ids) do
+        if guid == currentGuid then
+            ids[i] = targetGuid
+            labels[i] = (newParams and newParams.label) or (labels[i] or targetGuid)
+            break
+        end
+    end
+    configui.setSelections(prefix .. "accessory_picker", labels)
+
+    -- Keep the current selection index and refresh UI state.
+    local sel = configui.getValue(prefix .. "accessory_picker") or 1
+    configui.setValue(prefix .. "accessory_picker", sel, true)
+    setUIForAccessory(attachmentID, prefix, targetGuid)
+    configui.setValue(prefix .. "accessory_item_id", tostring(targetGuid), true)
+
+    if preview.enabled and preview.accessoryID == currentGuid then
+        preview.accessoryID = targetGuid
+        pokePreviewChanged()
+    end
+
+    M.print("Replicate: rekeyed accessory GUID " .. tostring(currentGuid) .. " -> " .. tostring(targetGuid), LogLevel.Debug)
+end
+-- ---------------------------------------------------------------------------
+
 function M.createConfigCallbacks(id, prefix)
     -- If user tweaks the transform/socket while preview is on, force re-apply:
     local function pokeIfPreviewingThisAccessory()
@@ -711,6 +1067,43 @@ function M.createConfigCallbacks(id, prefix)
     end
 
     prefix = prefix or ""
+
+    -- Replication UI wiring
+    configui.onCreateOrUpdate(prefix .. "accessory_replication_tree", function(_)
+        if accessoriesMap[id] ~= nil then
+            refreshReplicationDropdownUI(id, prefix)
+        end
+    end)
+
+    configui.onUpdate(prefix .. "accessory_replicate_button", function()
+        local values = (accessoriesMap[id] and accessoriesMap[id]["replicationExistingGuidValues"]) or {""}
+        local idx = configui.getValue(prefix .. "accessory_existing_guid") or 1
+        local chosen = values[idx] or ""
+        local targetGuid = chosen
+        if targetGuid == "" then
+            targetGuid = configui.getValue(prefix .. "accessory_item_id") or ""
+        end
+        replicateAccessoryGuidForCurrentSelection(id, prefix, targetGuid)
+    end)
+
+    configui.onUpdate(prefix .. "accessory_item_id_copy_button", function()
+        local guid = getAccessoryID(id, prefix)
+        if guid == nil then
+            M.print("Copy: no accessory selected.", LogLevel.Warning)
+            return
+        end
+
+        clipboard.accessory_guid = tostring(guid)
+        configui.setValue(prefix .. "accessory_item_id", clipboard.accessory_guid, true)
+    end)
+
+    configui.onUpdate(prefix .. "accessory_item_id_paste_button", function()
+        if clipboard.accessory_guid == nil or clipboard.accessory_guid == "" then
+            M.print("Paste: clipboard is empty (use Copy first).", LogLevel.Warning)
+            return
+        end
+        configui.setValue(prefix .. "accessory_item_id", tostring(clipboard.accessory_guid), true)
+    end)
     configui.onUpdate(prefix .. "accessory_item_label", function(value)
         local accessoryID = getAccessoryID(id, prefix)
 		if accessoryID ~= nil then saveAccessoryField(id, accessoryID, "label", value, true) end
@@ -740,11 +1133,69 @@ function M.createConfigCallbacks(id, prefix)
         pokeIfPreviewingThisAccessory()
     end)
 
+    configui.onUpdate(prefix .. "accessory_item_location_copy_button", function()
+        local accessoryID = getAccessoryID(id, prefix)
+        if accessoryID == nil then
+            M.print("Copy Position: no accessory selected.", LogLevel.Warning)
+            return
+        end
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        clipboard.marker_location = uevrUtils.deepCopyTable(getMarkerField(id, accessoryID, markerIndex, "location"))
+        M.print("Copied Position from Marker " .. tostring(markerIndex), LogLevel.Debug)
+    end)
+
+    configui.onUpdate(prefix .. "accessory_item_location_paste_button", function()
+        if clipboard.marker_location == nil then
+            M.print("Paste Position: clipboard empty (use Copy).", LogLevel.Warning)
+            return
+        end
+        local accessoryID = getAccessoryID(id, prefix)
+        if accessoryID == nil then
+            M.print("Paste Position: no accessory selected.", LogLevel.Warning)
+            return
+        end
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        local pos = uevrUtils.deepCopyTable(clipboard.marker_location)
+        saveMarkerField(id, accessoryID, markerIndex, "location", pos, true)
+        configui.setValue(prefix .. "accessory_item_location", pos, true)
+        pokeIfPreviewingThisAccessory()
+        M.print("Pasted Position into Marker " .. tostring(markerIndex), LogLevel.Debug)
+    end)
+
     configui.onUpdate(prefix .. "accessory_item_rotation", function(value)
         local accessoryID = getAccessoryID(id, prefix)
         local markerIndex = getSelectedMarkerIndex(prefix)
         if accessoryID ~= nil then saveMarkerField(id, accessoryID, markerIndex, "rotation", {value.Pitch, value.Yaw, value.Roll}, true) end
         pokeIfPreviewingThisAccessory()
+    end)
+
+    configui.onUpdate(prefix .. "accessory_item_rotation_copy_button", function()
+        local accessoryID = getAccessoryID(id, prefix)
+        if accessoryID == nil then
+            M.print("Copy Rotation: no accessory selected.", LogLevel.Warning)
+            return
+        end
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        clipboard.marker_rotation = uevrUtils.deepCopyTable(getMarkerField(id, accessoryID, markerIndex, "rotation"))
+        M.print("Copied Rotation from Marker " .. tostring(markerIndex), LogLevel.Debug)
+    end)
+
+    configui.onUpdate(prefix .. "accessory_item_rotation_paste_button", function()
+        if clipboard.marker_rotation == nil then
+            M.print("Paste Rotation: clipboard empty (use Copy).", LogLevel.Warning)
+            return
+        end
+        local accessoryID = getAccessoryID(id, prefix)
+        if accessoryID == nil then
+            M.print("Paste Rotation: no accessory selected.", LogLevel.Warning)
+            return
+        end
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        local rot = uevrUtils.deepCopyTable(clipboard.marker_rotation)
+        saveMarkerField(id, accessoryID, markerIndex, "rotation", rot, true)
+        configui.setValue(prefix .. "accessory_item_rotation", rot, true)
+        pokeIfPreviewingThisAccessory()
+        M.print("Pasted Rotation into Marker " .. tostring(markerIndex), LogLevel.Debug)
     end)
 
     configui.onUpdate(prefix .. "accessory_item_activation_hand", function(value)
@@ -777,6 +1228,14 @@ function M.createConfigCallbacks(id, prefix)
         M.print("Selected accessory ID: " .. tostring(accessoryID), LogLevel.Debug)
         setUIForAccessory(id, prefix, accessoryID)
 
+        -- Keep replication "Current ID" field in sync with selection.
+        if accessoryID ~= nil and accessoryID ~= "none" then
+            configui.setValue(prefix .. "accessory_item_id", tostring(accessoryID), true)
+        else
+            configui.setValue(prefix .. "accessory_item_id", "", true)
+        end
+        refreshReplicationDropdownUI(id, prefix)
+
         if preview.enabled then
             preview.accessoryID = (accessoryID ~= "none") and accessoryID or nil
             preview.markerIndex = getSelectedMarkerIndex(prefix) or 1
@@ -807,6 +1266,63 @@ function M.createConfigCallbacks(id, prefix)
         configui.setValue(prefix .. "accessory_marker_picker", newIndex, true)
         setUIForMarker(id, prefix, accessoryID, newIndex)
         pokeIfPreviewingThisAccessory()
+    end)
+
+    configui.onUpdate(prefix .. "accessory_marker_copy_button", function()
+        local accessoryID = getAccessoryID(id, prefix)
+        if accessoryID == nil then
+            M.print("Copy Marker: no accessory selected.", LogLevel.Warning)
+            return
+        end
+
+        local acc = ensureAccessoryHasMarkers(id, accessoryID, true)
+        if acc == nil or type(acc.markers) ~= "table" or #acc.markers < 1 then
+            M.print("Copy Marker: no markers to copy.", LogLevel.Warning)
+            return
+        end
+
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        if markerIndex < 1 or markerIndex > #acc.markers then
+            M.print("Copy Marker: invalid marker index.", LogLevel.Warning)
+            return
+        end
+
+        clipboard.marker = uevrUtils.deepCopyTable(acc.markers[markerIndex])
+        M.print("Copied Marker " .. tostring(markerIndex), LogLevel.Debug)
+    end)
+
+    configui.onUpdate(prefix .. "accessory_marker_paste_button", function()
+        if clipboard.marker == nil then
+            M.print("Paste Marker: clipboard empty (use Copy first).", LogLevel.Warning)
+            return
+        end
+
+        local accessoryID = getAccessoryID(id, prefix)
+        if accessoryID == nil then
+            M.print("Paste Marker: no accessory selected.", LogLevel.Warning)
+            return
+        end
+
+        local acc = ensureAccessoryHasMarkers(id, accessoryID, true)
+        if acc == nil then return end
+        acc.markers = acc.markers or {}
+        if type(acc.markers) ~= "table" or #acc.markers < 1 then
+            M.print("Paste Marker: no markers exist to paste into.", LogLevel.Warning)
+            return
+        end
+
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        if markerIndex < 1 or markerIndex > #acc.markers then
+            M.print("Paste Marker: invalid marker index.", LogLevel.Warning)
+            return
+        end
+
+        acc.markers[markerIndex] = uevrUtils.deepCopyTable(clipboard.marker)
+        paramManager:set({"accessories", id, accessoryID, "markers"}, acc.markers, true)
+        refreshMarkerList(id, prefix, accessoryID)
+        setUIForMarker(id, prefix, accessoryID, markerIndex)
+        pokeIfPreviewingThisAccessory()
+        M.print("Pasted into Marker " .. tostring(markerIndex), LogLevel.Debug)
     end)
 
     configui.onUpdate(prefix .. "accessory_marker_delete_button", function()
@@ -904,6 +1420,16 @@ function M.createConfigCallbacks(id, prefix)
         local accessoryID = getAccessoryID(id, prefix)
         local markerIndex = getSelectedMarkerIndex(prefix)
         if accessoryID ~= nil then saveMarkerField(id, accessoryID, markerIndex, "grip_animation", gripAnimationID, true) end
+    end)
+
+    configui.onUpdate(prefix .. "accessory_item_grip_priority", function(value)
+        local accessoryID = getAccessoryID(id, prefix)
+        local markerIndex = getSelectedMarkerIndex(prefix)
+        local p = tonumber(value)
+        if accessoryID ~= nil and p ~= nil then
+            saveMarkerField(id, accessoryID, markerIndex, "grip_priority", p, true)
+            pokeIfPreviewingThisAccessory()
+        end
     end)
 
     -- Preview handlers
