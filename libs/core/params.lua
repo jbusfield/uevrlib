@@ -45,18 +45,27 @@ end
 
 -- Sets a parameter value and marks as dirty for autosave
 function M:set(key, value, persist)
+--print("[parameters] Setting parameter before:", key, type(value), tostring(value), persist)
+    value = uevrUtils.getNativeValue(value)
+--print("[parameters] Setting parameter after:", key, tostring(value), persist)
     if type(key) == "table" then
         local field = self.parameters
-        for i = 1, #key-1 do
-            local k = key[i]
-            if type(field[k]) ~= "table" then
-                field[k] = {}   -- auto-create missing table
+        if field ~= nil then
+            for i = 1, #key-1 do
+                local k = key[i]
+                if k ~= nil then
+                    if type(field[k]) ~= "table" then
+                        field[k] = {}   -- auto-create missing table
+                    end
+                    field = field[k]
+                end
             end
-            field = field[k]
+            field[key[#key]] = value
         end
-        field[key[#key]] = value
     else
-        self.parameters[key] = value
+        if self.parameters ~= nil then
+            self.parameters[key] = value
+        end
     end
     self.isDirty = persist == nil and false or persist
 end
@@ -71,7 +80,7 @@ function M:get(key)
         end
         return field
     else
-        return self.parameters[key]
+        return self.parameters and self.parameters[key] or nil
     end
 end
 
@@ -339,6 +348,7 @@ end
 --local profileIDs = {}
 function M:updateProfileUI(noCallbacks)
 	local ids, names, current = self:getProfiles()
+    --print("Updating profile UI with profiles:", ids, names, current)
 	self.profileIDs = ids
 	configui.setSelections(self.widgetPrefix .. "active_profile", names)
 	configui.setValue(self.widgetPrefix .. "active_profile", current, noCallbacks)

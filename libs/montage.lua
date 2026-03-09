@@ -69,7 +69,7 @@ local configui = require("libs/configui")
 local hands = require("libs/hands")
 local ui = require("libs/ui")
 local pawnModule = require("libs/pawn")
-local accessories = require("libs/accessories")
+local accessoriesConfig = require("libs/config/accessories_config_dev")
 
 local M = {}
 
@@ -112,10 +112,11 @@ local function refreshAccessorySelections()
 	accessorySelectionGuids = {}
 
 	local map = nil
-	if accessories ~= nil and type(accessories.getAccessories) == "function" then
-		map = accessories.getAccessories()
+	if accessoriesConfig ~= nil and type(accessoriesConfig.getAccessories) == "function" then
+		map = accessoriesConfig.getAccessories()
 	end
 
+	--print("Map", map)
 	if map ~= nil then
 		local guids = {}
 		for guid, _ in pairs(map) do

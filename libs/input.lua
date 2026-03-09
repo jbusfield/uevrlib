@@ -26,6 +26,7 @@ local parameters = {
     smoothTurnSpeed = 50,
     pawnPositionMode = M.PawnPositionMode.FOLLOWS,
     pawnRotationMode = M.PawnRotationMode.RIGHT_CONTROLLER,
+	pawnRotationLockedSmoothTime = 0.06,
     pawnPositionSweepMovement = true,
     pawnPositionAnimationScale = 0.2,
     headOffset = {X=0,Y=0,Z=0},
@@ -41,6 +42,8 @@ local parameters = {
 	orientRotationToMovement = 1,
 	useControllerDesiredRotation = 1,
 --	movementMethod = M.MovementMethod.HEAD,
+	optimizeBodyRotationCalculations = true,
+	optimizeBodyLocationCalculations = true,
 	usePawnControlRotation = 1
 }
 
@@ -52,10 +55,12 @@ local bodyRotationOffset = 0
 local bodyMesh = nil
 local pawnRotationModeOverride = nil
 local aimCameraOverride = nil
+local lastBodyYawUpdateTime = nil
 
 --Normally body yaw only needs to be calculated for one eye only in on_early_calculate_stereo_view_offset
 --but in some cases, like Avowed when climbing, the body yaw needs to be calculated for both eyes or else the eyes desync
 --This flag enables optimizations to skip the second calculation when not needed
+--Also if IK hands are jittery when snap turning or moving your head quickly, try setting this to false
 local optimizeBodyYawCalculations = true
 
 local rxState = 0
@@ -361,7 +366,7 @@ local cameraComponent = {
 local pawnSettings = nil
 local function resetPawnSettings()
 	cameraComponent:reset()
-	if uevrUtils.getValid(pawn) ~= nil and pawnSettings ~= nil then
+	if uevrUtils.getValid(pawn) ~= nil and pawnSettings ~= nil and pawn.bUseControllerRotationPitch ~= nil then
 		--restore pawn settings
 		--print("Restoring pawn settings")
 		pawn.bUseControllerRotationPitch = pawnSettings.bUseControllerRotationPitch
@@ -459,7 +464,7 @@ local function updateAim()
 		-- 	cameraComponent:setRotation(aimRotationOffset)
 		-- end
 		--cameraComponent:setRotation(getAimOffsetAdjustedRotation(uevrUtils.rotator(0,0,0)))
-		if pawn ~= nil and decoupledYaw ~= nil then
+		if pawn ~= nil and decoupledYaw ~= nil and pawn.Controller ~= nil then
 			pawn.Controller:SetControlRotation(uevrUtils.rotator(0, decoupledYaw+bodyRotationOffset, 0))
 		end
 	else
@@ -902,10 +907,28 @@ local function updateBodyYaw(delta)
 				elseif pawnRotationMode == M.PawnRotationMode.ADVANCED then
 					bodyRotationOffset = bodyYaw.updateAdvanced(bodyRotationOffset, currentHeadRotator.Yaw - decoupledYaw, controllers.getControllerLocation(2), controllers.getControllerLocation(0),  controllers.getControllerLocation(1), delta)
 				end
+				-- record last real tick time for fallback smoothing when delta is unavailable
+				--lastBodyYawUpdateTime = os.clock()
 			else
 				local aimMethod = getParameter("aimMethod")
 				if pawnRotationMode == M.PawnRotationMode.LOCKED then
 					bodyRotationOffset = currentHeadRotator.Yaw - decoupledYaw
+					-- local smoothTime = getParameter("pawnRotationLockedSmoothTime")
+					-- if smoothTime == nil or smoothTime == 0 then
+					-- 	bodyRotationOffset = currentHeadRotator.Yaw - decoupledYaw
+					-- else
+					-- 	print("Smoothing body yaw with no delta")
+					-- 	local target = currentHeadRotator.Yaw - decoupledYaw
+					-- 	local tau = smoothTime
+					-- 	local dt = 1/90
+					-- 	if lastBodyYawUpdateTime ~= nil then
+					-- 		local now = os.clock()
+					-- 		dt = math.max(0.0005, now - lastBodyYawUpdateTime)
+					-- 		lastBodyYawUpdateTime = now
+					-- 	end
+					-- 	local alpha = 1 - math.exp(-dt / math.max(1e-6, tau))
+					-- 	bodyRotationOffset = bodyRotationOffset + (target - bodyRotationOffset) * alpha
+					-- end
 				elseif pawnRotationMode == M.PawnRotationMode.LEFT_CONTROLLER then
 --TODO this seems wrong. Why is aim affecting body rotation?
 					local rotation = (aimMethod == M.AimMethod.LEFT_WEAPON and weaponRotation ~= nil and weaponRotation.left ~= nil) and weaponRotation.left or controllers.getControllerRotation(Handed.Left)
@@ -951,7 +974,8 @@ local function updatePawnPositionRoomscale(world_to_meters)
 
 		--delta is how much the real world position of the hmd is changed from the real world origin
 		local delta = {X=(temp_vec3f.X-origin.X)*world_to_meters, Y=(temp_vec3f.Y-origin.Y)*world_to_meters, Z=(temp_vec3f.Z-origin.Z)*world_to_meters}
-
+		-- local dist = delta.X*delta.X + delta.Y*delta.Y
+		-- print(dist)
 		-- temp_quatf contains how much the rotation of the hmd is relative to the real world vr coordinate system
 		--local poseQuat = uevrUtils.quat(temp_quatf.Z, temp_quatf.X, -temp_quatf.Y, -temp_quatf.W)  --reordered terms to convert UEVR to unreal coord system
 		--local poseRotator = kismet_math_library:Quat_Rotator(poseQuat)
@@ -968,25 +992,29 @@ local function updatePawnPositionRoomscale(world_to_meters)
 
 		--add the decoupledYaw yaw rotation to the delta vector
 		forwardVector = kismet_math_library:RotateAngleAxis( forwardVector,  decoupledYaw, uevrUtils.vector(0,0,1))
-		forwardVector.Z = 0 --do not affect up/down
-		pcall(function()
-			if pawnPositionMode == M.PawnPositionMode.ANIMATED  then
-				if uevrUtils.getValid(pawn) ~= nil and pawn.AddMovementInput ~= nil then
-					pawn:AddMovementInput(forwardVector, getParameter("pawnPositionAnimationScale"), false) --dont need to check for pawn because if rootComponent exists then pawn exists
+		--local dist = forwardVector.X*forwardVector.X + forwardVector.Y*forwardVector.Y
+		--if dist > 2.0 then
+			--print("Here",dist)
+			forwardVector.Z = 0 --do not affect up/down
+			pcall(function()
+				if pawnPositionMode == M.PawnPositionMode.ANIMATED  then
+					if uevrUtils.getValid(pawn) ~= nil and pawn.AddMovementInput ~= nil then
+						pawn:AddMovementInput(forwardVector, getParameter("pawnPositionAnimationScale"), false) --dont need to check for pawn because if rootComponent exists then pawn exists
+					end
+				elseif pawnPositionMode == M.PawnPositionMode.FOLLOWS and rootComponent.K2_AddWorldOffset ~= nil then
+					--pcall(function()
+					if uevrUtils.getValid(rootComponent) ~= nil then
+						rootComponent:K2_AddWorldOffset(forwardVector, getParameter("pawnPositionSweepMovement"), reusable_hit_result, false)
+					end
+					--end)
+					--rootComponent:K2_SetWorldLocation(uevrUtils.vector(pawnPos.X+forwardVector.X,pawnPos.Y+forwardVector.Y,pawnPos.Z),pawnPositionSweepMovement,reusable_hit_result,false)
 				end
-			elseif pawnPositionMode == M.PawnPositionMode.FOLLOWS and rootComponent.K2_AddWorldOffset ~= nil then
-				--pcall(function()
-				if uevrUtils.getValid(rootComponent) ~= nil then
-					rootComponent:K2_AddWorldOffset(forwardVector, getParameter("pawnPositionSweepMovement"), reusable_hit_result, false)
-				end
-				--end)
-				--rootComponent:K2_SetWorldLocation(uevrUtils.vector(pawnPos.X+forwardVector.X,pawnPos.Y+forwardVector.Y,pawnPos.Z),pawnPositionSweepMovement,reusable_hit_result,false)
-			end
-		end)
+			end)
 
-		--temp_vec3f has the get_pose location
-		temp_vec3f.Y = origin.Y --dont affect the up_down position
-		uevr.params.vr.set_standing_origin(temp_vec3f)
+			--temp_vec3f has the get_pose location
+			temp_vec3f.Y = origin.Y --dont affect the up_down position
+			uevr.params.vr.set_standing_origin(temp_vec3f)
+		--end
 	end
 end
 updatePawnPositionRoomscale = uevrUtils.profiler:wrap("updatePawnPositionRoomscale", updatePawnPositionRoomscale)
@@ -1088,12 +1116,15 @@ getVRCameraOffsets = uevrUtils.profiler:wrap("getVRCameraOffsets", getVRCameraOf
 
 uevr.params.sdk.callbacks.on_early_calculate_stereo_view_offset(function(device, view_index, world_to_meters, position, rotation, is_double)
 	if not isDisabled then --and getParameter("aimMethod") ~= M.AimMethod.UEVR then
-		if optimizeBodyYawCalculations == false or view_index == 1 then
+		--print(optimizeBodyYawCalculations == false, getParameter("optimizeBodyRotationCalculations") ~= true, view_index)
+		if optimizeBodyYawCalculations == false or getParameter("optimizeBodyRotationCalculations") ~= true or view_index == 1 then
 			updateBodyYaw()
+		end
+		if getParameter("optimizeBodyLocationCalculations") ~= true or view_index == 1 then
+			updatePawnPositionRoomscale(world_to_meters)
 		end
 
 		if view_index == 1 then
-			updatePawnPositionRoomscale(world_to_meters)
 			updateMeshRelativePosition()
 		end
 

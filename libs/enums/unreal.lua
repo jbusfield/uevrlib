@@ -63,3 +63,10 @@ ETriState =
 	TRUE                                    = 2,
 	FALSE                                   = 3,
 }
+
+EBoneSpaces =
+{
+	WorldSpace                               = 0,
+	ComponentSpace                           = 1,
+	EBoneSpaces_MAX                          = 2,
+}

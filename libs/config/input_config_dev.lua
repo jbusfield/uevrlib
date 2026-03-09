@@ -207,6 +207,22 @@ local function getConfigWidgets(m_paramManager)
 					selections = {"Game", "Right Controller", "Left Controller", "Locked Head/HMD", "Follows Head (Simple)", "Follows Head (Advanced)"},
 					initialValue = configDefaults["pawnRotationMode"]
 				},
+				{ widgetType = "same_line"},
+				{
+					widgetType = "checkbox",
+					id = widgetPrefix .. "optimizeBodyRotationCalculations",
+					label = "Optimize",
+					initialValue = configDefaults["optimizeBodyRotationCalculations"]
+				},
+				{
+					widgetType = "slider_float",
+					id = widgetPrefix .. "pawnRotationLockedSmoothTime",
+					label = "Smoothing",
+					speed = .01,
+					range = {0, 1},
+					initialValue = configDefaults["pawnRotationLockedSmoothTime"],
+					isHidden = true
+				},
 				expandArray(bodyYaw.getConfigurationWidgets),
 		{
 			widgetType = "tree_pop"
@@ -223,6 +239,13 @@ local function getConfigWidgets(m_paramManager)
 				label = "Type",
 				selections = {"None", "Follows HMD", "Follows HMD With Animation"},
 				initialValue = configDefaults["pawnPositionMode"]
+			},
+			{ widgetType = "same_line"},
+			{
+				widgetType = "checkbox",
+				id = widgetPrefix .. "optimizeBodyLocationCalculations",
+				label = "Optimize",
+				initialValue = configDefaults["optimizeBodyLocationCalculations"]
 			},
 			{
 				widgetType = "checkbox",
@@ -382,6 +405,7 @@ local function updateUIState(key)
     elseif key == "pawnRotationMode" then
         configui.hideWidget("minAngularDeviation", not (configui.getValue(exKey) == M.PawnRotationMode.SIMPLE or configui.getValue(exKey) == M.PawnRotationMode.ADVANCED))
         configui.hideWidget("alignConfidenceThreshold",  configui.getValue(exKey) ~= M.PawnRotationMode.ADVANCED)
+        --configui.hideWidget(widgetPrefix .. "pawnRotationLockedSmoothTime",  configui.getValue(exKey) ~= M.PawnRotationMode.LOCKED)
     elseif key == "pawnPositionMode" then
         configui.hideWidget(widgetPrefix .. "pawnPositionAnimationScale", configui.getValue(exKey) ~= M.PawnPositionMode.ANIMATED)
         configui.hideWidget(widgetPrefix .. "pawnPositionSweepMovement", configui.getValue(exKey) ~= M.PawnPositionMode.FOLLOWS)
@@ -475,6 +499,14 @@ configui.onUpdate(widgetPrefix .. "snapAngle", function(value)
 	updateSetting("snapAngle", value)
 end)
 
+configui.onUpdate(widgetPrefix .. "optimizeBodyRotationCalculations", function(value)
+	updateSetting("optimizeBodyRotationCalculations", value)
+end)
+
+configui.onUpdate(widgetPrefix .. "optimizeBodyLocationCalculations", function(value)
+	updateSetting("optimizeBodyLocationCalculations", value)
+end)
+
 configui.onUpdate(widgetPrefix .. "smoothTurnSpeed", function(value)
 	updateSetting("smoothTurnSpeed", value)
 end)
@@ -482,6 +514,10 @@ end)
 configui.onUpdate(widgetPrefix .. "pawnRotationMode", function(value)
 	updateSetting("pawnRotationMode", value)
     updateUIState("pawnRotationMode")
+end)
+
+configui.onUpdate(widgetPrefix .. "pawnRotationLockedSmoothTime", function(value)
+	updateSetting("pawnRotationLockedSmoothTime", value)
 end)
 
 configui.onCreate(widgetPrefix .. "pawnRotationMode", function(value)

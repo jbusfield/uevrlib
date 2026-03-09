@@ -250,6 +250,10 @@ Available Widget Types:
 		properties: label
 		example: { widgetType = "collapsing_header", label = "Advanced Settings" }
 
+	- list_box - Start a list box container
+		properties: id, isHidden
+		example: { widgetType = "list_box", id = "some_list", selections = {"One", "Two", "Three"}, label = "List", isHidden = false, width = 300, height = 100 }
+
 	- begin_group - Start a group of widgets
 		properties: id, isHidden
 		example: { widgetType = "begin_group", id = "advanced_settings", isHidden = false }
@@ -415,6 +419,7 @@ ImGuiWindowFlags = {
     NoDecoration = 1 << 0 | 1 << 1 | 1 << 2 | 1 << 5, -- Alias for NoTitleBar, NoResize, NoMove, NoCollapse
     NoInputs = 1 << 9 | 1 << 18 | 1 << 19, -- Alias for NoMouseInputs and NoNav
 }
+
 
 local configValues = {}
 local itemMap = {}
@@ -701,6 +706,27 @@ local function drawUI(panelID)
 				imgui.begin_group()
 			elseif item.widgetType == "end_group" then
 				imgui.end_group()
+			elseif item.widgetType == "list_box" then
+				local size = nil
+				if item.width ~= nil or item.height ~= nil then
+					size = {item.width or 300, item.height or 100}
+				end
+				imgui.begin_list_box(item.label, size)
+				for index, selection in ipairs(item.selections or {}) do				
+					-- imgui.push_style_color(ImGui.Header, colorStringToInteger(item.color or "#FF8888FF"))
+					-- imgui.push_style_color(ImGui.HeaderActive, colorStringToInteger(item.color or "#FF8888FF"))
+					-- imgui.push_style_color(ImGui.HeaderHovered, colorStringToInteger(item.color or "#FF8888FF"))
+
+					if imgui.menu_item(selection, "", item.selectedIndex == index, true) then
+						item.selectedIndex = index
+						doUpdate(panelID, item.id, selection)
+					end
+					-- imgui.pop_style_color(3)
+				end
+				imgui.end_list_box()
+				--imgui.selectable("Highlighted Item", true)
+			-- elseif item.widgetType == "end_list_box" then
+			-- 	imgui.end_list_box()
 			elseif item.widgetType == "begin_child_window" then
 				imgui.begin_child_window(getVector2FromArray(item.size), item.border, item.flags)
 			elseif item.widgetType == "end_child_window" then

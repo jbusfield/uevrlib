@@ -148,7 +148,7 @@ local configui = require("libs/configui")
 local controllers = require("libs/controllers")
 local scope = require('libs/scope')
 local laser = require('libs/laser')
-local accessories = require('libs/accessories')
+local accessoriesConfig = require('libs/config/accessories_config_dev')
 
 --local debugger = require("libs/uevr_debug")
 
@@ -394,7 +394,7 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 			}
 		)
 
-		local accessoriesWidgets = accessories.getConfigWidgets(name, widgetPrefix .. name .. "_", 300)
+		local accessoriesWidgets = accessoriesConfig.getConfigWidgets(name, widgetPrefix .. name .. "_", 300)
 		for j = 1, #accessoriesWidgets do
 			table.insert(configDefinition[1]["layout"], accessoriesWidgets[j])
 		end
@@ -426,7 +426,7 @@ function M.addAttachmentOffsetsToConfigUI(configDefinition, m_attachmentOffsets)
 
 		scope.createConfigCallbacks(name, widgetPrefix .. name .. "_")
 
-		accessories.createConfigCallbacks(name, widgetPrefix .. name .. "_")
+		accessoriesConfig.createConfigCallbacks(name, widgetPrefix .. name .. "_")
 
 		configui.onUpdate(widgetPrefix .. name .. "_position", function(value)
 			M.updateAttachmentTransform(value, nil, nil, id)
@@ -634,7 +634,7 @@ function M.init(isDeveloperMode, logLevel, m_defaultLocation, m_defaultRotation,
     end
 
 	scope.init()
-	accessories.init(nil, nil, M)
+	accessoriesConfig.init(isDeveloperMode, logLevel, M)
 
     if isDeveloperMode then
 		--backward compatibility
@@ -811,14 +811,24 @@ function M.getAttachmentOffset(attachment)
 			--if hasNamedObject(attachment, parent, child) then
 			local _, _, attachmentID = getAttachmentNames(attachment)
 			if id == attachmentID then
-				local position = configui.getValue(widgetPrefix .. id .. "_position")
-				if position == nil then position = attachmentOffsets[i]["location"] end
+				local position = attachmentOffsets[i]["location"]
+				if position == nil then
+					position = configui.getValue(widgetPrefix .. id .. "_position")
+				-- else
+				-- 	configui.setValue(widgetPrefix .. id .. "_position", position)
+				end
+				-- local position = configui.getValue(widgetPrefix .. id .. "_position")
+				-- if position == nil then position = attachmentOffsets[i]["location"] end
 
-				local rotation = configui.getValue(widgetPrefix .. id .. "_rotation")
-				if rotation == nil then rotation = attachmentOffsets[i]["rotation"] end
+				local rotation = attachmentOffsets[i]["rotation"]
+				if rotation == nil then rotation = configui.getValue(widgetPrefix .. id .. "_rotation") end
+				--local rotation = configui.getValue(widgetPrefix .. id .. "_rotation")
+				--if rotation == nil then rotation = attachmentOffsets[i]["rotation"] end
 
-				local scale = configui.getValue(widgetPrefix .. id .. "_scale")
-				if scale == nil then scale = attachmentOffsets[i]["scale"] end
+				local scale = attachmentOffsets[i]["scale"]
+				if scale == nil then scale = configui.getValue(widgetPrefix .. id .. "_scale") end
+				-- local scale = configui.getValue(widgetPrefix .. id .. "_scale")
+				-- if scale == nil then scale = attachmentOffsets[i]["scale"] end
 				if scale == nil then --set a fixed scale in case something else tries to change it
 					attachmentOffsets[i]["scale"] = {attachment.RelativeScale3D.X, attachment.RelativeScale3D.Y, attachment.RelativeScale3D.Z}
 					scale = attachmentOffsets[i]["scale"]
@@ -1297,6 +1307,7 @@ end
 -- end
 
 --function M.updateAttachmentTransform(pos, rot, scale, parentName, childName)
+
 function M.updateAttachmentTransform(pos, rot, scale, id)
 	if id ~= nil then
 		M.setAttachmentOffset(id, pos, rot)
@@ -1741,7 +1752,7 @@ function M.attachToRawController(attachment, gripHand, options)
 end
 
 function M.detach(attachment, parent, attachType, originalTransform, detachFromParentOnRelease, maintainWorldPositionOnDetachFromParent)
-	--print("Detaching attachment", attachment, parent or nil, attachType)
+	print("Detaching attachment", attachment, parent or nil, attachType)
 	if uevrUtils.getValid(attachment) ~= nil then
 		if attachType == M.AttachType.RAW_CONTROLLER then
 			M.print("Detaching attachment from raw controller: " .. attachment:get_full_name())
@@ -1999,6 +2010,19 @@ configui.onUpdate("uevr_attachment_base_rotation", function(value)
 
 	if attachmentLasers[Handed.Left] then attachmentLasers[Handed.Left]:setRelativeRotation(uevrUtils.rotator(parameters["baseOffsets"]["rotation"])) end
 	if attachmentLasers[Handed.Right] then attachmentLasers[Handed.Right]:setRelativeRotation(uevrUtils.rotator(parameters["baseOffsets"]["rotation"])) end
+
+	-- local attachmentData = M.getCurrentGrippedAttachmentData(Handed.Left)
+	-- if attachmentData ~= nil then
+	-- 	local loc, rot, scale = M.getAttachmentOffset(attachmentData.attachment)
+	-- 	local attachmentID = M.getAttachmentIDFromAttachment(attachmentData.attachment)
+	-- 	M.updateAttachmentTransform(loc, rot, scale, attachmentID)
+	-- end
+	-- local attachmentData = M.getCurrentGrippedAttachmentData(Handed.Right)
+	-- if attachmentData ~= nil then
+	-- 	local loc, rot, scale = M.getAttachmentOffset(attachmentData.attachment)
+	-- 	local attachmentID = M.getAttachmentIDFromAttachment(attachmentData.attachment)
+	-- 	M.updateAttachmentTransform(loc, rot, scale, attachmentID)
+	-- end
 end)
 
 local autoUpdateCallbackCreated = false

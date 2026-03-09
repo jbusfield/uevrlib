@@ -783,6 +783,18 @@ Usage
 --Find orphaned prints: ^[^-]*[^.\w]print\(
 
 require("libs/enums/unreal")
+local coreLerp = require("libs/core/lerp")
+-- TArray Support ----------------
+local tArrayExists, tArray = pcall(require, "libs/core/tarray")
+if tArrayExists == false then tArray = nil end
+local function checkTArrayExists()
+	if tArray == nil then
+		print("TArray module not loaded. Ensure libs/core/tarray.lua exists and the tarray_helper.dll file is in the plugins folder")
+	end
+	return tArray ~= nil
+end
+---------------------------------
+
 -------------------------------
 -- Globals
 --  These exist for backwards compatability with existing scripts 
@@ -950,7 +962,6 @@ KeyName = {
 	PS4_Special = "PS4_Special"
 }
 -------------------------------
-local coreLerp = require("libs/core/lerp")
 
 local M = {}
 
@@ -1304,6 +1315,20 @@ local function updateLazyPoll(delta)
 			lazyElapsedTime = 0
 		end
 	end
+end
+
+local function unregisterUEVRCallback(callbackName, callbackFunc)
+	if uevrCallbacks[callbackName] ~= nil then
+		for i, entry in ipairs(uevrCallbacks[callbackName]) do
+			if entry.func == callbackFunc then
+				table.remove(uevrCallbacks[callbackName], i)
+				break
+			end
+		end
+	end
+end
+function M.unregisterUEVRCallback(callbackName, callbackFunc)
+	unregisterUEVRCallback(callbackName, callbackFunc)
 end
 
 local function registerUEVRCallback(callbackName, callbackFunc, priority)
@@ -1715,7 +1740,12 @@ function M.setLogToFile(val)
 end
 
 function M.printStackTrace()
+--	local ok, result = pcall(function()
     print(debug.traceback())
+--	end)
+--	if not ok then
+--		M.print(result)
+--	end
 end
 
 function M.print(str, logLevel)
@@ -2376,16 +2406,6 @@ function M.getAllActorsOfClass(className)
 	return actors
 end
 
--- TArray Support ----------------
-local tArrayExists, tArray = pcall(require, "libs/core/tarray")
-if tArrayExists == false then tArray = nil end
-local function checkTArrayExists()
-	if tArray == nil then
-		M.print("TArray module not loaded. Ensure libs/core/tarray.lua exists and the tarray_helper.dll file is in the plugins folder", LogLevel.Error)
-	end
-	return tArray ~= nil
-end
----------------------------------
 
 function M.getSocketNames(object, callback)
 ---@diagnostic disable-next-line: need-check-nil
@@ -2716,27 +2736,33 @@ function M.getArrayFromVector2(vec)
 	if vec == nil then
 		return {0,0}
 	end
-	return {vec.x, vec.y}
+	return {M.cleanFloat(vec.x), M.cleanFloat(vec.y)}
 end
 
 function M.getArrayFromVector3(vec)
 	if vec == nil then
 		return {0,0,0}
 	end
-	return {vec.X, vec.Y, vec.Z}
+	return {M.cleanFloat(vec.X), M.cleanFloat(vec.Y), M.cleanFloat(vec.Z)}
 end
 
 function M.getArrayFromVector4(vec)
 	if vec == nil then
 		return {0, 0, 0, 0}
 	end
-	return {vec.X, vec.Y, vec.Z, vec.W}
+	return {M.cleanFloat(vec.X), M.cleanFloat(vec.Y), M.cleanFloat(vec.Z), M.cleanFloat(vec.W)}
+end
+
+function M.cleanFloat(num)
+	if num < 0.0001 and num > -0.0001 then num = 0 end
+	num = math.floor(num * 10000) / 10000
+	return num
 end
 
 --convert userdata types to native lua types for json saving
 function M.getNativeValue(val, useTable)
 	local returnValue = val
-	if type(val) == "userdata" then
+	if type(val) == "userdata" then 
 ---@diagnostic disable-next-line: undefined-field
 		if val.x ~= nil and val.y ~= nil and val.z == nil and val.w == nil then
 			returnValue = M.getArrayFromVector2(val)
@@ -2754,6 +2780,16 @@ function M.getNativeValue(val, useTable)
 			returnValue = M.getArrayFromVector4(val)
 			if useTable == true then
 				returnValue = {X=returnValue[1], Y=returnValue[2], Z=returnValue[3], W=returnValue[4]}
+			end
+		elseif val.X ~= nil and val.Y ~= nil and val.Z ~= nil then
+			returnValue = M.getArrayFromVector3(val)
+			if useTable == true then
+				returnValue = {X=returnValue[1], Y=returnValue[2], Z=returnValue[3]}
+			end
+		elseif val.Pitch ~= nil and val.Yaw ~= nil and val.Roll ~= nil then
+			returnValue = {M.cleanFloat(val.Pitch), M.cleanFloat(val.Yaw), M.cleanFloat(val.Roll)}
+			if useTable == true then
+				returnValue = {Pitch=returnValue[1], Yaw=returnValue[2], Roll=returnValue[3]}
 			end
 		end
 	end
@@ -3139,7 +3175,9 @@ function M.destroyComponent(component, destroyOwner, destroyChildren)
 				if children ~= nil then
 					M.print("[destroyComponent] Found " .. #children .. " children")
 					for i = #children, 1, -1 do
-						M.destroyComponent(children[i], destroyOwner, destroyChildren)
+						-- Never propagate destroyOwner into children: they share the same owner actor.
+						-- Destroying the owner during child recursion can invalidate subsequent UObject calls and crash.
+						M.destroyComponent(children[i], false, destroyChildren)
 					end
 				else
 					M.print("[destroyComponent] No children found")
@@ -4002,3 +4040,4 @@ hook_function("Class /Script/Engine.PlayerController", "ClientRestart", true, ni
 
 
 return M
+
