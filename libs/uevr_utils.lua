@@ -2081,7 +2081,14 @@ end
 function M.quat(x, y, z, w, reuseable)
 	local quat = M.get_struct_object("ScriptStruct /Script/CoreUObject.Quat", reuseable)
 	if quat ~= nil then
-		kismet_math_library:Quat_SetComponents(quat, x, y, z, w)
+		if kismet_math_library.Quat_SetComponents ~= nil then
+			kismet_math_library:Quat_SetComponents(quat, x, y, z, w)
+		else
+			quat.X = x
+			quat.Y = y
+			quat.Z = z
+			quat.W = w
+		end
 	end
 	return quat
 end
@@ -3228,9 +3235,9 @@ end
 function M.createPoseableMeshFromSkeletalMesh(skeletalMeshComponent, options)
 	if options == nil then options = {} end
 	local showDebug = options.showDebug
-	if showDebug == true then M.print("Creating PoseableMeshComponent from " .. skeletalMeshComponent:get_full_name()) end
 	local poseableComponent = nil
 	if skeletalMeshComponent ~= nil then
+		if showDebug == true then M.print("Creating PoseableMeshComponent from " .. skeletalMeshComponent:get_full_name()) end
 		if skeletalMeshComponent:is_a(M.get_class("Class /Script/Engine.SkeletalMeshComponent")) or skeletalMeshComponent:is_a(M.get_class("Class /Script/Engine.PoseableMeshComponent")) then
 			poseableComponent = M.create_component_of_class("Class /Script/Engine.PoseableMeshComponent", options.manualAttachment, options.relativeTransform, options.deferredFinish, options.parent, options.tag)
 			--poseableComponent:SetCollisionEnabled(0, false)

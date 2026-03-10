@@ -1303,7 +1303,7 @@ end
 function M.setLabel(widgetID, newLabel)
 	local item = getDefinitionElement(M.getPanelID(widgetID), widgetID)
 	if item ~= nil then
-		if item.widgetType == "text" and item.wrapped == true then
+		if item.widgetType == "text" or item.widgetType == "text_colored" and item.wrapped == true then
 			item.label_wrapped = wrapTextOnWordBoundary(newLabel, item.textWidth)
 		end
 		item.label = newLabel

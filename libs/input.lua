@@ -962,7 +962,39 @@ local function updateBodyYaw(delta)
 end
 updateBodyYaw = uevrUtils.profiler:wrap("updateBodyYaw", updateBodyYaw)
 
+local function Quat_RotateVector(quat, vec)
+	if kismet_math_library.Quat_RotateVector == nil then
+			-- support method-call style: (self, quat, vec) or function-call style (quat, vec)
+			if vec == nil and type(quat) == "table" and quat.X ~= nil and quat.Y ~= nil and quat.Z ~= nil and quat.W == nil then
+				-- unlikely, keep signature robust
+			end
 
+			local q = quat
+			-- extract quaternion components (accept many naming conventions)
+			local qx = (q.X or q.x or q[1]) or 0
+			local qy = (q.Y or q.y or q[2]) or 0
+			local qz = (q.Z or q.z or q[3]) or 0
+			local qw = (q.W or q.w or q[4]) or 0
+
+			local v = vec or {X=0,Y=0,Z=0}
+			local vx = (v.X or v.x or v[1]) or 0
+			local vy = (v.Y or v.y or v[2]) or 0
+			local vz = (v.Z or v.z or v[3]) or 0
+
+			-- t = 2 * cross(q_vec, v)
+			local tx = 2 * ( qy * vz - qz * vy )
+			local ty = 2 * ( qz * vx - qx * vz )
+			local tz = 2 * ( qx * vy - qy * vx )
+
+			-- v' = v + qw * t + cross(q_vec, t)
+			local cx = qy * tz - qz * ty
+			local cy = qz * tx - qx * tz
+			local cz = qx * ty - qy * tx
+
+			return { X = vx + qw * tx + cx, Y = vy + qw * ty + cy, Z = vz + qw * tz + cz }
+		end
+	return kismet_math_library:Quat_RotateVector(quat, vec)
+end
 local function updatePawnPositionRoomscale(world_to_meters)
 	local pawnPositionMode = getParameter("pawnPositionMode")
 	if pawnPositionMode ~= M.PawnPositionMode.NONE and rootComponent ~= nil and decoupledYaw ~= nil then
@@ -988,7 +1020,7 @@ local function updatePawnPositionRoomscale(world_to_meters)
 		--print("HEAD",headRotator.Pitch, headRotator.Yaw, headRotator.Roll) --this is in the Unreal coord system
 
 		--rotate the delta by the amount of the hmd offset
-		local forwardVector = kismet_math_library:Quat_RotateVector(headQuat, uevrUtils.vector(-delta.Z, delta.X, delta.Y)) --converts UEVR to Unreal coord system
+		local forwardVector = Quat_RotateVector(headQuat, uevrUtils.vector(-delta.Z, delta.X, delta.Y)) -- kismet_math_library:Quat_RotateVector(headQuat, uevrUtils.vector(-delta.Z, delta.X, delta.Y)) --converts UEVR to Unreal coord system
 
 		--add the decoupledYaw yaw rotation to the delta vector
 		forwardVector = kismet_math_library:RotateAngleAxis( forwardVector,  decoupledYaw, uevrUtils.vector(0,0,1))

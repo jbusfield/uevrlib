@@ -76,6 +76,8 @@ local configDefinition = {
 					initialValue = 1
 				},
 				{ widgetType = "new_line" },
+				{ widgetType = "text_colored", id = "version_info", isHidden = false, wrapped = true, textWidth = textWidth, color = "#0088FFFF", label = ""},
+				{ widgetType = "new_line" },
 				{ widgetType = "unindent", width = 20 },
 			{
 				widgetType = "end_group",
@@ -2739,6 +2741,16 @@ function M.updateCurrentStep(previousStep, m_currentStep)
 print("Current Step",currentStep)
 	hands.disableAnimations(true)
 	if currentStep == 1 then
+		local engineVersion = "unknown"
+		if kismet_system_library ~= nil and kismet_system_library.GetEngineVersion ~= nil then
+			engineVersion = kismet_system_library:GetEngineVersion()
+		end
+		local displayEngineVersion = engineVersion
+		if type(engineVersion) == "string" and #engineVersion > 1 then
+			displayEngineVersion = string.sub(engineVersion, 1, -2)
+		end
+		configui.setLabel("version_info", "If hands creation does not work it may be because hands creation is not supported in Unreal Engine versions earlier than 4.26. The Unreal Engine version of this game is " .. displayEngineVersion )
+
 		loadProfileNames()
 		configui.hideWidget("next_button", false)
 		configui.disableWidget("next_button", false)
