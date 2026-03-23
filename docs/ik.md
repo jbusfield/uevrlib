@@ -6,7 +6,7 @@ The IK module allows you to add Two Bone IK to player meshes using UEVR.
 
 Using the IK config UI you can select the game mesh you wish to use to create the IK rig. The mesh you select is then copied as a PoseableMeshComponent, whose bones are then 
 manipulated to perform the Inverse Kinematics.
-A quick video guide to setting up IK is available here https://youtu.be/UeKNvOFPmz4. The demo uses the game Hello Neighbor 2 Demo which is free on steam.
+A <A HREF="https://youtu.be/UeKNvOFPmz4">quick video guide</A> to setting up IK is available. The demo uses the game Hello Neighbor 2 Demo which is free on steam.
 
 <br><img width="346" height="348" alt="reticule1" src="images/ik_01.png" />
 
