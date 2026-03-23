@@ -26,6 +26,7 @@ The library comes with several examples. The files that begin with "example_" wo
 - [Config UI](docs/configui.md)
 - [Controller Remapping](docs/remap.md)
 - [Interaction (Laser Pointer)](docs/interaction.md)
+- [Inverse Kinematics (IK)](docs/ik.md)
 - [Montages](docs/montage.md)
 - [Gestures](docs/gestures.md)
 - [Gunstock](docs/gunstock.md)
