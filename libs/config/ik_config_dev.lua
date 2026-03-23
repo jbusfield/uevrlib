@@ -27,10 +27,11 @@ local rigDefaults = {
 	animation_mesh = "",
 	animation_location_offset = uevrUtils.vector(0,0,0),
 	animation_rotation_offset = uevrUtils.rotator(0,0,0),
+	show_debug_meshes = false,
 }
 local solverDefaults = {
 	label = "",
-	active = true,
+	active = false,
 	solver_type = M.SolverType.TWO_BONE,
     end_bone = "",
 	joint_bone = "",
@@ -52,6 +53,7 @@ local solverDefaults = {
 }
 
 local meshList = {}
+local animationMeshList = {}
 local boneNames = {}
 local solverIds = {}
 local selectedSolverId = nil
@@ -114,6 +116,12 @@ local function getConfigWidgets(m_paramManager)
                 speed = 1,
                 range = {-360, 360},
                 initialValue = {0,0,0}
+            },
+            {
+                widgetType = "checkbox",
+                id = widgetPrefix .. "show_debug_meshes",
+                label = "Show Debug Meshes",
+                initialValue = false
             },
             {
                 widgetType = "tree_node",
@@ -378,24 +386,44 @@ local function getConfigWidgets(m_paramManager)
 							label = "Bone 1",
 							selections = {"None"},
 							initialValue = 1,
-							width = 200
+							width = 170
 						},
 						{
 							widgetType = "input_text",
 							id = widgetPrefix .. "lower_twist_bone_1",
 							label = "Bone 1",
 							initialValue = "",
-							width = 200,
+							width = 170,
 							isHidden = hideLabels
 						},
 						{ widgetType = "same_line" },
 						{
 							widgetType = "slider_float",
-							id = widgetPrefix .. "lower_twist_bone_frac_1",
-							label = "%",
+							id = widgetPrefix .. "lower_twist_bone_roll_1",
+							label = "Roll %",
 							speed = 0.01,
 							range = {0,1},
-							initialValue = 0.25,
+							initialValue = 0.0,
+							width = 80
+						},
+						{ widgetType = "same_line" },
+						{
+							widgetType = "slider_float",
+							id = widgetPrefix .. "lower_twist_bone_pitch_1",
+							label = "Pitch %",
+							speed = 0.01,
+							range = {0,1},
+							initialValue = 0.0,
+							width = 80
+						},
+						{ widgetType = "same_line" },
+						{
+							widgetType = "slider_float",
+							id = widgetPrefix .. "lower_twist_bone_yaw_1",
+							label = "Yaw %",
+							speed = 0.01,
+							range = {0,1},
+							initialValue = 0.0,
 							width = 80
 						},
 						{
@@ -404,24 +432,44 @@ local function getConfigWidgets(m_paramManager)
 							label = "Bone 2",
 							selections = {"None"},
 							initialValue = 1,
-							width = 200
+							width = 170
 						},
 						{
 							widgetType = "input_text",
 							id = widgetPrefix .. "lower_twist_bone_2",
 							label = "Bone 2",
 							initialValue = "",
-							width = 200,
+							width = 170,
 							isHidden = hideLabels
 						},
 						{ widgetType = "same_line" },
 						{
 							widgetType = "slider_float",
-							id = widgetPrefix .. "lower_twist_bone_frac_2",
-							label = "%",
+							id = widgetPrefix .. "lower_twist_bone_roll_2",
+							label = "Roll %",
 							speed = 0.01,
 							range = {0,1},
-							initialValue = 0.5,
+							initialValue = 0.0,
+							width = 80
+						},
+						{ widgetType = "same_line" },
+						{
+							widgetType = "slider_float",
+							id = widgetPrefix .. "lower_twist_bone_pitch_2",
+							label = "Pitch %",
+							speed = 0.01,
+							range = {0,1},
+							initialValue = 0.0,
+							width = 80
+						},
+						{ widgetType = "same_line" },
+						{
+							widgetType = "slider_float",
+							id = widgetPrefix .. "lower_twist_bone_yaw_2",
+							label = "Yaw %",
+							speed = 0.01,
+							range = {0,1},
+							initialValue = 0.0,
 							width = 80
 						},
 						{
@@ -430,24 +478,44 @@ local function getConfigWidgets(m_paramManager)
 							label = "Bone 3",
 							selections = {"None"},
 							initialValue = 1,
-							width = 200
+							width = 170
 						},
 						{
 							widgetType = "input_text",
 							id = widgetPrefix .. "lower_twist_bone_3",
 							label = "Bone 3",
 							initialValue = "",
-							width = 200,
+							width = 170,
 							isHidden = hideLabels
 						},
 						{ widgetType = "same_line" },
 						{
 							widgetType = "slider_float",
-							id = widgetPrefix .. "lower_twist_bone_frac_3",
-							label = "%",
+							id = widgetPrefix .. "lower_twist_bone_roll_3",
+							label = "Roll %",
 							speed = 0.01,
 							range = {0,1},
-							initialValue = 0.75,
+							initialValue = 0.0,
+							width = 80
+						},
+						{ widgetType = "same_line" },
+						{
+							widgetType = "slider_float",
+							id = widgetPrefix .. "lower_twist_bone_pitch_3",
+							label = "Pitch %",
+							speed = 0.01,
+							range = {0,1},
+							initialValue = 0.0,
+							width = 80
+						},
+						{ widgetType = "same_line" },
+						{
+							widgetType = "slider_float",
+							id = widgetPrefix .. "lower_twist_bone_yaw_3",
+							label = "Yaw %",
+							speed = 0.01,
+							range = {0,1},
+							initialValue = 0.0,
 							width = 80
 						},
 					{ widgetType = "end_group" },
@@ -627,7 +695,7 @@ local function updateSetting(key, value)
 	local profileId = getActiveProfileId()
 	if profileId == nil then return end
 
-	if key == "mesh" or key == "animation_mesh" or key == "animation_location_offset" or key == "animation_rotation_offset" or key == "mesh_location_offset" or key == "mesh_rotation_offset" then
+	if key == "mesh" or key == "animation_mesh" or key == "animation_location_offset" or key == "animation_rotation_offset" or key == "mesh_location_offset" or key == "mesh_rotation_offset" or key == "show_debug_meshes" then
 		pmSet({profileId, key}, value, true)
 		uevrUtils.executeUEVRCallbacks("on_ik_config_param_change", key, value, true)
 		return
@@ -656,7 +724,9 @@ local function updateUI(rigParams)
 			for i = 1,3 do
 				local twistBone = twistValues[i] or {}
 				setUIValue("lower_twist_bone_" .. i, twistBone.bone or "")
-				setUIValue("lower_twist_bone_frac_" .. i, twistBone.fraction or 0.0)
+				setUIValue("lower_twist_bone_roll_" .. i, twistBone.fraction or twistBone.roll or 0.0)
+				setUIValue("lower_twist_bone_pitch_" .. i, twistBone.pitch or 0.0)
+				setUIValue("lower_twist_bone_yaw_" .. i, twistBone.yaw or 0.0)
 			end
 		elseif key == "end_control_type" then
 			local current = solverParams[key]
@@ -724,11 +794,11 @@ local function setMeshList(currentMeshName, noCallbacks)
 end
 
 local function setAnimationMeshList(currentMeshName, noCallbacks)
-    meshList = uevrUtils.getObjectPropertyDescriptors(pawn, "Pawn", "Class /Script/Engine.SkeletalMeshComponent", configui.getValue(widgetPrefix .. "animation_mesh_combo_show_children"))
-	table.insert(meshList, 1, "None")
-	table.insert(meshList, "Custom")
+    animationMeshList = uevrUtils.getObjectPropertyDescriptors(pawn, "Pawn", "Class /Script/Engine.SkeletalMeshComponent", configui.getValue(widgetPrefix .. "animation_mesh_combo_show_children"))
+	table.insert(animationMeshList, 1, "None")
+	table.insert(animationMeshList, "Custom")
 
-	configui.setSelections(widgetPrefix .. "animation_mesh_combo", meshList)
+	configui.setSelections(widgetPrefix .. "animation_mesh_combo", animationMeshList)
 	setSelectedMesh(currentMeshName, "animation_mesh_combo", noCallbacks)
 end
 
@@ -754,7 +824,7 @@ local function setBoneList()
         configui.setValue(widgetPrefix .. "end_bone_combo", 1)
         return
     end
-    local mesh = nil
+    local customMeshList = nil
     if currentMesh == "Custom" then
         if getCustomIKComponent == nil then
 --TODO this function is getting called too early need to investigate how to recover
@@ -762,11 +832,27 @@ local function setBoneList()
             return
         end
         local activeProfileID = paramManager and paramManager:getActiveProfile() or ""
-        mesh = getCustomIKComponent(activeProfileID)
+        local templates = getCustomIKComponent(activeProfileID)
+		if type(templates) ~= "table" then
+			templates = {{descriptor = templates}}
+		end
+		customMeshList = {}
+		for i, template in ipairs(templates) do
+			if template.instance ~= nil then
+				table.insert(customMeshList, template.instance)
+			else
+				table.insert(customMeshList, uevrUtils.getObjectFromDescriptor(template.descriptor))
+			end
+		end
+
     else
-        mesh = uevrUtils.getObjectFromDescriptor(configui.getValue(widgetPrefix .. "mesh"))
+        customMeshList = {uevrUtils.getObjectFromDescriptor(configui.getValue(widgetPrefix .. "mesh"))}
     end
 
+	local mesh = nil
+	if customMeshList ~= nil and #customMeshList > 0 then
+		mesh = customMeshList[1]
+	end
     if mesh ~= nil then
 		boneNames = uevrUtils.getBoneNames(mesh)
         table.insert(boneNames, 1, "None")
@@ -786,6 +872,15 @@ local function setBoneList()
         setSelectedBone("lower_twist_bone_1_combo", "lower_twist_bone_1")
         setSelectedBone("lower_twist_bone_2_combo", "lower_twist_bone_2")
         setSelectedBone("lower_twist_bone_3_combo", "lower_twist_bone_3")
+	else
+		--print("Error: Could not retrieve mesh for bone list population")
+		--something is wrong (maybe it's too early in the load process) so try initializing again
+		delay(2000, function()
+			setMeshList(configui.getValue(widgetPrefix .. "mesh"), true)
+			setAnimationMeshList(configui.getValue(widgetPrefix .. "animation_mesh"), true)
+			setBoneList()
+		end)
+
     end
 end
 
@@ -806,6 +901,7 @@ configui.onUpdate(widgetPrefix .. "solver_new", function()
 	local solver = uevrUtils.deepCopyTable(solverDefaults)
 	solver.label = "New Solver"
 	solver.sort_order = (#solverIds or 0) + 1
+	solver.end_bone_offset =  uevrUtils.getNativeValue(solver.end_bone_offset)
 	pmSet({profileId, "solvers", solverId}, solver, true)
 	normalizeSolverSortOrders(pmGet({profileId, "solvers"}), profileId)
 	selectedSolverId = solverId
@@ -823,6 +919,7 @@ configui.onUpdate(widgetPrefix .. "solver_duplicate", function()
 	local copy = uevrUtils.deepCopyTable(current)
 	copy.label = ((copy.label and copy.label ~= "") and copy.label or "Solver") .. " Copy"
 	copy.sort_order = (#solverIds or 0) + 1
+	copy.end_bone_offset =  uevrUtils.getNativeValue(copy.end_bone_offset)
 	pmSet({profileId, "solvers", solverId}, copy, true)
 	normalizeSolverSortOrders(pmGet({profileId, "solvers"}), profileId)
 	selectedSolverId = solverId
@@ -890,7 +987,7 @@ configui.onCreateOrUpdate(widgetPrefix .. "animation_mesh_combo_show_children", 
 end)
 
 configui.onUpdate(widgetPrefix .. "animation_mesh_combo", function(value)
-    updateSetting("animation_mesh", meshList[value] == "None" and "" or meshList[value])
+    updateSetting("animation_mesh", animationMeshList[value] == "None" and "" or animationMeshList[value])
 end)
 
 configui.onUpdate(widgetPrefix .. "end_bone_combo", function(value)
@@ -929,10 +1026,15 @@ local function updateTwistBones()
     for i = 1,3 do
 		local comboIndex = configui.getValue(widgetPrefix .. "lower_twist_bone_" .. i .. "_combo") or 1
 		local boneName = boneNames[comboIndex]
-		if boneName == "None" then boneName = "" end
-        local frac = configui.getValue(widgetPrefix .. "lower_twist_bone_frac_" .. i)
-        if boneName ~= nil and boneName ~= "" then
-            table.insert(twistBones, {bone = boneName, fraction = frac})
+		if boneName == nil then 
+			print("Error: Invalid bone index selected for lower twist bone " .. i)
+			return
+		end
+        local roll = configui.getValue(widgetPrefix .. "lower_twist_bone_roll_" .. i)
+        local pitch = configui.getValue(widgetPrefix .. "lower_twist_bone_pitch_" .. i)
+        local yaw = configui.getValue(widgetPrefix .. "lower_twist_bone_yaw_" .. i)
+        if  boneName ~= "None" then
+            table.insert(twistBones, {bone = boneName, roll = roll, pitch = pitch, yaw = yaw})
         end
     end
     updateSetting("twist_bones", twistBones)
@@ -948,13 +1050,31 @@ configui.onUpdate(widgetPrefix .. "lower_twist_bone_3_combo", function(value)
     updateTwistBones()
 end)
 
-configui.onUpdate(widgetPrefix .. "lower_twist_bone_frac_1", function(value)
+configui.onUpdate(widgetPrefix .. "lower_twist_bone_roll_1", function(value)
     updateTwistBones()
 end)
-configui.onUpdate(widgetPrefix .. "lower_twist_bone_frac_2", function(value)
+configui.onUpdate(widgetPrefix .. "lower_twist_bone_roll_2", function(value)
     updateTwistBones()
 end)
-configui.onUpdate(widgetPrefix .. "lower_twist_bone_frac_3", function(value)
+configui.onUpdate(widgetPrefix .. "lower_twist_bone_roll_3", function(value)
+    updateTwistBones()
+end)
+configui.onUpdate(widgetPrefix .. "lower_twist_bone_pitch_1", function(value)
+    updateTwistBones()
+end)
+configui.onUpdate(widgetPrefix .. "lower_twist_bone_pitch_2", function(value)
+    updateTwistBones()
+end)
+configui.onUpdate(widgetPrefix .. "lower_twist_bone_pitch_3", function(value)
+    updateTwistBones()
+end)
+configui.onUpdate(widgetPrefix .. "lower_twist_bone_yaw_1", function(value)
+    updateTwistBones()
+end)
+configui.onUpdate(widgetPrefix .. "lower_twist_bone_yaw_2", function(value)
+    updateTwistBones()
+end)
+configui.onUpdate(widgetPrefix .. "lower_twist_bone_yaw_3", function(value)
     updateTwistBones()
 end)
 

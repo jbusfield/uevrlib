@@ -1,6 +1,7 @@
 -- Decoupled Yaw code courtesy of Pande4360
 
 local uevrUtils = require("libs/uevr_utils")
+local mathLib = require("libs/core/math_lib")
 local controllers = require("libs/controllers")
 local bodyYaw = require("libs/body_yaw")
 local pawnModule = require("libs/pawn")
@@ -26,7 +27,7 @@ local parameters = {
     smoothTurnSpeed = 50,
     pawnPositionMode = M.PawnPositionMode.FOLLOWS,
     pawnRotationMode = M.PawnRotationMode.RIGHT_CONTROLLER,
-	pawnRotationLockedSmoothTime = 0.06,
+	pawnRotationLockedSmoothTime = 0.36,
     pawnPositionSweepMovement = true,
     pawnPositionAnimationScale = 0.2,
     headOffset = {X=0,Y=0,Z=0},
@@ -44,11 +45,13 @@ local parameters = {
 --	movementMethod = M.MovementMethod.HEAD,
 	optimizeBodyRotationCalculations = true,
 	optimizeBodyLocationCalculations = true,
+	pawnRotationModeDisableRotation = false,
 	usePawnControlRotation = 1
 }
 
 local isDisabled = false
 
+local status = {}
 local rootComponent = nil
 local decoupledYaw = nil
 local bodyRotationOffset = 0
@@ -585,6 +588,9 @@ local function saveParameter(key, value, persist, noCallbacks)
 	if key == "aimCamera" then
 		cameraComponent:reset()
 	end
+	if key == "useMeshHeightForHeadOffset" then
+		status["meshZOffset"] = nil
+	end
 end
 
 local createConfigMonitor = doOnce(function()
@@ -650,12 +656,14 @@ function M.setDisabled(val)
 		--this ensures the camera gets reset to the current pawn orientation when input is re-enabled
 		decoupledYaw = nil
 		bodyRotationOffset = 0
+		lastBodyYawUpdateTime = nil
 	end
 end
 
 function M.resetCapsuleComponent()
 	decoupledYaw = nil
 	bodyRotationOffset = 0
+	lastBodyYawUpdateTime = nil
 	if rootComponent ~= nil then
 		rootComponent:K2_SetWorldRotation(uevrUtils.rotator(0,0,0),false,reusable_hit_result,false)
 		pawn:K2_SetActorRotation(uevrUtils.rotator(0,0,0), false, reusable_hit_result, false)
@@ -773,12 +781,24 @@ end
 
 --This function sets the global rootComponent variable 
 local function getRootComponent()
-	rootComponent = nil
-	local component = uevrUtils.getValid(pawn,{"RootComponent"})
-	if component ~= nil and component.K2_GetComponentLocation ~= nil and component.K2_GetComponentRotation ~= nil and component.K2_SetWorldRotation ~= nil then
-		rootComponent = component
+	if status.rootComponent == nil then
+		local component = uevrUtils.getValid(pawn,{"RootComponent"})
+		if component ~= nil and component.K2_GetComponentLocation ~= nil and component.K2_GetComponentRotation ~= nil and component.K2_SetWorldRotation ~= nil then
+			status.rootComponent = component
+		end
+	end
+	rootComponent = uevrUtils.getValid(status.rootComponent)
+	if rootComponent == nil then
+		status.rootComponent = nil
 	end
 	return rootComponent
+	
+	-- rootComponent = nil
+	-- local component = uevrUtils.getValid(pawn,{"RootComponent"})
+	-- if component ~= nil and component.K2_GetComponentLocation ~= nil and component.K2_GetComponentRotation ~= nil and component.K2_SetWorldRotation ~= nil then
+	-- 	rootComponent = component
+	-- end
+	-- return rootComponent
 end
 getRootComponent = uevrUtils.profiler:wrap("getRootComponent", getRootComponent)
 
@@ -864,10 +884,12 @@ local function getAnimationHeadDelta(pawn, pawnYaw)
 				end
 			end
 
+			--local pawnPos = rootComponent:K2_GetComponentLocation()
 			local headSocketLocation = mesh:GetSocketLocation(uevrUtils.fname_from_string(headBoneName))
 			local rootSocketLocation = mesh:GetSocketLocation(uevrUtils.fname_from_string(rootBoneName))
 			local socketDelta = uevrUtils.vector(headSocketLocation.Y - rootSocketLocation.Y, headSocketLocation.X - rootSocketLocation.X, headSocketLocation.Z - rootSocketLocation.Z)
 			socketDelta = kismet_math_library:RotateAngleAxis(socketDelta, pawnYaw - baseRotationOffsetRotatorYaw, uevrUtils.vector(0,0,1))
+			--print(headBoneName, rootBoneName, socketDelta.X, socketDelta.Y, socketDelta.Z)
 			return socketDelta
 		end
 	end
@@ -894,6 +916,44 @@ getEyeOffsetDelta = uevrUtils.profiler:wrap("getEyeOffsetDelta", getEyeOffsetDel
 local function getPawnRotationMode()
 	return pawnRotationModeOverride ~= nil and pawnRotationModeOverride or getParameter("pawnRotationMode")
 end
+
+local function getBodyRotationSmoothingDelta(delta)
+	if delta ~= nil and delta > 0 then
+		lastBodyYawUpdateTime = os.clock()
+		return delta
+	end
+
+	local now = os.clock()
+	local fallbackDelta = lastBodyYawUpdateTime ~= nil and (now - lastBodyYawUpdateTime) or nil
+	lastBodyYawUpdateTime = now
+
+	if fallbackDelta == nil or fallbackDelta <= 0 then
+		return 1 / 90
+	end
+
+	return math.min(fallbackDelta, 0.05)
+end
+
+local function smoothBodyRotationOffset(targetOffset, delta)
+	targetOffset = uevrUtils.clampAngle180(targetOffset or 0)
+
+	local smoothTime = getParameter("pawnRotationLockedSmoothTime") or 0
+	if smoothTime <= 0 then
+		return targetOffset
+	end
+
+	local smoothingDelta = getBodyRotationSmoothingDelta(delta)
+	local alpha = 1 - math.exp(-smoothingDelta / smoothTime)
+	local angleDelta = uevrUtils.clampAngle180(targetOffset - bodyRotationOffset)
+
+	if math.abs(angleDelta) < 0.01 then
+		return targetOffset
+	end
+
+	return uevrUtils.clampAngle180(bodyRotationOffset + angleDelta * math.min(1, alpha))
+end
+
+local lateYaw = false
 --this is called from both on_pre_engine_tick and on_early_calculate_stereo_view_offset but K2_SetWorldRotation can only be called once per tick
 --because of the currentOffset ~= bodyRotationOffset check
 local function updateBodyYaw(delta)
@@ -901,10 +961,52 @@ local function updateBodyYaw(delta)
 	if pawnRotationMode ~= M.PawnRotationMode.NONE then
 		if decoupledYaw~= nil and rootComponent ~= nil then
 			local currentOffset = bodyRotationOffset
+			if delta ~= nil and delta > 0 then
+				lastBodyYawUpdateTime = os.clock()
+			end
+			if lateYaw then
+				if pawnRotationMode == M.PawnRotationMode.SIMPLE then
+					bodyRotationOffset = bodyYaw.update(bodyRotationOffset, currentHeadRotator.Yaw - decoupledYaw, delta)
+				elseif pawnRotationMode == M.PawnRotationMode.ADVANCED then
+					--bodyRotationOffset = smoothBodyRotationOffset(bodyYaw.updateAdvanced(bodyRotationOffset, currentHeadRotator.Yaw - decoupledYaw, controllers.getControllerLocation(2), controllers.getControllerLocation(0),  controllers.getControllerLocation(1), delta), delta)
+					bodyRotationOffset = bodyYaw.updateAdvanced(bodyRotationOffset, currentHeadRotator.Yaw - decoupledYaw, controllers.getControllerLocation(2), controllers.getControllerLocation(0),  controllers.getControllerLocation(1), delta)
+				else
+					local aimMethod = getParameter("aimMethod")
+					if pawnRotationMode == M.PawnRotationMode.LOCKED then
+						bodyRotationOffset = smoothBodyRotationOffset(currentHeadRotator.Yaw - decoupledYaw, delta)
+					elseif pawnRotationMode == M.PawnRotationMode.LEFT_CONTROLLER then
+	--TODO this seems wrong. Why is aim affecting body rotation?
+						local rotation = (aimMethod == M.AimMethod.LEFT_WEAPON and weaponRotation ~= nil and weaponRotation.left ~= nil) and weaponRotation.left or controllers.getControllerRotation(Handed.Left)
+						--did this to fix robocop. what happens with hello neighbor?
+						if rotation ~= nil then
+							local final = aimMethod ~= M.AimMethod.LEFT_WEAPON and getAimOffsetAdjustedRotation(rotation) or rotation
+							bodyRotationOffset = smoothBodyRotationOffset(final.Yaw - decoupledYaw, delta)
+						end
+						--if rotation ~= nil then bodyRotationOffset = rotation.Yaw - decoupledYaw end
+					elseif pawnRotationMode == M.PawnRotationMode.RIGHT_CONTROLLER then
+	--TODO this seems wrong. Why is aim affecting body rotation?
+						local rotation = (aimMethod == M.AimMethod.RIGHT_WEAPON and weaponRotation ~= nil and weaponRotation.right ~= nil) and weaponRotation.right or controllers.getControllerRotation(Handed.Right)
+	--					local rotation = controllers.getControllerRotation(Handed.Right)
+						--did this to fix robocop. what happens with hello neighbor? (even though hello neighbor doesnt need gunstock adjustments)
+						if rotation ~= nil then
+							local final = aimMethod ~= M.AimMethod.RIGHT_WEAPON and getAimOffsetAdjustedRotation(rotation) or rotation
+							bodyRotationOffset = smoothBodyRotationOffset(final.Yaw - decoupledYaw, delta)
+						end
+						--if rotation ~= nil then bodyRotationOffset = rotation.Yaw - decoupledYaw end
+					end
+				end
+				pcall(function()
+					if currentOffset ~= bodyRotationOffset and rootComponent.K2_SetWorldRotation ~= nil then
+						rootComponent:K2_SetWorldRotation(uevrUtils.rotator(0,decoupledYaw+bodyRotationOffset,0),false,reusable_hit_result,false)
+					end
+				end)
+				return
+			end
 			if delta ~= nil then
 				if pawnRotationMode == M.PawnRotationMode.SIMPLE then
 					bodyRotationOffset = bodyYaw.update(bodyRotationOffset, currentHeadRotator.Yaw - decoupledYaw, delta)
 				elseif pawnRotationMode == M.PawnRotationMode.ADVANCED then
+					--bodyRotationOffset = smoothBodyRotationOffset(bodyYaw.updateAdvanced(bodyRotationOffset, currentHeadRotator.Yaw - decoupledYaw, controllers.getControllerLocation(2), controllers.getControllerLocation(0),  controllers.getControllerLocation(1), delta), delta)
 					bodyRotationOffset = bodyYaw.updateAdvanced(bodyRotationOffset, currentHeadRotator.Yaw - decoupledYaw, controllers.getControllerLocation(2), controllers.getControllerLocation(0),  controllers.getControllerLocation(1), delta)
 				end
 				-- record last real tick time for fallback smoothing when delta is unavailable
@@ -912,30 +1014,14 @@ local function updateBodyYaw(delta)
 			else
 				local aimMethod = getParameter("aimMethod")
 				if pawnRotationMode == M.PawnRotationMode.LOCKED then
-					bodyRotationOffset = currentHeadRotator.Yaw - decoupledYaw
-					-- local smoothTime = getParameter("pawnRotationLockedSmoothTime")
-					-- if smoothTime == nil or smoothTime == 0 then
-					-- 	bodyRotationOffset = currentHeadRotator.Yaw - decoupledYaw
-					-- else
-					-- 	print("Smoothing body yaw with no delta")
-					-- 	local target = currentHeadRotator.Yaw - decoupledYaw
-					-- 	local tau = smoothTime
-					-- 	local dt = 1/90
-					-- 	if lastBodyYawUpdateTime ~= nil then
-					-- 		local now = os.clock()
-					-- 		dt = math.max(0.0005, now - lastBodyYawUpdateTime)
-					-- 		lastBodyYawUpdateTime = now
-					-- 	end
-					-- 	local alpha = 1 - math.exp(-dt / math.max(1e-6, tau))
-					-- 	bodyRotationOffset = bodyRotationOffset + (target - bodyRotationOffset) * alpha
-					-- end
+					bodyRotationOffset = smoothBodyRotationOffset(currentHeadRotator.Yaw - decoupledYaw, delta)
 				elseif pawnRotationMode == M.PawnRotationMode.LEFT_CONTROLLER then
 --TODO this seems wrong. Why is aim affecting body rotation?
 					local rotation = (aimMethod == M.AimMethod.LEFT_WEAPON and weaponRotation ~= nil and weaponRotation.left ~= nil) and weaponRotation.left or controllers.getControllerRotation(Handed.Left)
 					--did this to fix robocop. what happens with hello neighbor?
 					if rotation ~= nil then
 						local final = aimMethod ~= M.AimMethod.LEFT_WEAPON and getAimOffsetAdjustedRotation(rotation) or rotation
-						bodyRotationOffset = final.Yaw - decoupledYaw
+						bodyRotationOffset = smoothBodyRotationOffset(final.Yaw - decoupledYaw, delta)
 					end
 					--if rotation ~= nil then bodyRotationOffset = rotation.Yaw - decoupledYaw end
 				elseif pawnRotationMode == M.PawnRotationMode.RIGHT_CONTROLLER then
@@ -945,7 +1031,7 @@ local function updateBodyYaw(delta)
 					--did this to fix robocop. what happens with hello neighbor? (even though hello neighbor doesnt need gunstock adjustments)
 					if rotation ~= nil then
 						local final = aimMethod ~= M.AimMethod.RIGHT_WEAPON and getAimOffsetAdjustedRotation(rotation) or rotation
-						bodyRotationOffset = final.Yaw - decoupledYaw
+						bodyRotationOffset = smoothBodyRotationOffset(final.Yaw - decoupledYaw, delta)
 					end
 					--if rotation ~= nil then bodyRotationOffset = rotation.Yaw - decoupledYaw end
 				end
@@ -962,39 +1048,18 @@ local function updateBodyYaw(delta)
 end
 updateBodyYaw = uevrUtils.profiler:wrap("updateBodyYaw", updateBodyYaw)
 
-local function Quat_RotateVector(quat, vec)
-	if kismet_math_library.Quat_RotateVector == nil then
-			-- support method-call style: (self, quat, vec) or function-call style (quat, vec)
-			if vec == nil and type(quat) == "table" and quat.X ~= nil and quat.Y ~= nil and quat.Z ~= nil and quat.W == nil then
-				-- unlikely, keep signature robust
-			end
-
-			local q = quat
-			-- extract quaternion components (accept many naming conventions)
-			local qx = (q.X or q.x or q[1]) or 0
-			local qy = (q.Y or q.y or q[2]) or 0
-			local qz = (q.Z or q.z or q[3]) or 0
-			local qw = (q.W or q.w or q[4]) or 0
-
-			local v = vec or {X=0,Y=0,Z=0}
-			local vx = (v.X or v.x or v[1]) or 0
-			local vy = (v.Y or v.y or v[2]) or 0
-			local vz = (v.Z or v.z or v[3]) or 0
-
-			-- t = 2 * cross(q_vec, v)
-			local tx = 2 * ( qy * vz - qz * vy )
-			local ty = 2 * ( qz * vx - qx * vz )
-			local tz = 2 * ( qx * vy - qy * vx )
-
-			-- v' = v + qw * t + cross(q_vec, t)
-			local cx = qy * tz - qz * ty
-			local cy = qz * tx - qx * tz
-			local cz = qx * ty - qy * tx
-
-			return { X = vx + qw * tx + cx, Y = vy + qw * ty + cy, Z = vz + qw * tz + cz }
-		end
-	return kismet_math_library:Quat_RotateVector(quat, vec)
+function M.getRotationOffset()
+	if decoupledYaw ~= nil and bodyRotationOffset ~= nil then
+		return decoupledYaw+bodyRotationOffset
+	end
+	return 0
 end
+
+local function vectorRotate_Quat(vec, quat)
+	return mathLib.vectorRotate_Quat(vec, quat, false)
+end
+vectorRotate_Quat = uevrUtils.profiler:wrap("Input vectorRotate_Quat", vectorRotate_Quat)
+
 local function updatePawnPositionRoomscale(world_to_meters)
 	local pawnPositionMode = getParameter("pawnPositionMode")
 	if pawnPositionMode ~= M.PawnPositionMode.NONE and rootComponent ~= nil and decoupledYaw ~= nil then
@@ -1015,12 +1080,14 @@ local function updatePawnPositionRoomscale(world_to_meters)
 
 		temp_quatf:set(0,0,0,0)
 		uevr.params.vr.get_rotation_offset(temp_quatf) --This is how much the head was twisted from the pose quat the last time "recenter view" was performed
-		local headQuat = uevrUtils.quat(temp_quatf.Z, temp_quatf.X, -temp_quatf.Y, temp_quatf.W) --reordered terms to convert UEVR to unreal coord system
+		--local headQuat = uevrUtils.quat(temp_quatf.Z, temp_quatf.X, -temp_quatf.Y, temp_quatf.W) --reordered terms to convert UEVR to unreal coord system
 		--local headRotator = kismet_math_library:Quat_Rotator(headQuat)
 		--print("HEAD",headRotator.Pitch, headRotator.Yaw, headRotator.Roll) --this is in the Unreal coord system
 
 		--rotate the delta by the amount of the hmd offset
-		local forwardVector = Quat_RotateVector(headQuat, uevrUtils.vector(-delta.Z, delta.X, delta.Y)) -- kismet_math_library:Quat_RotateVector(headQuat, uevrUtils.vector(-delta.Z, delta.X, delta.Y)) --converts UEVR to Unreal coord system
+		
+		local forwardVector = vectorRotate_Quat({X=-delta.Z, Y=delta.X, Z=delta.Y}, {X=temp_quatf.Z, Y=temp_quatf.X, Z=-temp_quatf.Y, W=temp_quatf.W}) -- kismet_math_library:Quat_RotateVector(headQuat, uevrUtils.vector(-delta.Z, delta.X, delta.Y)) --converts UEVR to Unreal coord system
+		--local forwardVector = vectorRotate_Quat(headQuat, uevrUtils.vector(-delta.Z, delta.X, delta.Y)) -- kismet_math_library:Quat_RotateVector(headQuat, uevrUtils.vector(-delta.Z, delta.X, delta.Y)) --converts UEVR to Unreal coord system
 
 		--add the decoupledYaw yaw rotation to the delta vector
 		forwardVector = kismet_math_library:RotateAngleAxis( forwardVector,  decoupledYaw, uevrUtils.vector(0,0,1))
@@ -1051,7 +1118,6 @@ local function updatePawnPositionRoomscale(world_to_meters)
 end
 updatePawnPositionRoomscale = uevrUtils.profiler:wrap("updatePawnPositionRoomscale", updatePawnPositionRoomscale)
 
-
 local function updateMeshRelativePosition()
 	if rootComponent ~= nil and decoupledYaw ~= nil then
 		local mesh = getBodyMesh()
@@ -1070,7 +1136,12 @@ local function updateMeshRelativePosition()
 				local y = -forwardVector.Y
 				if animationDelta ~= nil and eyeOffsetDelta ~= nil then
 					x = x + animationDelta.X + eyeOffsetDelta.X
-					y = y + animationDelta.Y - eyeOffsetDelta.Y
+					y = y - animationDelta.Y - eyeOffsetDelta.Y
+				end
+				--print("AAAAAAAAAAAAA",animationDelta ~= nil, getParameter("useMeshHeightForHeadOffset"), status["meshZOffset"] == nil)
+				if animationDelta ~= nil and getParameter("useMeshHeightForHeadOffset") and status["meshZOffset"] == nil then
+					status["meshZOffset"] = animationDelta.Z / 2 - 90 + (headOffset and headOffset.Z or 0)
+					print("Calculated meshZOffset:", status["meshZOffset"])
 				end
 				--dont worry about Z here. Z is applied directly to the RootComponent later
 				mesh.RelativeLocation.X = x
@@ -1140,7 +1211,8 @@ local function getVRCameraOffsets()
 				temp_vec3:set(0, 0, 1) --the axis to rotate around
 				forwardVector = kismet_math_library:RotateAngleAxis(temp_vec3f, pawnRot.Yaw - bodyRotationOffset, temp_vec3)
 			end
-			return  pawnPos.x + forwardVector.X, pawnPos.y + forwardVector.Y, pawnPos.z + rootOffset.Z + capsuleHeight + getParameter("headOffset").Z, 0, pawnRot.Yaw - bodyRotationOffset, 0
+			--print("Current",status["meshZOffset"])
+			return  pawnPos.x + forwardVector.X, pawnPos.y + forwardVector.Y, pawnPos.z + rootOffset.Z + capsuleHeight + getParameter("headOffset").Z + (status["meshZOffset"] or 0), 0, pawnRot.Yaw - bodyRotationOffset, 0
 		end
 	end
 end
@@ -1149,26 +1221,30 @@ getVRCameraOffsets = uevrUtils.profiler:wrap("getVRCameraOffsets", getVRCameraOf
 uevr.params.sdk.callbacks.on_early_calculate_stereo_view_offset(function(device, view_index, world_to_meters, position, rotation, is_double)
 	if not isDisabled then --and getParameter("aimMethod") ~= M.AimMethod.UEVR then
 		--print(optimizeBodyYawCalculations == false, getParameter("optimizeBodyRotationCalculations") ~= true, view_index)
-		if optimizeBodyYawCalculations == false or getParameter("optimizeBodyRotationCalculations") ~= true or view_index == 1 then
+		if lateYaw == false and optimizeBodyYawCalculations == false or getParameter("optimizeBodyRotationCalculations") ~= true or view_index == 1 then
 			updateBodyYaw()
 		end
 		if getParameter("optimizeBodyLocationCalculations") ~= true or view_index == 1 then
 			updatePawnPositionRoomscale(world_to_meters)
 		end
 
-		if view_index == 1 then
+		if lateYaw == false and view_index == 1 then
 			updateMeshRelativePosition()
 		end
 
-		--Change the UEVR camera position and rotation to align with the pawn
-		local x, y, z, pitch, yaw, roll = getVRCameraOffsets()
-		position.x = x
-		position.y = y
-		position.z = z
-		rotation.Pitch = pitch
-		rotation.Yaw = yaw
-		rotation.Roll = roll
-
+		local pawnRotationMode = getPawnRotationMode() -- getParameter("pawnRotationMode")
+		if pawnRotationMode ~= M.PawnRotationMode.NONE then
+			--Change the UEVR camera position and rotation to align with the pawn
+			local x, y, z, pitch, yaw, roll = getVRCameraOffsets()
+			position.x = x
+			position.y = y
+			position.z = z
+			if getParameter("pawnRotationModeDisableRotation") ~= true then
+				rotation.Pitch = pitch
+				rotation.Yaw = yaw
+				rotation.Roll = roll
+			end
+		end
 
 		--Change the UEVR camera position and rotation to align with the pawn
 		-- if bodyRotationOffset ~= nil and rootComponent ~= nil and uevrUtils.getValid(rootComponent) ~= nil and rootComponent.K2_GetComponentLocation ~= nil then
@@ -1229,14 +1305,29 @@ uevr.sdk.callbacks.on_post_calculate_stereo_view_offset(function(device, view_in
 	currentHeadRotator.Roll = rotation.Roll
 end)
 
--- uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
--- end)
+uevr.sdk.callbacks.on_post_engine_tick(function(engine, delta)
+	if lateYaw then
+		if not isDisabled then
+			updateBodyYaw(delta)
+			--updateBodyYaw()
+			updateMeshRelativePosition()
+		end
+	end
+
+	-- if not isDisabled then --and pawnRotationMode ~= M.PawnRotationMode.NONE then
+	-- 	if decoupledYaw~= nil and rootComponent ~= nil then
+	-- 		rootComponent:K2_SetWorldRotation(uevrUtils.rotator(0,decoupledYaw+bodyRotationOffset,0),false,reusable_hit_result,false)
+	-- 	end
+	-- end
+
+end)
 
 --without this the right controller left/right stick movement does nothing
 uevr.sdk.callbacks.on_xinput_get_state(function(retval, user_index, state)
-	if not isDisabled then --and getParameter("aimMethod") ~= M.AimMethod.UEVR then
+	--local pawnRotationMode = getPawnRotationMode() -- getParameter("pawnRotationMode")
+	if not isDisabled then --and pawnRotationMode ~= M.PawnRotationMode.NONE then
 		local yawChange = updateDecoupledYaw(state)
-		if yawChange~= 0 and decoupledYaw~= nil and rootComponent ~= nil then
+		if yawChange ~= 0 and decoupledYaw~= nil and rootComponent ~= nil and getParameter("pawnRotationModeDisableRotation") ~= true then
 			rootComponent:K2_SetWorldRotation(uevrUtils.rotator(0,decoupledYaw+bodyRotationOffset,0),false,reusable_hit_result,false)
 		end
 	end
@@ -1257,13 +1348,16 @@ end)
 uevrUtils.registerPreLevelChangeCallback(function(level)
 	decoupledYaw = nil
 	bodyRotationOffset = 0
+	lastBodyYawUpdateTime = nil
 	bodyMesh = nil
 	cameraComponent:reset()
 end)
 
 uevr.params.sdk.callbacks.on_script_reset(function()
+	status = {}
 	decoupledYaw = nil
 	bodyRotationOffset = 0
+	lastBodyYawUpdateTime = nil
 	bodyMesh = nil
 	cameraComponent:reset()
 	resetPawnSettings()
@@ -1272,10 +1366,12 @@ end)
 function M.resetView()
 	decoupledYaw = nil
 	bodyRotationOffset = 0
+	lastBodyYawUpdateTime = nil
 	uevr.params.vr.recenter_view()
 end
 
 uevrUtils.registerLevelChangeCallback(function(level)
+	status = {}
 	if getParameter("aimMethod") ~= M.AimMethod.UEVR then
 		controllers.createController(0)
 		controllers.createController(1)

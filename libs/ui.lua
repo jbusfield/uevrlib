@@ -411,6 +411,11 @@ function M.init(isDeveloperMode, logLevel)
 		end)
     end
 
+    local cutsceneOptions = getParameter("cutscene_options")
+    if cutsceneOptions ~= nil then
+        uevrUtils.setCutsceneDetectionOptions(cutsceneOptions)
+    end
+
     enableCutsceneDetection()
     enablePauseDetection()
     enableCharacterHiddenDetection()
@@ -440,7 +445,7 @@ local createConfigMonitor = doOnce(function()
 end, Once.EVER)
 
 function M.addViewportWidget(widget)
-    if uiConfigDev ~= nil then 
+    if uiConfigDev ~= nil then
         uiConfigDev.registerViewportWidget(widget:get_class():get_full_name(), uevrUtils.getShortName(widget:get_class()))
     end
     --add uniquely to currentCustomViewportWidgets array

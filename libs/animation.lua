@@ -843,6 +843,62 @@ function M.getDescendantBones(component, targetBoneName, includeRoot)
 	return boneNames
 end
 
+-- Expects sourceComponent to be skeletalMeshComponent but should work with poseable components too
+-- targetComponent must be a poseableMeshComponent
+local descendantBoneList = {}
+function M.copyDescendantTransforms(sourceComponent, targetComponent, startBoneName, includeRoot)
+	if includeRoot == nil then includeRoot = true end
+	if uevrUtils.getValid(sourceComponent) == nil or uevrUtils.getValid(targetComponent) == nil or startBoneName == nil then
+		M.print("copyDescendantTransforms: invalid params", LogLevel.Warning)
+		return false
+	end
+	if sourceComponent.GetSocketTransform == nil then
+		M.print("copyDescendantTransforms: source component does not support GetSocketTransform", LogLevel.Warning)
+		return false
+	end
+	if targetComponent.SetBoneTransformByName == nil then
+		M.print("copyDescendantTransforms: target component does not support SetBoneTransformByName", LogLevel.Warning)
+		return false
+	end
+
+	local cacheKey = sourceComponent:get_full_name() .. "-" .. startBoneName .. "-" .. tostring(includeRoot)
+	if descendantBoneList[cacheKey] == nil then
+		descendantBoneList[cacheKey] = M.getDescendantBones(sourceComponent, startBoneName, includeRoot)
+	end
+	local boneNames = descendantBoneList[cacheKey]
+	if boneNames == nil or #boneNames == 0 then
+		return true
+	end
+
+	local startFName = uevrUtils.fname_from_string(startBoneName)
+	local sourceRootTransform = sourceComponent:GetSocketTransform(startFName, 2)
+	local targetRootTransform = nil
+	if targetComponent.GetBoneTransformByName ~= nil then
+		targetRootTransform = targetComponent:GetBoneTransformByName(startFName, EBoneSpaces.ComponentSpace)
+	elseif targetComponent.GetSocketTransform ~= nil then
+		targetRootTransform = targetComponent:GetSocketTransform(startFName, 2)
+	end
+	if sourceRootTransform == nil or targetRootTransform == nil then
+		M.print("copyDescendantTransforms: failed to get root transforms for alignment", LogLevel.Warning)
+		return false
+	end
+	local inverseSourceRoot = kismet_math_library:InvertTransform(sourceRootTransform)
+	local sourceToTargetTransform = kismet_math_library:ComposeTransforms(inverseSourceRoot, targetRootTransform)
+
+	for _, boneName in ipairs(boneNames) do
+		local fName = uevrUtils.fname_from_string(boneName)
+		local socketTransform = sourceComponent:GetSocketTransform(fName, 2)
+		if socketTransform ~= nil then
+			local alignedTransform = kismet_math_library:ComposeTransforms(socketTransform, sourceToTargetTransform)
+			targetComponent:SetBoneTransformByName(fName, alignedTransform, EBoneSpaces.ComponentSpace)
+		else
+			M.print("copyDescendantTransforms: failed to read transform for " .. boneName, LogLevel.Debug)
+		end
+	end
+
+	return true
+end
+
 function M.getAncestorBones(component, boneName)
 	if component == nil then return {} end
 	if boneName == nil or boneName == "" then return {component:GetBoneName(1)} end

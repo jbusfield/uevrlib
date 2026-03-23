@@ -33,7 +33,7 @@ end
 
 -- Loads parameters from JSON file
 function M:load(useProfileFormat)
-    uevrUtils.print("[parameters] Loading parameters from " .. self.fileName .. ".json")
+    --uevrUtils.print("[parameters] Loading parameters from " .. self.fileName .. ".json")
     local params = json.load_file(self.fileName .. ".json")
     if params ~= nil then
         self.parameters = params
@@ -318,7 +318,7 @@ function M:setupProfileUpdateHandlers(widgetPrefix)
 
     configui.onUpdate(widgetPrefix .. "duplicate_profile", function()
         local activeProfileID = self:getActiveProfile()
-        local newProfileID = uevrUtils.generateUUID()
+        local newProfileID = uevrUtils.guid()
         self:createProfile(newProfileID, "Duplicate Profile")
 
         -- Copy all settings from active profile to new profile

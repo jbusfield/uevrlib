@@ -1654,7 +1654,8 @@ function M.attachToMesh(attachment, mesh, socketName, gripHand, options)
 			end
 		end
 
-		if options.detachFromOriginOnGrip == true then
+		--print(attachment:get_full_name() .. " parent before attach: " .. (attachment.AttachParent and attachment.AttachParent:get_full_name() or "nil"))
+		if options.detachFromOriginOnGrip == true and attachment.DetachFromParent ~= nil then
 			attachment:DetachFromParent(options.maintainWorldPositionOnDetachFromOrigin or false, false)
 		end
 

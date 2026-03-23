@@ -172,6 +172,41 @@ local function getConfigWidgets()
             { widgetType = "end_rect", additionalSize = 12, rounding = 5 }, { widgetType = "unindent", width = 5 }, { widgetType = "end_group", },
 	        { widgetType = "unindent", width = 20 },
 	        { widgetType = "new_line" },
+
+            {
+                widgetType = "begin_group",
+                id = widgetPrefix .. "cutscene_options_group",
+                isHidden = true
+            },
+                {
+                    widgetType = "tree_node",
+                    id = widgetPrefix .. "cutscene_options_tree",
+                    initialOpen = false,
+                    label = "Cutscene Detection Options"
+                },
+                    {
+                        widgetType = "checkbox",
+                        id = widgetPrefix .. "use_target_is_cine",
+                        label = "Check Target is Cine",
+                        initialValue = true
+                    },
+                    {
+                        widgetType = "checkbox",
+                        id = widgetPrefix .. "use_active_camera_is_cine",
+                        label = "Check Active Camera is Cine",
+                        initialValue = true
+                    },
+                    {
+                        widgetType = "checkbox",
+                        id = widgetPrefix .. "use_camera_component_is_cine",
+                        label = "Check Camera Component is Cine",
+                        initialValue = true
+                    },
+                {
+                    widgetType = "tree_pop"
+                },
+                { widgetType = "new_line" },
+            { widgetType = "end_group", },
 	{
 		widgetType = "tree_pop"
 	},
@@ -429,6 +464,8 @@ local function showGameStateEditFields()
             configui.setValue(widgetPrefix .. priorityKey, priority, true)
         end
     end
+
+    configui.setHidden(widgetPrefix .. "cutscene_options_group", state ~= "cutscene")
 end
 
 local function updateViewportWidgetList()
@@ -486,7 +523,7 @@ local function updateCurrentViewportWidgetFields()
         updateSetting({ "widgetlist", id, valueKey .. "Priority" }, configui.getValue(widgetPrefix .. valueKey .. "Priority"))
     end
     updateSetting({ "widgetlist", id, "scale" }, uevrUtils.getNativeValue(configui.getValue(widgetPrefix .. "widget_scale_2d")))
-    updateSetting({ "widgetlist", id, "alignment" }, uevrUtils.getNativeValue(configui.getValue(widgetPrefix .. "widget_alignment_2d")))    
+    updateSetting({ "widgetlist", id, "alignment" }, uevrUtils.getNativeValue(configui.getValue(widgetPrefix .. "widget_alignment_2d")))
 end
 
 local function updateGameStateFields()
@@ -517,6 +554,19 @@ local function updateWidgetLayout()
     end
 end
 
+local function updateCutsceneOptions()
+    local options = {
+        useTargetIsCine = configui.getValue(widgetPrefix .. "use_target_is_cine"),
+        useActiveCameraIsCine = configui.getValue(widgetPrefix .. "use_active_camera_is_cine"),
+        useCameraComponentIsCine = configui.getValue(widgetPrefix .. "use_camera_component_is_cine")
+    }
+    uevrUtils.setCutsceneDetectionOptions(options)
+
+    updateSetting({"cutscene_options", "useTargetIsCine"}, options.useTargetIsCine)
+    updateSetting({"cutscene_options", "useActiveCameraIsCine"}, options.useActiveCameraIsCine)
+    updateSetting({"cutscene_options", "useCameraComponentIsCine"}, options.useCameraComponentIsCine)
+end
+
 for _, config in ipairs(stateConfigWidget) do
     local valueKey = config.valueKey
     configui.onUpdate(widgetPrefix .. valueKey, function(value)
@@ -539,6 +589,18 @@ end
 
 configui.onCreateOrUpdate(widgetPrefix .. "gameStateList", function(value)
 	showGameStateEditFields()
+end)
+
+configui.onUpdate(widgetPrefix .. "use_target_is_cine", function(value)
+	updateCutsceneOptions()
+end)
+
+configui.onUpdate(widgetPrefix .. "use_active_camera_is_cine", function(value)
+	updateCutsceneOptions()
+end)
+
+configui.onUpdate(widgetPrefix .. "use_camera_component_is_cine", function(value)
+	updateCutsceneOptions()
 end)
 
 configui.onUpdate(widgetPrefix .. "knownViewportWidgetList", function(value)

@@ -806,6 +806,7 @@ local function checkMonitoredMeshes()
 			local animInstance = monitor.meshObject.AnimScriptInstance
 			if animInstance ~= nil then
 				local playingMontage = animInstance:GetCurrentActiveMontage()
+				--print("Checking monitored mesh " .. monitor.label .. " for montage changes. Current: " .. tostring(monitor["currentMontage"] and monitor["currentMontage"]:get_full_name() or "nil") .. " New: " .. tostring(playingMontage and playingMontage:get_full_name() or "nil"))
 				if monitor["currentMontage"] ~= playingMontage then
 					monitor["currentMontage"] = playingMontage
 					local montageName = playingMontage and uevrUtils.getShortName(playingMontage) or ""

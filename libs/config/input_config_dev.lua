@@ -215,6 +215,12 @@ local function getConfigWidgets(m_paramManager)
 					initialValue = configDefaults["optimizeBodyRotationCalculations"]
 				},
 				{
+					widgetType = "checkbox",
+					id = widgetPrefix .. "pawnRotationModeDisableRotation",
+					label = "Disable Rotation",
+					initialValue = configDefaults["pawnRotationModeDisableRotation"]
+				},
+				{
 					widgetType = "slider_float",
 					id = widgetPrefix .. "pawnRotationLockedSmoothTime",
 					label = "Smoothing",
@@ -302,6 +308,12 @@ local function getConfigWidgets(m_paramManager)
 				range = {-200, 200},
 				initialValue = {configDefaults["headOffset"] and configDefaults["headOffset"].X or 0, configDefaults["headOffset"] and configDefaults["headOffset"].Y or 0, configDefaults["headOffset"] and configDefaults["headOffset"].Z or 0}
 			},
+            {
+                widgetType = "checkbox",
+                id = widgetPrefix .. "useMeshHeightForHeadOffset",
+                label = "Use Mesh Height",
+                initialValue = configDefaults["useMeshHeightForHeadOffset"]
+            },
 			{
 				widgetType = "checkbox",
 				id = widgetPrefix .. "adjustForAnimation",
@@ -368,6 +380,11 @@ local function updateSetting(key, value)
 end
 
 local function setCurrentHeadBone(value)
+	print("Setting current head bone to index " .. value)
+	if #boneList < value then
+		print("Invalid head bone index")
+		return
+	end
 	local headBoneName = boneList[value]
     updateSetting("headBoneName", headBoneName)
 	local mesh = pawnModule.getBodyMesh()
@@ -405,7 +422,7 @@ local function updateUIState(key)
     elseif key == "pawnRotationMode" then
         configui.hideWidget("minAngularDeviation", not (configui.getValue(exKey) == M.PawnRotationMode.SIMPLE or configui.getValue(exKey) == M.PawnRotationMode.ADVANCED))
         configui.hideWidget("alignConfidenceThreshold",  configui.getValue(exKey) ~= M.PawnRotationMode.ADVANCED)
-        --configui.hideWidget(widgetPrefix .. "pawnRotationLockedSmoothTime",  configui.getValue(exKey) ~= M.PawnRotationMode.LOCKED)
+        configui.hideWidget(widgetPrefix .. "pawnRotationLockedSmoothTime",  configui.getValue(exKey) == M.PawnRotationMode.NONE)
     elseif key == "pawnPositionMode" then
         configui.hideWidget(widgetPrefix .. "pawnPositionAnimationScale", configui.getValue(exKey) ~= M.PawnPositionMode.ANIMATED)
         configui.hideWidget(widgetPrefix .. "pawnPositionSweepMovement", configui.getValue(exKey) ~= M.PawnPositionMode.FOLLOWS)
@@ -503,6 +520,10 @@ configui.onUpdate(widgetPrefix .. "optimizeBodyRotationCalculations", function(v
 	updateSetting("optimizeBodyRotationCalculations", value)
 end)
 
+configui.onUpdate(widgetPrefix .. "pawnRotationModeDisableRotation", function(value)
+	updateSetting("pawnRotationModeDisableRotation", value)
+end)
+
 configui.onUpdate(widgetPrefix .. "optimizeBodyLocationCalculations", function(value)
 	updateSetting("optimizeBodyLocationCalculations", value)
 end)
@@ -545,6 +566,11 @@ end)
 configui.onCreate(widgetPrefix .. "adjustForAnimation", function(value)
     updateUIState("adjustForAnimation")
 end)
+
+configui.onUpdate(widgetPrefix .. "useMeshHeightForHeadOffset", function(value)
+    updateSetting("useMeshHeightForHeadOffset", value)
+end)
+
 
 configui.onUpdate(widgetPrefix .. "adjustForEyeOffset", function(value)
 	updateSetting("adjustForEyeOffset", value)

@@ -1527,13 +1527,21 @@ local function captureAnimationFromMesh()
 		--local tempPoseableMesh = meshComponent:is_a(uevrUtils.get_class("Class /Script/Engine.PoseableMeshComponent")) and meshComponent or uevrUtils.createPoseableMeshFromSkeletalMesh(meshComponent)
 		local tempPoseableMesh = uevrUtils.createPoseableMeshFromSkeletalMesh(meshComponent)
 		if tempPoseableMesh ~= nil then
-			if meshComponent:is_a(uevrUtils.get_class("Class /Script/Engine.PoseableMeshComponent")) then
-				tempPoseableMesh:SetLeaderPoseComponent(meshComponent, true)
-			end
+
+			-- if meshComponent:is_a(uevrUtils.get_class("Class /Script/Engine.PoseableMeshComponent")) then
+			-- 	if tempPoseableMesh.SetLeaderPoseComponent ~= nil then
+			-- 		tempPoseableMesh:SetLeaderPoseComponent(meshComponent, true)
+			-- 	else
+			-- 		tempPoseableMesh:SetMasterPoseComponent(meshComponent, true)
+			-- 	end
+			-- end
 			for hand = Handed.Left, Handed.Right do
 				if configui.getValue("animation_hand") == (hand + 1) or configui.getValue("animation_hand") == 3 then
 					local component = hands.getHandComponent(hand, selectedMeshName)
 					if component ~= nil then
+						local jointName = configuration["profiles"][selectedProfileName][selectedMeshName][hand == Handed.Left and "Left" or "Right"]["Name"]
+						animation.copyDescendantTransforms(meshComponent, tempPoseableMesh, jointName, false)
+
 						local minBoneIndex = (hand == Handed.Left and 1 or 6)
 						local maxBoneIndex = (hand == Handed.Left and 5 or 10)
 						local handStr = (hand == Handed.Left and "left_hand" or "right_hand")
@@ -1554,9 +1562,14 @@ local function captureAnimationFromMesh()
 				-- json.dump_file("debug.json", boneRotators, 4)
 				end
 			end
-			if meshComponent:is_a(uevrUtils.get_class("Class /Script/Engine.PoseableMeshComponent")) then
-				tempPoseableMesh:SetLeaderPoseComponent(nil, false)
-			end
+			-- if meshComponent:is_a(uevrUtils.get_class("Class /Script/Engine.PoseableMeshComponent")) then
+			-- 	if tempPoseableMesh.SetLeaderPoseComponent ~= nil then
+			-- 		tempPoseableMesh:SetLeaderPoseComponent(nil, false)
+			-- 	else
+			-- 		tempPoseableMesh:SetMasterPoseComponent(nil, false)
+			-- 	end
+			-- end
+
 			--if not meshComponent:is_a(uevrUtils.get_class("Class /Script/Engine.PoseableMeshComponent")) then
 				uevrUtils.destroyComponent(tempPoseableMesh, true, true)
 			--end
@@ -2107,7 +2120,8 @@ end
 local function captureCurrentHandTransforms()
 	local meshComponent = getMeshComponent()
 	if meshComponent ~= nil then
-		hands.updateAnimationFromMesh(configui.getValue("cutoff_children_hand_picker") - 1, meshComponent, selectedMeshName)
+		print("Capturing current hand transforms for mesh:", meshComponent:get_full_name(), selectedMeshName, configui.getValue("cutoff_children_hand_picker") - 1)
+		hands.updateAnimationFromMesh(configui.getValue("cutoff_children_hand_picker") - 1, meshComponent, selectedMeshName, true)
 		updateCutoffChildBoneTransformsUI()
 	end
 end
@@ -2153,12 +2167,14 @@ local function updateOptimizationBoneList()
 	local leftIndex = 1
 	local rightIndex = 1
 	for index, name in ipairs(ancestorBonesLeft) do
+		print("Left Ancestor Bone:",index, name)
 		if name == currentLeftBone then
 			leftIndex = index
 			break
 		end
 	end
 	for index, name in ipairs(ancestorBonesRight) do
+		print("Right Ancestor Bone:",index, name)
 		if name == currentRightBone then
 			rightIndex = index
 			break
@@ -2757,10 +2773,10 @@ print("Current Step",currentStep)
 		if not hands.exists() then
 			hands.createFromConfig(configuration, selectedProfileName, selectedAnimationName)
 		end
-		hands.resetAutoCreate()
 		hands.disableAnimations(false)
 	end
 	if currentStep == 2 then
+		hands.resetAutoCreate()
 		hands.destroyHands()
 		configui.hideWidget("next_button", true)
 		selectedProfileName = profileNames[configui.getValue("hands_profile_list")]
@@ -2818,12 +2834,19 @@ print("Current Step",currentStep)
 		if previousStep == 4 then
 			local profileMeshName = configui.getValue("hands_profile_mesh_name")
 			if profileMeshName ~= nil then
-				if configuration["profiles"][selectedProfileName][profileMeshName] == nil then
-					local profileMesh = configuration["profiles"][selectedProfileName][selectedMeshName]
-					if profileMesh == nil then profileMesh = {} end
-					configuration["profiles"][selectedProfileName][profileMeshName] = profileMesh
-					configuration["profiles"][selectedProfileName][selectedMeshName] = nil
-					isConfigurationDirty = true
+				if configui.getValue("hands_profile_mesh_list") == 1 then
+					if configuration["profiles"][selectedProfileName][profileMeshName] == nil then
+						configuration["profiles"][selectedProfileName][profileMeshName] = {}
+						isConfigurationDirty = true
+					end
+				else
+					if configuration["profiles"][selectedProfileName][profileMeshName] == nil then
+						local profileMesh = configuration["profiles"][selectedProfileName][selectedMeshName]
+						if profileMesh == nil then profileMesh = {} end
+						configuration["profiles"][selectedProfileName][profileMeshName] = profileMesh
+						configuration["profiles"][selectedProfileName][selectedMeshName] = nil
+						isConfigurationDirty = true
+					end
 				end
 				selectedMeshName = profileMeshName
 			end
@@ -2910,30 +2933,55 @@ print("Current Step",currentStep)
 
 		if leftParams ~= nil then
 			local currentName = leftParams["Name"]
-			local index = configui.getValue("left_cutoff_bone")
-			if currentName ~= bones["names"][index] then
-				configui.setValue("left_cutoff_bone", 1)
-				--configui.setValue("left_cutoff_bone_name" , "")
-				leftParams["Name"] = ""
+			local found = false
+			for index, name in ipairs(bones["names"]) do
+				if name == currentName then
+					configui.setValue("left_cutoff_bone", index)
+					found = true
+					break
+				end
 			end
+			if not found then
+				configui.setValue("left_cutoff_bone", 1)
+			end
+			
+			-- local index = configui.getValue("left_cutoff_bone")
+			-- print("Current Name Left", currentName, index, bones["names"][index])
+			-- if currentName ~= bones["names"][index] then
+			-- 	configui.setValue("left_cutoff_bone", 1)
+			-- 	--configui.setValue("left_cutoff_bone_name" , "")
+			-- 	leftParams["Name"] = ""
+			-- end
 		end
 
 		if rightParams ~= nil then
 			local currentName = rightParams["Name"]
-			local index = configui.getValue("right_cutoff_bone")
-			if currentName ~= bones["names"][index] then
-				configui.setValue("right_cutoff_bone", 1)
-				--configui.setValue("right_cutoff_bone_name" , "")
-				rightParams["Name"] = ""
+			local found = false
+			for index, name in ipairs(bones["names"]) do
+				if name == currentName then
+					configui.setValue("right_cutoff_bone", index)
+					found = true
+					break
+				end
 			end
+			if not found then
+				configui.setValue("right_cutoff_bone", 1)
+			end
+			-- local index = configui.getValue("right_cutoff_bone")
+			-- print("Current Name Right", currentName, index, bones["names"][index])
+			-- if currentName ~= bones["names"][index] then
+			-- 	configui.setValue("right_cutoff_bone", 1)
+			-- 	--configui.setValue("right_cutoff_bone_name" , "")
+			-- 	rightParams["Name"] = ""
+			-- end
 		end
 
-		updateOptimizationUI()
 		updateBoneTransformVisibility()
 		updateHands()
 
 		loadInitialTransform()
 		updateCutoffChildBonePicker()
+		updateOptimizationUI()
 
 		configui.hideWidget("next_button", false)
 

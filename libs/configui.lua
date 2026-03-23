@@ -428,6 +428,7 @@ local layoutDefinitions = {}
 local updateFunctions = {}
 local createFunctions = {}
 local createOrUpdateFunctions = {}
+local updateInProgress = {}
 local defaultFilename = "config_default"
 local treeInitialized = {}
 
@@ -448,17 +449,23 @@ local function doUpdate(panelID, widgetID, value, updateConfigValue, noCallbacks
 		end
 
 		if noCallbacks ~= true then
-			local funcList = updateFunctions[widgetID]
-			if funcList ~= nil and #funcList > 0 then
-				for i = 1, #funcList do
-					funcList[i](value)
+			if updateInProgress[widgetID] then
+				-- skip callbacks to prevent re-entrant updates
+			else
+				updateInProgress[widgetID] = true
+				local funcList = updateFunctions[widgetID]
+				if funcList ~= nil and #funcList > 0 then
+					for i = 1, #funcList do
+						funcList[i](value)
+					end
 				end
-			end
-			funcList = createOrUpdateFunctions[widgetID]
-			if funcList ~= nil and #funcList > 0 then
-				for i = 1, #funcList do
-					funcList[i](value)
+				funcList = createOrUpdateFunctions[widgetID]
+				if funcList ~= nil and #funcList > 0 then
+					for i = 1, #funcList do
+						funcList[i](value)
+					end
 				end
+				updateInProgress[widgetID] = false
 			end
 		end
 		if panelList[panelID] ~= nil then panelList[panelID].isDirty = true end

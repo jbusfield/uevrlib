@@ -462,15 +462,18 @@ function M.create(skeletalMeshComponent, definition, handAnimations)
 							animation.initializeBones(handComponents[name][index], initialTransform[index==Handed.Left and "left_hand" or "right_hand"])
 						end
 
-						local animID = skeletalMeshDefinition[index==Handed.Left and "Left" or "Right"]["AnimationID"]
-						if animID ~= nil then
-							-- local suffix = getAnimIDSuffix(animID)
-							-- if suffix ~= nil then inputHandlerAnimID[animID] = suffix end
-							-- print("@@@@@@",animID, suffix)
-							-- animation.add(animID, handComponents[name][index], handAnimations)
-							-- animation.initialize(animID, handComponents[name][index])
-							handsAnimation.createAnimationHandler(animID, handComponents[name][index], handAnimations)
+						if skeletalMeshDefinition[index==Handed.Left and "Left" or "Right"] ~= nil then
+							local animID = skeletalMeshDefinition[index==Handed.Left and "Left" or "Right"]["AnimationID"]
+							if animID ~= nil then
+								-- local suffix = getAnimIDSuffix(animID)
+								-- if suffix ~= nil then inputHandlerAnimID[animID] = suffix end
+								-- print("@@@@@@",animID, suffix)
+								-- animation.add(animID, handComponents[name][index], handAnimations)
+								-- animation.initialize(animID, handComponents[name][index])
+								handsAnimation.createAnimationHandler(animID, handComponents[name][index], handAnimations)
+							end
 						end
+						
 						executeOnCreatedCallback(index, handComponents[name][index])
 					end
 				end
@@ -575,12 +578,43 @@ function M.setAnimationMesh(mesh)
 	defaultAnimationMesh = mesh
 end
 
-function M.updateAnimationFromMesh(hand, mesh, componentName)
+function M.transformBoneToRoot(hand, componentName)
+	componentName = getComponentName(componentName)
+	if componentName == nil or componentName == "" or handDefinitions[componentName] == nil then
+		M.print("Could not transformBoneToRoot because component is undefined")
+	else
+		local component = M.getHandComponent(hand, componentName)
+		local handStr = hand == Handed.Left and "Left" or "Right"
+		local definition = handDefinitions[componentName][handStr]
+		if definition ~= nil then
+			local jointName = definition["Name"]
+			if jointName ~= nil and jointName ~= "" then
+				local success, response = pcall(function()
+					local location = getValidVector(definition, "Location", {0,0,0})
+					local rotation = getValidRotator(definition, "Rotation", {0,0,0})
+					local scale = getValidVector(definition, "Scale", {1,1,1})
+					local taperOffset = getValidVector(definition, "TaperOffset", {0,0,0})
+					--When an animation is applied, every bone in the entire skeleton is moved, so we need to reapply the transform from wrist to root
+					local optimizeAnimationFromMesh = handDefinitions[componentName]["OptimizeAnimations"] ~= false
+					local optimizationRootBone = definition["OptimizeAnimationsRootBone"]
+					animation.transformBoneToRoot(component, jointName, location, rotation, scale, taperOffset, optimizeAnimationFromMesh, optimizationRootBone)
+					print("here", component:get_full_name())
+					--component:SetLeaderPoseComponent(nil, false)
+				end)
+				if success == false then
+					M.print("[hands] " .. response, LogLevel.Error)
+				end
+			end
+		end
+	end
+end
+
+function M.updateAnimationFromMesh_Native(hand, mesh, componentName)
 	--print("Updating animation from mesh", hand, mesh:get_full_name(), componentName)
 	if mesh ~= nil then
 		componentName = getComponentName(componentName)
 		if componentName == nil or componentName == "" or handDefinitions[componentName] == nil then
-			M.print("Could not update Animation From Mesh because component is undefined")
+			M.print("Could not update Animation From Mesh Full because component is undefined")
 		else
 			local component = M.getHandComponent(hand, componentName)
 			local handStr = hand == Handed.Left and "Left" or "Right"
@@ -590,7 +624,7 @@ function M.updateAnimationFromMesh(hand, mesh, componentName)
 				if jointName ~= nil and jointName ~= "" then
 					local success, response = pcall(function()
 						component:CopyPoseFromSkeletalComponent(mesh)
-						--print("here", component:get_full_name())
+						--print("here", component:get_full_name(), mesh:get_full_name())
 						--component:SetLeaderPoseComponent(mesh, true)
 						local location = getValidVector(definition, "Location", {0,0,0})
 						local rotation = getValidRotator(definition, "Rotation", {0,0,0})
@@ -610,6 +644,32 @@ function M.updateAnimationFromMesh(hand, mesh, componentName)
 		end
 	end
 end
+
+function M.updateAnimationFromMesh(hand, mesh, componentName, useCompatibilityMode)
+	if useCompatibilityMode ~= true then
+		M.updateAnimationFromMesh_Native(hand, mesh, componentName)
+	else
+		-- This is ~2x slower than native but guaranteed to work
+		-- should only use on non-tick cases or when native is not working for some reason (ie Hogwarts where MasterComponent overide prevents native)
+        if mesh ~= nil then
+			componentName = getComponentName(componentName)
+			if componentName == nil or componentName == "" or handDefinitions[componentName] == nil then
+				M.print("Could not update Animation From Mesh because component is undefined")
+			else
+				local component = M.getHandComponent(hand, componentName)
+				local handStr = hand == Handed.Left and "Left" or "Right"
+				local definition = handDefinitions[componentName][handStr]
+				if definition ~= nil then
+					local jointName = definition["Name"]
+					if jointName ~= nil and jointName ~= "" then
+						animation.copyDescendantTransforms(mesh, component, jointName, false)
+					end
+				end
+			end
+		end
+	end
+end
+M.updateAnimationFromMesh = uevrUtils.profiler:wrap("updateAnimationFromMesh", M.updateAnimationFromMesh)
 
 function M.setHandsAreAnimatingFromMesh(isLeftAnimating, isRightAnimating, leftMesh, rightMesh, componentName)
 	if isLeftAnimating ~= nil then
@@ -1226,7 +1286,7 @@ uevrUtils.registerPreLevelChangeCallback(function(level)
 end)
 
 local function tryAutoCreateHands()
-	if autoCreateHands and not M.exists()then
+	if autoCreateHands and not M.exists() then
 		--see if the defaults params file exists
 		local paramsFile = "hands_parameters"
 		--if we already found it once we dont ned to keep reading from json to see if it exists
