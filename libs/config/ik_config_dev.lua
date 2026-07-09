@@ -15,6 +15,11 @@ M.ControllerType = {
     RIGHT_CONTROLLER = 1,
 }
 
+M.ParentType = {
+    PAWN_ROOT = 1,
+    HMD = 2,
+}
+
 local configFileName = "dev/ik_config_dev"
 local configTabLabel = "IK Dev Config"
 local widgetPrefix = "uevr_ik_"
@@ -28,6 +33,12 @@ local rigDefaults = {
 	animation_location_offset = uevrUtils.vector(0,0,0),
 	animation_rotation_offset = uevrUtils.rotator(0,0,0),
 	show_debug_meshes = false,
+	parent_type = M.ParentType.PAWN_ROOT,
+	hide_body = false,
+	spine_bone_name = "",
+	left_shoulder_bone_name = "",
+	right_shoulder_bone_name = "",
+	shoulder_width_scale = 1.0
 }
 local solverDefaults = {
 	label = "",
@@ -50,6 +61,9 @@ local solverDefaults = {
 	smoothing = 0,
     wrist_twist_influence = 0.35,
     wrist_twist_max = 75.0,
+	end_bone_lock_pitch = false,
+	end_bone_lock_yaw = false,
+	end_bone_lock_roll = false,
 }
 
 local meshList = {}
@@ -117,6 +131,75 @@ local function getConfigWidgets(m_paramManager)
                 range = {-360, 360},
                 initialValue = {0,0,0}
             },
+            {
+                widgetType = "combo",
+                id = widgetPrefix .. "parent_type",
+                label = "Rig Parent",
+                selections = {"Pawn RootComponent", "HMD"},
+                initialValue = 1,
+                width = 263
+            },
+            {
+                widgetType = "checkbox",
+                id = widgetPrefix .. "hide_body",
+                label = "Hide Body",
+                initialValue = false
+            },
+        	{ widgetType = "begin_group", id =  widgetPrefix .. "hide_body_group", isHidden = true }, { widgetType = "indent", width = 20 },
+				{
+					widgetType = "combo",
+					id = widgetPrefix .. "left_shoulder_bone_name_combo",
+					label = "Left Shoulder Bone",
+					selections = {"None"},
+					initialValue = 1,
+					width = 263
+				},
+				{
+					widgetType = "input_text",
+					id = widgetPrefix .. "left_shoulder_bone_name",
+					label = "Left Shoulder Bone",
+					initialValue = "",
+					isHidden = hideLabels
+				},
+				{
+					widgetType = "combo",
+					id = widgetPrefix .. "right_shoulder_bone_name_combo",
+					label = "Right Shoulder Bone",
+					selections = {"None"},
+					initialValue = 1,
+					width = 263
+				},
+				{
+					widgetType = "input_text",
+					id = widgetPrefix .. "right_shoulder_bone_name",
+					label = "Right Shoulder Bone",
+					initialValue = "",
+					isHidden = hideLabels
+				},
+				{
+					widgetType = "combo",
+					id = widgetPrefix .. "spine_bone_name_combo",
+					label = "Spine Bone",
+					selections = {"None"},
+					initialValue = 1,
+					width = 263
+				},
+				{
+					widgetType = "input_text",
+					id = widgetPrefix .. "spine_bone_name",
+					label = "Spine Bone",
+					initialValue = "",
+					isHidden = hideLabels
+				},
+				{
+					widgetType = "drag_float",
+					id = widgetPrefix .. "shoulder_width_scale",
+					label = "Shoulder Width Scale",
+					speed = 0.01,
+					range = {0.01, 10},
+					initialValue = 1.0
+				},
+			{widgetType = "unindent", width = 20}, { widgetType = "end_group"},
             {
                 widgetType = "checkbox",
                 id = widgetPrefix .. "show_debug_meshes",
@@ -263,6 +346,26 @@ local function getConfigWidgets(m_paramManager)
 							speed = 1,
 							range = {-360, 360},
 							initialValue = {0,0,0}
+						},
+						{
+							widgetType = "checkbox",
+							id = widgetPrefix .. "end_bone_lock_pitch",
+							label = "Lock Pitch",
+							initialValue = false
+						},
+						{ widgetType = "same_line" },
+						{
+							widgetType = "checkbox",
+							id = widgetPrefix .. "end_bone_lock_yaw",
+							label = "Lock Yaw",
+							initialValue = false
+						},
+						{ widgetType = "same_line" },
+						{
+							widgetType = "checkbox",
+							id = widgetPrefix .. "end_bone_lock_roll",
+							label = "Lock Roll",
+							initialValue = false
 						},
 						{
 							widgetType = "combo",
@@ -695,7 +798,7 @@ local function updateSetting(key, value)
 	local profileId = getActiveProfileId()
 	if profileId == nil then return end
 
-	if key == "mesh" or key == "animation_mesh" or key == "animation_location_offset" or key == "animation_rotation_offset" or key == "mesh_location_offset" or key == "mesh_rotation_offset" or key == "show_debug_meshes" then
+	if key == "mesh" or key == "animation_mesh" or key == "animation_location_offset" or key == "animation_rotation_offset" or key == "mesh_location_offset" or key == "mesh_rotation_offset" or key == "show_debug_meshes" or key == "parent_type"  or key == "hide_body" or key == "spine_bone_name" or key == "left_shoulder_bone_name" or key == "right_shoulder_bone_name" or key == "shoulder_width_scale" then
 		pmSet({profileId, key}, value, true)
 		uevrUtils.executeUEVRCallbacks("on_ik_config_param_change", key, value, true)
 		return
@@ -816,13 +919,12 @@ local function setSelectedBone(comboWidgetID, valueWidgetID)
     configui.setValue(widgetPrefix .. comboWidgetID, selectedIndex, true)
 end
 
-local function setBoneList()
-    boneNames = {}
+local function getMesh()
     local currentMesh = configui.getValue(widgetPrefix .. "mesh")
     if currentMesh == "None" or currentMesh == "" then
         configui.setSelections(widgetPrefix .. "end_bone_combo", {"None"})
         configui.setValue(widgetPrefix .. "end_bone_combo", 1)
-        return
+        return nil
     end
     local customMeshList = nil
     if currentMesh == "Custom" then
@@ -853,6 +955,48 @@ local function setBoneList()
 	if customMeshList ~= nil and #customMeshList > 0 then
 		mesh = customMeshList[1]
 	end
+	return mesh
+end
+
+local function setBoneList()
+    boneNames = {}
+    local currentMesh = configui.getValue(widgetPrefix .. "mesh")
+    if currentMesh == "None" or currentMesh == "" then
+        configui.setSelections(widgetPrefix .. "end_bone_combo", {"None"})
+        configui.setValue(widgetPrefix .. "end_bone_combo", 1)
+        return
+    end
+--     local customMeshList = nil
+--     if currentMesh == "Custom" then
+--         if getCustomIKComponent == nil then
+-- --TODO this function is getting called too early need to investigate how to recover
+--             print("Error: getCustomIKComponent function not defined for custom IK mesh retrieval")
+--             return
+--         end
+--         local activeProfileID = paramManager and paramManager:getActiveProfile() or ""
+--         local templates = getCustomIKComponent(activeProfileID)
+-- 		if type(templates) ~= "table" then
+-- 			templates = {{descriptor = templates}}
+-- 		end
+-- 		customMeshList = {}
+-- 		for i, template in ipairs(templates) do
+-- 			if template.instance ~= nil then
+-- 				table.insert(customMeshList, template.instance)
+-- 			else
+-- 				table.insert(customMeshList, uevrUtils.getObjectFromDescriptor(template.descriptor))
+-- 			end
+-- 		end
+
+--     else
+--         customMeshList = {uevrUtils.getObjectFromDescriptor(configui.getValue(widgetPrefix .. "mesh"))}
+--     end
+
+-- 	local mesh = nil
+-- 	if customMeshList ~= nil and #customMeshList > 0 then
+-- 		mesh = customMeshList[1]
+-- 	end
+
+	local mesh = getMesh()
     if mesh ~= nil then
 		boneNames = uevrUtils.getBoneNames(mesh)
         table.insert(boneNames, 1, "None")
@@ -864,6 +1008,9 @@ local function setBoneList()
         configui.setSelections(widgetPrefix .. "lower_twist_bone_1_combo", boneNames)
         configui.setSelections(widgetPrefix .. "lower_twist_bone_2_combo", boneNames)
         configui.setSelections(widgetPrefix .. "lower_twist_bone_3_combo", boneNames)
+        configui.setSelections(widgetPrefix .. "spine_bone_name_combo", boneNames)
+        configui.setSelections(widgetPrefix .. "left_shoulder_bone_name_combo", boneNames)
+        configui.setSelections(widgetPrefix .. "right_shoulder_bone_name_combo", boneNames)
 
         setSelectedBone("end_bone_combo", "end_bone")
         setSelectedBone("joint_bone_combo", "joint_bone")
@@ -872,6 +1019,9 @@ local function setBoneList()
         setSelectedBone("lower_twist_bone_1_combo", "lower_twist_bone_1")
         setSelectedBone("lower_twist_bone_2_combo", "lower_twist_bone_2")
         setSelectedBone("lower_twist_bone_3_combo", "lower_twist_bone_3")
+        setSelectedBone("spine_bone_name_combo", "spine_bone_name")
+        setSelectedBone("left_shoulder_bone_name_combo", "left_shoulder_bone_name")
+        setSelectedBone("right_shoulder_bone_name_combo", "right_shoulder_bone_name")
 	else
 		--print("Error: Could not retrieve mesh for bone list population")
 		--something is wrong (maybe it's too early in the load process) so try initializing again
@@ -982,6 +1132,10 @@ configui.onUpdate(widgetPrefix .. "mesh_combo", function(value)
     setBoneList()
 end)
 
+configui.onCreateOrUpdate(widgetPrefix .. "hide_body", function(value)
+    configui.setHidden(widgetPrefix .. "hide_body_group", not value)
+end)
+
 configui.onCreateOrUpdate(widgetPrefix .. "animation_mesh_combo_show_children", function(value)
     setAnimationMeshList(configui.getValue(widgetPrefix .. "animation_mesh"), true)
 end)
@@ -1005,6 +1159,53 @@ end)
 configui.onUpdate(widgetPrefix .. "wrist_bone_combo", function(value)
     updateSetting("wrist_bone", boneNames[value] == "None" and "" or boneNames[value])
 end)
+
+configui.onUpdate(widgetPrefix .. "spine_bone_name_combo", function(value)
+    updateSetting("spine_bone_name", boneNames[value] == "None" and "" or boneNames[value])
+end)
+
+
+configui.onUpdate(widgetPrefix .. "left_shoulder_bone_name_combo", function(value)
+    updateSetting("left_shoulder_bone_name", boneNames[value] == "None" and "" or boneNames[value])
+
+	local mesh = getMesh()
+	local rightBone = boneNames[configui.getValue(widgetPrefix .. "right_shoulder_bone_name_combo")]
+	if rightBone == "None" then
+		rightBone = uevrUtils.findOppositeBone(boneNames[value], true, uevrUtils.getBoneNames(mesh))
+		if rightBone ~= nil then
+			updateSetting("right_shoulder_bone_name", rightBone)
+		end
+	end
+
+	local bone = uevrUtils.findCommonAncestor(mesh, boneNames[value], rightBone)
+	if bone ~= nil then
+		print("Common bone", bone)
+		updateSetting("spine_bone_name", bone)
+		setSelectedBone("spine_bone_name_combo", "spine_bone_name")
+	end
+end)
+
+configui.onUpdate(widgetPrefix .. "right_shoulder_bone_name_combo", function(value)
+    updateSetting("right_shoulder_bone_name", boneNames[value] == "None" and "" or boneNames[value])
+
+	local mesh = getMesh()
+	local leftBone = boneNames[configui.getValue(widgetPrefix .. "left_shoulder_bone_name_combo")]
+	if leftBone == "None" then
+		leftBone = uevrUtils.findOppositeBone(boneNames[value], false, uevrUtils.getBoneNames(mesh))
+		if leftBone ~= nil then
+			updateSetting("left_shoulder_bone_name", leftBone)
+		end
+	end
+
+	local bone = uevrUtils.findCommonAncestor(mesh, leftBone, boneNames[value])
+	if bone ~= nil then
+		print("Common bone", bone)
+		updateSetting("spine_bone_name", bone)
+		setSelectedBone("spine_bone_name_combo", "spine_bone_name")
+	end
+
+end)
+
 
 configui.onUpdate(widgetPrefix .. "label", function(value)
 	--change the label of the currently selected solver

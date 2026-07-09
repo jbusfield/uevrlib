@@ -90,6 +90,7 @@ local parameters = {
     hideAnimationArms = false,
 	bodyMeshFOVFixID = "",
 	armsMeshFOVFixID = "",
+	basePawnName = "Pawn",
 }
 -- local parameters = {
 --     _profileLabels = {
@@ -155,7 +156,9 @@ local function doHideArmsBones(val)
 				armsMesh:UnHideBoneByName(uevrUtils.fname_from_string(getParameter("pawnUpperArmLeft")))
 			end
 		end
+		return true
 	end
+	return false
 end
 
 local function fixFOV()
@@ -312,6 +315,14 @@ function M.setBodyMeshName(val)
 	saveParameter("bodyMeshName", "Pawn." .. val)
 end
 
+function M.getPawnBaseName()
+	return getParameter("basePawnName") or "Pawn"
+end
+
+function M.getPawn()
+	return uevrUtils.getObjectFromDescriptor(M.getPawnBaseName())
+end
+
 function M.getBodyMesh()
 	return uevrUtils.getObjectFromDescriptor(getParameter("bodyMeshName"))
 end
@@ -390,6 +401,8 @@ local pawnState = {}
 function M.setCurrentProfile(profileID)
 	pawnState = {}
 	paramManager:setActiveProfile(profileID)
+	uevrUtils.executeUEVRCallbacks("on_pawn_param_change", "profile", profileID)
+
 	--saveParameter({"_profileState", "currentEditingProfile"}, profileID)
 	--uevrUtils.executeUEVRCallbacks("on_pawn_config_param_change", {"_profileState", "currentEditingProfile"}, profileID, false, true)
 end
@@ -436,12 +449,16 @@ uevrUtils.setInterval(100, function()
 
 end)
 
+function M.reset()
+	pawnState = {}
+end
+
 uevrUtils.setInterval(2000, function()
 	fixFOV()
 end)
 
 uevrUtils.registerPreLevelChangeCallback(function(level)
-	pawnState = {}
+	M.reset()
 end)
 
 --if using Visibility or HiddenInGame to hide meshes, there's a very good chance the game will override

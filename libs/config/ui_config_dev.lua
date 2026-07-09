@@ -21,7 +21,9 @@ local stateConfigWidget = {
     {stateKey = "autoAdjustUI", valueKey = "autoAdjustUIWhenActive"},
     {stateKey = "inputEnabled", valueKey = "inputWhenActive"},
     {stateKey = "handsEnabled", valueKey = "handsWhenActive"},
-    {stateKey = "remapEnabled", valueKey = "remapWhenActive"}
+    {stateKey = "remapEnabled", valueKey = "remapWhenActive"},
+    {stateKey = "fadeCamera", valueKey = "fadeCameraWhenActive"},
+    {stateKey = "pawnArmBones", valueKey = "pawnArmBonesWhenActive"}
 }
 
 local stateConfigGame = {
@@ -31,7 +33,9 @@ local stateConfigGame = {
     {stateKey = "autoAdjustUI", valueKey = "autoAdjustUIWhenInGameState"},
     {stateKey = "inputEnabled", valueKey = "inputWhenInGameState"},
     {stateKey = "handsEnabled", valueKey = "handsWhenInGameState"},
-    {stateKey = "remapEnabled", valueKey = "remapWhenInGameState"}
+    {stateKey = "remapEnabled", valueKey = "remapWhenInGameState"},
+    {stateKey = "fadeCamera", valueKey = "fadeCameraWhenInGameState"},
+    {stateKey = "pawnArmBones", valueKey = "pawnArmBonesWhenInGameState"}
 }
 
 local gameStates = {"cutscene", "paused", "character_hidden"}
@@ -166,6 +170,38 @@ local function getConfigWidgets()
                 widgetType = "input_text",
                 id = widgetPrefix .. "remapWhenInGameStatePriority",
                 label = " Remap",
+                initialValue = "0",
+                width = 35,
+            },
+            {
+                widgetType = "combo",
+                id = widgetPrefix .. "fadeCameraWhenInGameState",
+                label = "",
+                selections = {"No effect", "Enable", "Disable"},
+                initialValue = 1,
+                width = 150,
+            },
+		    { widgetType = "same_line" },
+            {
+                widgetType = "input_text",
+                id = widgetPrefix .. "fadeCameraWhenInGameStatePriority",
+                label = " Fade Camera",
+                initialValue = "0",
+                width = 35,
+            },
+            {
+                widgetType = "combo",
+                id = widgetPrefix .. "pawnArmBonesWhenInGameState",
+                label = "",
+                selections = {"No effect", "Enable", "Disable"},
+                initialValue = 1,
+                width = 150,
+            },
+		    { widgetType = "same_line" },
+            {
+                widgetType = "input_text",
+                id = widgetPrefix .. "pawnArmBonesWhenInGameStatePriority",
+                label = " Pawn Arm Bones",
                 initialValue = "0",
                 width = 35,
             },
@@ -341,6 +377,38 @@ local function getConfigWidgets()
                 widgetType = "input_text",
                 id = widgetPrefix .. "remapWhenActivePriority",
                 label = " Remap",
+                initialValue = "0",
+                width = 35,
+            },
+            {
+                widgetType = "combo",
+                id = widgetPrefix .. "fadeCameraWhenActive",
+                label = "",
+                selections = {"No effect", "Enable", "Disable"},
+                initialValue = 1,
+                width = 150,
+            },
+		    { widgetType = "same_line" },
+            {
+                widgetType = "input_text",
+                id = widgetPrefix .. "fadeCameraWhenActivePriority",
+                label = " Fade Camera",
+                initialValue = "0",
+                width = 35,
+            },
+            {
+                widgetType = "combo",
+                id = widgetPrefix .. "pawnArmBonesWhenActive",
+                label = "",
+                selections = {"No effect", "Enable", "Disable"},
+                initialValue = 1,
+                width = 150,
+            },
+		    { widgetType = "same_line" },
+            {
+                widgetType = "input_text",
+                id = widgetPrefix .. "pawnArmBonesWhenActivePriority",
+                label = " Pawn Arm Bones",
                 initialValue = "0",
                 width = 35,
             },

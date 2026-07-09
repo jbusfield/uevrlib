@@ -38,6 +38,11 @@ function M.print(text, logLevel)
 	end
 end
 
+local isDisabled = false
+function M.setDisabled(val)
+	isDisabled = val
+end
+
 function M.getPrimaryMarkerParams(accessoryParams)
 	if accessoryParams == nil then return nil end
 	if type(accessoryParams.markers) == "table" then
@@ -628,6 +633,8 @@ local function checkSegmentedMontage(montageObject, montageName, label, animInst
 end
 
 uevrUtils.registerUEVRCallback("on_module_montage_change", function(montageObject, montageName, label, animInstance)
+	if isDisabled then return end
+
 	checkSegmentedMontage(montageObject, montageName, label, animInstance)
 
 	checkAccessories(montageName ~= nil and montageName ~= "", animInstance, montageObject) --sending this param allows for montage based proximity checks
@@ -643,6 +650,8 @@ end)
 
 -- Monitor for activation distance changes (since montage callbacks won't fire when proximity changes).
 uevrUtils.setInterval(300, function()
+	if isDisabled then return end
+
 	local isMontage = (status["montageMonitor"] ~= nil)
 	checkAccessories(isMontage)
 end)
@@ -663,6 +672,8 @@ end)
 
 
 uevrUtils.registerPostEngineTickCallback(function(engine, delta)
+	if isDisabled then return end
+
 	if status["montageMonitor"] ~= nil then
 		local changed = {
 			[Handed.Left] = false,

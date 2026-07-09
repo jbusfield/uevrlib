@@ -4,6 +4,7 @@ uevrUtils.setLogToFile(true)
 local configui = require("libs/configui")
 local controllers = require("libs/controllers")
 local animation = require("libs/animation")
+local pawnModule = require("libs/pawn")
 local hands = require("libs/hands")
 hands.setLogLevel(LogLevel.Debug)
 animation.setLogLevel(LogLevel.Debug)
@@ -209,7 +210,7 @@ local configDefinition = {
 					widgetType = "drag_float3",
 					id = "mesh_rotation",
 					label = "Rotation",
-					speed = 45,
+					speed = 1,
 					range = {-180, 180},
 					initialValue = {0.0, 0.0, 0.0}
 				},
@@ -1484,6 +1485,7 @@ local function getMeshComponent()
 					return getCustomHandComponent(selectedMeshName)
 				end
 			else
+				meshPropertyName = meshPropertyName:gsub("Pawn", pawnModule.getPawnBaseName())
 				return uevrUtils.getObjectFromDescriptor(meshPropertyName)
 			end
 		end
@@ -2073,7 +2075,8 @@ end
 
 local function loadCharacterMeshList()
 	meshList = {}
-	if uevrUtils.getValid(pawn) ~= nil then
+	local pawn = uevrUtils.getValid(pawnModule.getPawn())
+	if pawn ~= nil then
 		meshList = uevrUtils.getPropertiesOfClass(pawn, "Class /Script/Engine.SkeletalMeshComponent")
 		for index, name in ipairs(meshList) do
 			meshList[index] = "Pawn." .. meshList[index]
@@ -2081,7 +2084,8 @@ local function loadCharacterMeshList()
 
 		if configui.getValue("include_children_in_mesh_search") then
 			for _, prop in ipairs(meshList) do
-				local parent = uevrUtils.getObjectFromDescriptor(prop)
+				local propertyName = prop:gsub("Pawn", pawnModule.getPawnBaseName())
+				local parent = uevrUtils.getObjectFromDescriptor(propertyName)
 				if parent ~= nil then
 					local children = parent.AttachChildren
 					if children ~= nil then

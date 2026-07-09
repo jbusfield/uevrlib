@@ -31,6 +31,13 @@ local function getConfigWidgets(m_paramManager)
     return spliceableInlineArray{
 		expandArray(m_paramManager.getProfilePreConfigurationWidgets, widgetPrefix),
 		{
+			widgetType = "input_text",
+			id = widgetPrefix .. "basePawnName",
+			label = "Base Name",
+			initialValue = "Pawn",
+			isHidden = false
+		},
+		{
 			widgetType = "tree_node",
 			id = widgetPrefix .. "body",
 			initialOpen = true,
@@ -250,6 +257,7 @@ local function setPawnUpperArmRight(value)
 end
 
 local function getArmsMesh()
+	--print("Getting arms mesh from descriptor:", configui.getValue(widgetPrefix .. "selectedPawnArmsMesh"))
 	return uevrUtils.getObjectFromDescriptor(configui.getValue(widgetPrefix .. "selectedPawnArmsMesh"))
 end
 
@@ -281,7 +289,7 @@ local function updateMeshUI(pawnMeshList, listName, selectedName, defaultValue)
 
 	for i = 1, #pawnMeshList do
 		if pawnMeshList[i] == selectedPawnBodyMesh then
-			configui.setValue(widgetPrefix .. listName, i)
+			configui.setValue(widgetPrefix .. listName, i, true)
 			break
 		end
 	end
@@ -289,8 +297,14 @@ local function updateMeshUI(pawnMeshList, listName, selectedName, defaultValue)
 end
 
 local function setPawnMeshList()
-	M.print("Setting pawn mesh list", LogLevel.Debug)
-	pawnMeshList = uevrUtils.getObjectPropertyDescriptors(pawn, "Pawn", "Class /Script/Engine.SkeletalMeshComponent", includeChildrenInMeshList)
+	--uevrUtils.printStackTrace()
+	--print("Setting pawn mesh list", configui.getValue(widgetPrefix .. "basePawnName"))
+	--uevrUtils.printStackTrace()
+	--print(configDefaults["basePawnName"], configDefaults["bodyMeshName"], configDefaults["armsMeshName"])
+	--print(configui.getValue(widgetPrefix .. "basePawnName"), configui.getValue(widgetPrefix .. "selectedPawnBodyMesh"), configui.getValue(widgetPrefix .. "selectedPawnArmsMesh"))
+	local pawnName = configui.getValue(widgetPrefix .. "basePawnName") or "Pawn"
+	local pawnObject = uevrUtils.getObjectFromDescriptor(pawnName)
+	pawnMeshList = uevrUtils.getObjectPropertyDescriptors(pawnObject, pawnName, "Class /Script/Engine.SkeletalMeshComponent", includeChildrenInMeshList)
 	M.print("Found " .. #pawnMeshList .. " meshes", LogLevel.Debug)
 	updateMeshUI(pawnMeshList, "pawnBodyMeshList", "selectedPawnBodyMesh", configDefaults["bodyMeshName"])
 	updateMeshUI(pawnMeshList, "pawnArmsMeshList", "selectedPawnArmsMesh", configDefaults["armsMeshName"])
@@ -323,7 +337,7 @@ configui.onUpdate(widgetPrefix .. "pawnArmsMeshList", function(value)
 	configui.setValue(widgetPrefix .. "selectedPawnArmsMesh", pawnMeshList[value])
 end)
 
-configui.onCreateOrUpdate(widgetPrefix .. "selectedPawnArmsMesh", function(value)
+configui.onUpdate(widgetPrefix .. "selectedPawnArmsMesh", function(value)
 	if value ~= "" then
 		--armsMeshName = value
         updateSetting("armsMeshName", value)
@@ -408,7 +422,7 @@ end)
 
 local createDevMonitor = doOnce(function()
 	uevrUtils.registerLevelChangeCallback(function(level)
-		loadPawnProperties()
+		--loadPawnProperties()
 	end)
 end, Once.EVER)
 
@@ -449,27 +463,24 @@ local function setUIValue(key, value)
 	return bonesChangd
 end
 
-local function updateUI(params)
-	local bonesChanged = false
-	for key, value in pairs(params) do
-		if setUIValue(key, value) then bonesChanged = true end
-	end
-	if bonesChanged then
-		setBoneNames()
-	end
-end
 
 function M.init(m_paramManager)
     configDefaults = m_paramManager and m_paramManager:getAll() or {}
 	paramManager = m_paramManager
     createDevMonitor()
     M.showConfiguration(configFileName)
-	loadPawnProperties()
+	--loadPawnProperties()
 
 	paramManager:initProfileHandler(widgetPrefix, function(profileParams)
-		if updateUI(profileParams) then
-			setBoneNames()
+		local bonesChanged = false
+		for key, value in pairs(profileParams) do
+			--print("Applying profile param", key, value)
+			if setUIValue(key, value) then bonesChanged = true end
 		end
+		loadPawnProperties()
+		-- if bonesChanged then
+		-- 	setBoneNames()
+		-- end
 	end)
 end
 
@@ -477,5 +488,9 @@ uevrUtils.registerUEVRCallback("on_pawn_config_param_change", function(key, valu
 	setUIValue(key, value)
 end)
 
+configui.onUpdate(widgetPrefix .. "basePawnName", function(value)
+	updateSetting("basePawnName", value)
+	loadPawnProperties()
+end)
 
 return M

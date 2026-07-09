@@ -25,6 +25,7 @@ local paramManager = nil
 --local configIDs = {"isDisabledOverride", "aimMethod", "fixSpatialAudio", "rootOffset", "useSnapTurn", "snapAngle", "smoothTurnSpeed", "pawnRotationMode", "pawnPositionMode", "pawnPositionSweepMovement", "pawnPositionAnimationScale", "headOffset", "adjustForAnimation", "adjustForEyeOffset", "eyeOffset"}
 -- local configDefaults = {
 --     isDisabledOverride = false,
+--     useRootOffset = true,
 --     aimMethod = M.AimMethod.UEVR,
 --     fixSpatialAudio = true,
 --     rootOffset = {X=0,Y=0,Z=0},
@@ -74,6 +75,26 @@ local function getConfigWidgets(m_paramManager)
 	-- },
 	expandArray(m_paramManager.getProfilePreConfigurationWidgets, widgetPrefix),
 	{
+		widgetType = "checkbox",
+		id = widgetPrefix .. "fixSpatialAudio",
+		label = "Fix Spatial Audio",
+		initialValue = configDefaults["fixSpatialAudio"]
+	},
+	{
+		widgetType = "checkbox",
+		id = widgetPrefix .. "useRootOffset",
+		label = "Use HMD Offset",
+		initialValue = configDefaults["useRootOffset"] or true
+	},
+	{
+		widgetType = "drag_float3",
+		id = widgetPrefix .. "rootOffset",
+		label = "HMD Offset",
+		speed = .1,
+		range = {-200, 200},
+		initialValue = {configDefaults["rootOffset"].X, configDefaults["rootOffset"].Y, configDefaults["rootOffset"].Z}
+	},
+	{
 		widgetType = "tree_node",
 		id = widgetPrefix .. "aim_method_tree",
 		initialOpen = true,
@@ -106,20 +127,6 @@ local function getConfigWidgets(m_paramManager)
 				initialValue = 1,
 				width = 100
 			},
-            {
-                widgetType = "checkbox",
-                id = widgetPrefix .. "fixSpatialAudio",
-                label = "Fix Spatial Audio",
-                initialValue = configDefaults["fixSpatialAudio"]
-            },
-            {
-                widgetType = "drag_float3",
-                id = widgetPrefix .. "rootOffset",
-                label = "Root Offset",
-                speed = .1,
-                range = {-200, 200},
-                initialValue = {configDefaults["rootOffset"].X, configDefaults["rootOffset"].Y, configDefaults["rootOffset"].Z}
-            },
         {
             widgetType = "end_group",
         },
@@ -303,7 +310,7 @@ local function getConfigWidgets(m_paramManager)
 			{
 				widgetType = "drag_float3",
 				id = widgetPrefix .. "headOffset",
-				label = "Head Offset",
+				label = "Mesh Offset",
 				speed = .1,
 				range = {-200, 200},
 				initialValue = {configDefaults["headOffset"] and configDefaults["headOffset"].X or 0, configDefaults["headOffset"] and configDefaults["headOffset"].Y or 0, configDefaults["headOffset"] and configDefaults["headOffset"].Z or 0}
@@ -477,6 +484,15 @@ end)
 configui.onUpdate(widgetPrefix .. "headOffset", function(value)
 	local arr = uevrUtils.getNativeValue(value)
     updateSetting("headOffset", {X=arr[1],Y=arr[2],Z=arr[3]})
+end)
+
+configui.onUpdate(widgetPrefix .. "useRootOffset", function(value)
+	updateSetting("useRootOffset", value)
+	configui.hideWidget(widgetPrefix .. "rootOffset", not value)
+end)
+
+configui.onCreate(widgetPrefix .. "useRootOffset", function(value)
+	configui.hideWidget(widgetPrefix .. "rootOffset", not value)
 end)
 
 configui.onUpdate(widgetPrefix .. "rootOffset", function(value)

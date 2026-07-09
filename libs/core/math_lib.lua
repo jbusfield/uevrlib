@@ -118,6 +118,14 @@ function M.vectorSafeNormalize(v)
 	return v * (1.0 / len)
 end
 
+function M.vectorAdd(vec1, vec2)
+	if vec1 == nil and vec2 == nil then return nil end
+	if vec1 == nil then return vec2 end
+	if vec2 == nil then return vec1 end
+	--do it this way so originals are not modified
+	return M.vector(vec1.X + vec2.X, vec1.Y + vec2.Y, vec1.Z + vec2.Z)
+end
+
 function M.vectorRotate(vec, rot, preferKismet)
 	if preferKismet and kismet_math_library and kismet_math_library.GreaterGreater_VectorRotator then
 		return kismet_math_library:GreaterGreater_VectorRotator(vec, rot)
@@ -205,6 +213,48 @@ function M.sumRotators(...)
 	end
 	return kismet_math_library:MakeRotator(rollTotal, pitchTotal, yawTotal)
 end
+
+-- Compute the world transform of an object that is a child of a parent (e.g. a collider
+-- attached to a motion controller). localPosition and localRotation are defined in the
+-- parent's local space: the offset is rotated by the parent's rotation before being added,
+-- and the rotations are composed (parent-then-child) rather than added component-wise.
+-- Any argument may be nil; returns worldLocation, worldRotation (either may be nil if the
+-- corresponding parent value is missing).
+function M.childWorldTransform(parentLocation, parentRotation, localPosition, localRotation)
+	local worldRotation = parentRotation
+	if parentRotation ~= nil and localRotation ~= nil then
+		worldRotation = M.composeRotators(localRotation, parentRotation)
+	end
+
+	local worldLocation = parentLocation
+	if parentLocation ~= nil and localPosition ~= nil then
+		local offset = parentRotation ~= nil and M.vectorRotate(localPosition, parentRotation) or localPosition
+		worldLocation = M.vectorAdd(parentLocation, offset)
+	end
+
+	return worldLocation, worldRotation
+end
+
+-- compose any number of rotators, skipping any that are nil or zero since they are identity. 
+function M.composeRotators(...)
+	local rotators = {...}
+	local finalRotator = nil
+	for i = 1, #rotators do
+		local rot = rotators[i]
+		if rot ~= nil and (rot.Yaw ~= 0 or rot.Pitch ~= 0 or rot.Roll ~= 0) then
+			if finalRotator == nil then
+				finalRotator = rot
+			else
+				finalRotator = kismet_math_library:ComposeRotators(finalRotator, rot)
+			end
+		end
+	end
+	if finalRotator == nil then
+		finalRotator = M.rotator(0,0,0)
+	end
+	return finalRotator
+end
+
 
 function M.rotatorFromQuat(x, y, z, w)
 	return kismet_math_library:Quat_Rotator(M.quat(x, y, z, w))

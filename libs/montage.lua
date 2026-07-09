@@ -64,6 +64,8 @@ Usage
             local widgets = montage.getDeveloperConfigurationWidgets()
 ]]--
 
+--TODO add a filter to get rid of random number montages
+
 local uevrUtils = require("libs/uevr_utils")
 local configui = require("libs/configui")
 local hands = require("libs/hands")
@@ -188,6 +190,7 @@ local helpText = "This module allows you to configure how montages (animations) 
 local configWidgets = spliceableInlineArray{
 }
 
+local widgetPrefix = "uevr_montage_"
 local developerWidgets = spliceableInlineArray{
 	{
 		widgetType = "tree_node",
@@ -376,6 +379,12 @@ local developerWidgets = spliceableInlineArray{
         {
             widgetType = "end_group",
         },
+		{
+			widgetType = "checkbox",
+			id = widgetPrefix .. "ignore_generic",
+			label = "Ignore Unnamed Montages",
+			initialValue = true
+		},
 		{ widgetType = "new_line" },
        	{
             widgetType = "input_text_multiline",
@@ -518,11 +527,15 @@ local createDevMonitor = doOnce(function()
 				isParametersDirty = true
 			end
 			if parameters["montagelist"][montageName] == nil then
-				parameters["montagelist"][montageName] = {}
-				parameters["montagelist"][montageName]["label"] = label .. " " .. montageName
-				parameters["montagelist"][montageName]["class_name"] = montageObject:get_full_name()
-				isParametersDirty = true
-				updateMontageList()
+				if configui.getValue(widgetPrefix .. "ignore_generic") == true and uevrUtils.startsWith(montageName, "AnimMontage_") then
+					--dont save generic named montage
+				else
+					parameters["montagelist"][montageName] = {}
+					parameters["montagelist"][montageName]["label"] = label .. " " .. montageName
+					parameters["montagelist"][montageName]["class_name"] = montageObject:get_full_name()
+					isParametersDirty = true
+					updateMontageList()
+				end
 			elseif parameters["montagelist"][montageName]["class_name"] == nil then
 				parameters["montagelist"][montageName]["class_name"] = montageObject:get_full_name()
 				isParametersDirty = true
@@ -608,7 +621,7 @@ local function executeMontageChange(...)
 end
 
 local function handleMontageChanged(montage, montageName, label, animInstance)
-	print("Montage changed: " .. tostring(montageName))
+	--print("Montage changed: " .. tostring(montageName))
 	for _, config in ipairs(stateConfig) do
 		montageState[config.stateKey] = nil
 		montageState[config.stateKey .. "Priority"] = 0
@@ -747,7 +760,7 @@ function M.setPlaybackRate(montage, label, rate)
 	local animInstance, montageObject = getAnimInstanceForMontage(montage, label)
 	if animInstance ~= nil then
 		animInstance:Montage_SetPlayRate(montageObject, rate or 1.0)
-		print("Set playback rate to " .. tostring(rate) .. " for montage " .. montageObject:get_full_name() .. " on " .. tostring(label))
+		--print("Set playback rate to " .. tostring(rate) .. " for montage " .. montageObject:get_full_name() .. " on " .. tostring(label))
 	end
 end
 

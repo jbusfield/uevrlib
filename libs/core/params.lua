@@ -168,44 +168,48 @@ function M:getAllActiveProfileParams()
 end
 
 function M:getFromActiveProfile(key)
-    return self:get({self:getActiveProfile(), key})
     -- if activeProfile == "default" and self:get(activeProfile) == nil then
     --     return self:get(key) -- Fallback to global if default profile not set
     -- else
     --     return self:get({activeProfile, key})
     -- end
-    -- if type(key) == "table" then
-    --     local fullKey = {activeProfile}
-    --     for _, k in ipairs(key) do
-    --         table.insert(fullKey, k)
-    --     end
-    --     return self:get(fullKey)
-    -- else
-    --     return self:get({activeProfile, key})
-    -- end
+
+    --return self:get({self:getActiveProfile(), key})
+    --Changed this and setInActiveProfile to allow for nested keys like {"channels", 5}
+    if type(key) == "table" then
+        local fullKey = {self:getActiveProfile()}
+        for _, k in ipairs(key) do
+            table.insert(fullKey, k)
+        end
+        return self:get(fullKey)
+    else
+        return self:get({self:getActiveProfile(), key})
+    end
 end
 
 function M:setInActiveProfile(key, value, persist)
-    self:set({self:getActiveProfile(), key}, value, persist)
-    -- if type(key) == "table" then
-    --     local fullKey = {activeProfile}
-    --     for _, k in ipairs(key) do
-    --         table.insert(fullKey, k)
-    --     end
-    --     self:set(fullKey, value, persist)
-    -- else
-    --     self:set({activeProfile, key}, value, persist)
-    -- end
+    --self:set({self:getActiveProfile(), key}, value, persist)
+
+    --This allows: setInActiveProfile({"channels", 5}, 2, true)
+    if type(key) == "table" then
+        local fullKey = {self:getActiveProfile()}
+        for _, k in ipairs(key) do
+            table.insert(fullKey, k)
+        end
+        self:set(fullKey, value, persist)
+    else
+        self:set({self:getActiveProfile(), key}, value, persist)
+    end
 end
 
-function M.getProfilePreConfigurationWidgets(widgetPrefix)
+function M.getProfilePreConfigurationWidgets(widgetPrefix, customLabel)
     return spliceableInlineArray{
 		{ widgetType = "indent", width = 10 },
 		{ widgetType = "new_line" },
 		{
 			widgetType = "combo",
 			id = widgetPrefix .. "active_profile",
-			label = "Current Profile",
+			label = "Current " .. (customLabel or "Profile"),
 			selections = {"None"},
 			initialValue = 1,
 			width = 200
@@ -240,24 +244,24 @@ function M.getProfilePreConfigurationWidgets(widgetPrefix)
     }
 end
 
-function M.getProfilePostConfigurationWidgets(widgetPrefix)
+function M.getProfilePostConfigurationWidgets(widgetPrefix, customLabel)
     return spliceableInlineArray{
 		{
 			widgetType = "button",
 			id = widgetPrefix .. "new_profile",
-			label = "New Profile"
+			label = "New " .. (customLabel or "Profile")
 		},
 		{ widgetType = "same_line" },
 		{
 			widgetType = "button",
 			id = widgetPrefix .. "duplicate_profile",
-			label = "Duplicate Profile"
+			label = "Duplicate " .. (customLabel or "Profile")
 		},
 		{ widgetType = "same_line" },
 		{
 			widgetType = "button",
 			id = widgetPrefix .. "delete_profile",
-			label = "Delete Profile"
+			label = "Delete " .. (customLabel or "Profile")
 		},
 		{ widgetType = "unindent", width = 10 },
     }

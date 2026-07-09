@@ -785,15 +785,25 @@ local uevrLib = require('libs/core/uevr_lib')
 local mathLib = require('libs/core/math_lib')
 require("libs/enums/unreal")
 local coreLerp = require("libs/core/lerp")
--- TArray Support ----------------
-local tArrayExists, tArray = pcall(require, "libs/core/tarray")
-if tArrayExists == false then tArray = nil end
-local function checkTArrayExists()
-	if tArray == nil then
-		print("TArray module not loaded. Ensure libs/core/tarray.lua exists and the tarray_helper.dll file is in the plugins folder")
+local pluginExists, plugin = pcall(require, "libs/core/plugin")
+if pluginExists == false then plugin = nil end
+local function checkPluginExists()
+	if plugin == nil then
+		print("Plugin module not loaded. Ensure libs/core/plugin.lua exists and the uevr_utils.dll file is in the plugins folder")
 	end
-	return tArray ~= nil
+	return plugin ~= nil
 end
+-- No need for tArray, Plugin can handle everything tArray did
+-- TArray Support ----------------
+-- local tArrayExists, tArray = pcall(require, "libs/core/tarray")
+-- if tArrayExists == false then tArray = nil end
+-- local function checkTArrayExists()
+-- 	if tArray == nil then
+-- 		print("TArray module not loaded. Ensure libs/core/tarray.lua exists and the tarray_helper.dll file is in the plugins folder")
+-- 	end
+-- 	return tArray ~= nil
+-- end
+-- TArray Support ----------------
 ---------------------------------
 
 -------------------------------
@@ -832,6 +842,7 @@ pawn = nil -- updated every tick
 ---@class Statics
 ---@field [any] any
 Statics = nil
+GameUserSettings = nil
 WidgetBlueprintLibrary = nil
 WidgetLayoutLibrary = nil
 ---@class kismet_system_library
@@ -977,6 +988,14 @@ local isCharacterHidden = false
 local isDeveloperMode = nil
 local handedness = Handed.Right --a way to track handedness in a unified way
 
+-- No need for tArray, Plugin can handle everything tArray did
+-- function M.checkTArrayExists()
+--     return checkTArrayExists()
+-- end
+
+function M.checkPluginExists()
+    return checkPluginExists()
+end
 
 function register_key_bind(keyName, callbackFunc)
 	keyBindList[keyName] = {}
@@ -997,7 +1016,7 @@ local function updateKeyPress()
 		if pc == nil then pc = uevr.api:get_player_controller(0) end -- dont allocate until we know its needed
 		if keyStruct == nil then keyStruct = M.get_reuseable_struct_object("ScriptStruct /Script/InputCore.Key") end
 		keyStruct.KeyName = M.fname_from_string(key)
-		if pc:IsInputKeyDown(keyStruct) then
+		if pc ~= nil and pc:IsInputKeyDown(keyStruct) then
 			if elem.isPressed == false then
 				elem.func()
 				elem.isPressed = true
@@ -1633,6 +1652,7 @@ function M.initUEVR(UEVR, callbackFunc)
 	kismet_string_library = M.find_default_instance("Class /Script/Engine.KismetStringLibrary")
 	kismet_rendering_library = M.find_default_instance("Class /Script/Engine.KismetRenderingLibrary")
 	Statics = M.find_default_instance("Class /Script/Engine.GameplayStatics")
+	GameUserSettings = M.find_default_instance("Class /Script/Engine.GameUserSettings")
 	WidgetBlueprintLibrary = M.find_default_instance("Class /Script/UMG.WidgetBlueprintLibrary")
     WidgetLayoutLibrary = M.find_default_instance("Class /Script/UMG.WidgetLayoutLibrary")
     
@@ -1851,6 +1871,10 @@ function M.setHandedness(val)
 	handedness = val
 	M.executeUEVRCallbacks("handedness_change", val)
 end
+
+M.registerUEVRCallback("recenter_view", function()
+	uevr.params.vr.recenter_view()
+end)
 
 function M.getHandedness()
 	return handedness
@@ -2289,6 +2313,10 @@ function M.setUEVRParam_int(paramName, value)
 	uevr.params.vr.set_mod_value(paramName, value)
 end
 
+function M.setUEVRParam(paramName, value)
+	uevr.params.vr.set_mod_value(paramName, value)
+end
+
 function M.PositiveIntegerMask(text)
     return text:gsub("[^%-%d]", "")
 end
@@ -2369,6 +2397,38 @@ function M.getWorld()
 end
 
 
+function M.spawn_actor_of_class(className, transform, collisionMethod, owner)
+	local actorClass = M.get_class(className)
+	if actorClass == nil then
+		print("spawn_actor_of_class - class not found:", className)
+		return nil
+	end
+
+	local viewport = game_engine.GameViewport
+	if viewport == nil then
+		print("Viewport is nil")
+	end
+
+	local worldContext = viewport.World
+	if worldContext == nil then
+		print("World is nil")
+	end
+
+	if transform == nil then
+		transform = M.get_transform()
+	end
+
+	collisionMethod = collisionMethod or 1
+	local actor = Statics:BeginDeferredActorSpawnFromClass(worldContext, actorClass, transform, collisionMethod, owner)
+	if actor == nil then
+		print("spawn_actor_of_class - failed to spawn:", className)
+		return nil
+	end
+
+	Statics:FinishSpawningActor(actor, transform)
+	return actor
+end
+
 function M.spawn_actor(transform, collisionMethod, owner, tag)
 	local viewport = game_engine.GameViewport
 	if viewport == nil then
@@ -2434,14 +2494,28 @@ end
 
 
 function M.getSocketNames(object, callback)
----@diagnostic disable-next-line: need-check-nil
-	if checkTArrayExists() then tArray.registerCallback(callback, "FName", object, "GetAllSocketNames()") end
+	--if checkTArrayExists() then tArray.registerCallback(callback, "FName", object, "GetAllSocketNames()") end
+
+	local arr = {}
+	if checkPluginExists() then
+		plugin.showDebug = true
+		---@diagnostic disable-next-line: need-check-nil
+		local result = plugin.executeFunction(object, "GetAllSocketNames")
+		if result ~= nil then
+			local names = result.ReturnValue or {}
+			for i = 1, #names do
+				local name = names[i]
+				table.insert(arr, name)
+			end
+		end
+		plugin.showDebug = false
+	end
+	callback(arr)
 end
 
 --coutesy of Pande4360
 function M.validate_object(object)
-	--TODO check that object is not a table
-    if object == nil or not UEVR_UObjectHook.exists(object) then
+	if object == nil or type(object) ~= "userdata" or not UEVR_UObjectHook.exists(object) then
         return nil
     else
         return object
@@ -2529,11 +2603,9 @@ function M.create_component_of_class(class, manualAttachment, relativeTransform,
 		--print("Used AddComponentByClass to create component",component)
 	end
 	if component ~= nil then
-		component:SetVisibility(true)
-		component:SetHiddenInGame(false)
-		if component.SetCollisionEnabled ~= nil then
-			component:SetCollisionEnabled(0, false)
-		end
+		if component.SetVisibility ~= nil then component:SetVisibility(true) end
+		if component.SetHiddenInGame ~= nil then component:SetHiddenInGame(false) end
+		if component.SetCollisionEnabled ~= nil then component:SetCollisionEnabled(0, false) end
 	else
 		M.print("Failed to create_component_of_class because component was nil")
 	end
@@ -2655,6 +2727,46 @@ function M.fname_from_string(str)
 	return kismet_string_library:Conv_StringToName(str)
 end
 
+-- print(uevrUtils.ternary(true, true, nil))    -- true
+-- print(uevrUtils.ternary(false, true, nil))   -- nil
+-- print(uevrUtils.ternary(true, false, nil))   -- false
+-- print(uevrUtils.ternary(true, nil, true))    -- nil
+function M.ternary(cond, trueVal, falseVal)
+    if cond then
+        return trueVal
+    else
+        return falseVal
+    end
+end
+
+-- Use this version for expensive computations
+-- For example: ternary(inVal, expensiveA(), expensiveB()) evaluates both always, so use ternary_lazy instead
+-- Example 1:
+-- local result = uevrUtils.ternary_lazy(
+--     boolVal,
+--     function() return nil end,
+--     function() return false end
+-- )
+-- Example 2:
+-- local function add(a, b)
+--     return a + b
+-- end
+-- local function sub(a, b)
+--     return a - b
+-- end
+-- local result = ternary_lazy(
+--     inVal,
+--     function() return add(10, 5) end,
+--     function() return sub(10, 5) end
+-- )
+function M.ternary_lazy(cond, trueFn, falseFn)
+    if cond then
+        return trueFn()
+    else
+        return falseFn()
+    end
+end
+
 -- float values from 0.0 to 1.0
 function color_from_rgba(r,g,b,a, reuseable)
 	local color = M.get_struct_object("ScriptStruct /Script/CoreUObject.LinearColor", reuseable) --StructObject.new(M.get_class("ScriptStruct /Script/CoreUObject.LinearColor"))
@@ -2765,6 +2877,18 @@ function M.splitStr(inputstr, sep)
 		end
    	end
    	return t
+end
+
+function M.startsWith(source, find)
+    if type(source) ~= "string" or type(find) ~= "string" then
+        return false
+    end
+
+    if #find == 0 then
+        return true
+    end
+
+    return source:sub(1, #find) == find
 end
 
 function M.getArrayFromVector2(vec)
@@ -2960,7 +3084,7 @@ function M.stopFadeCamera()
 		--(FromAlpha, ToAlpha, Duration, Color, bShouldFadeAudio, bHoldWhenFinished)
 		camMan:StopCameraFade()
 		--camMan:SetManualCameraFade(1, color_from_rgba(0.0, 0.0, 0.0, 0.0), false)
-		print("stopFadeCamera executed\n")
+		--print("stopFadeCamera executed\n")
 	end
 	fadeHardLock = false
 	fadeSoftLock = false
@@ -3039,7 +3163,7 @@ function M.get_decoupled_pitch_adjust_ui()
 end
 
 
-function M.enableCameraLerp(state, pitch, yaw, roll)
+function M.enableCameraLerp(state, pitch, yaw, roll, speed)
 	if pitch == true then
 		uevr.params.vr.set_mod_value("VR_LerpCameraPitch", state and "true" or "false")
 	end
@@ -3048,6 +3172,9 @@ function M.enableCameraLerp(state, pitch, yaw, roll)
 	end
 	if roll == true then
 		uevr.params.vr.set_mod_value("VR_LerpCameraRoll", state and "true" or "false")
+	end
+	if speed ~= nil then
+		uevr.params.vr.set_mod_value("VR_LerpCameraSpeed", speed)
 	end
 end
 
@@ -3067,6 +3194,11 @@ end
 
 function M.setUIFollowsViewSize(size)
 	uevr.params.vr.set_mod_value("UI_Size", tostring(size))
+end
+
+-- 0-flat, 1-cylinder
+function M.setUIShape(overlayType)
+	uevr.params.vr.set_mod_value("UI_OverlayType", tostring(overlayType))
 end
 
 --there should be a better way to do this with the asset registry
@@ -3382,6 +3514,9 @@ function M.createSkeletalMeshComponent(mesh, options)
 	return component
 end
 
+
+-- Bone handler functions
+-- TODO move this to a core file
 function M.getRootBoneOfBone(skeletalMeshComponent, boneName)
 	local fName = M.fname_from_string(boneName)
 	local boneName = fName
@@ -3405,7 +3540,109 @@ function M.getBoneNames(skeletalMeshComponent)
 	return boneNames
 end
 
+function M.getAncestorBones(component, boneName)
+	if component == nil then return {} end
+	if boneName == nil or boneName == "" then return {component:GetBoneName(1)} end
+	local boneNames = {}
+	local fName = M.fname_from_string(boneName)
+	while fName:to_string() ~= "None" do
+		table.insert(boneNames, fName:to_string())
+		fName = component:GetParentBone(fName)
+	end
+	return boneNames
+end
 
+function M.findCommonAncestor(mesh, boneName1, boneName2)
+	if mesh == nil or boneName1 == "None" or boneName2 == "None" then
+		return nil
+	end
+	local ancestors1 = M.getAncestorBones(mesh, boneName1)
+	local ancestors2 = M.getAncestorBones(mesh, boneName2)
+	for _, ancestor1 in ipairs(ancestors1) do
+		for _, ancestor2 in ipairs(ancestors2) do
+			if ancestor1 == ancestor2 and ancestor1 ~= boneName1 and ancestor1 ~= boneName2 then
+				return ancestor1
+			end
+		end
+	end
+	return nil
+end
+
+-- Finds the opposite (left/right) bone in a list, handling various naming conventions
+-- bone_name: string, is_left: boolean, bone_list: table of strings
+function M.findOppositeBone(bone_name, is_left, bone_list)
+	-- Patterns for left/right detection (expanded for mid-string)
+	local left_right_pairs = {
+		{"_l_", "_r_"}, {"_L_", "_R_"},
+		{"_l$", "_r$"}, {"_L$", "_R$"},
+		{"_l", "_r"}, {"_L", "_R"},
+		{"left", "right"}, {"Left", "Right"}, {"LEFT", "RIGHT"},
+		{"\\.l$", ".r$"}, {"\\.L$", ".R$"},
+		{"-l$", "-r$"}, {"-L$", "-R$"},
+		{" l ", " r "}, {" L ", " R "},
+	}
+
+	local candidates = {}
+	local seen = {}
+
+	local function add_candidate(candidate)
+		if type(candidate) == "string" and candidate ~= bone_name and not seen[candidate] then
+			table.insert(candidates, candidate)
+			seen[candidate] = true
+		end
+	end
+
+	-- Try all left/right swaps
+	for _, pair in ipairs(left_right_pairs) do
+		local from_pat, to_pat = is_left and pair[1] or pair[2], is_left and pair[2] or pair[1]
+		local candidate = bone_name:gsub(from_pat, to_pat)
+		add_candidate(candidate)
+	end
+
+	-- Also try simple _l_ <-> _r_ anywhere in the string
+	if is_left then
+		add_candidate(bone_name:gsub("_l_", "_r_"))
+		add_candidate(bone_name:gsub("_L_", "_R_"))
+	else
+		add_candidate(bone_name:gsub("_r_", "_l_"))
+		add_candidate(bone_name:gsub("_R_", "_L_"))
+	end
+
+	-- Try swapping _l/_r or L/R anywhere in the name (but not if it's the only L/R in the string)
+	if is_left then
+		add_candidate(bone_name:gsub("([_.%-])l([_.%-])", "%1r%2"))
+		add_candidate(bone_name:gsub("([_.%-])L([_.%-])", "%1R%2"))
+		add_candidate(bone_name:gsub("l$", "r"))
+		add_candidate(bone_name:gsub("L$", "R"))
+	else
+		add_candidate(bone_name:gsub("([_.%-])r([_.%-])", "%1l%2"))
+		add_candidate(bone_name:gsub("([_.%-])R([_.%-])", "%1L%2"))
+		add_candidate(bone_name:gsub("r$", "l"))
+		add_candidate(bone_name:gsub("R$", "L"))
+	end
+
+	-- Try global L/R swap (last resort, only if above fails)
+	local swapped
+	if is_left then
+		swapped = bone_name:gsub("[lL]", function(c) return (c == "l" and "r") or "R" end)
+	else
+		swapped = bone_name:gsub("[rR]", function(c) return (c == "r" and "l") or "L" end)
+	end
+	add_candidate(swapped)
+
+	-- Search for any candidate in the bone_list
+	for _, candidate in ipairs(candidates) do
+		for _, b in ipairs(bone_list) do
+			if b == candidate then
+				return b
+			end
+		end
+	end
+
+	-- Not found
+	return nil
+end
+-- End bone functions
 
 --options are width, height, format
 function M.createRenderTarget2D(options)
@@ -3636,23 +3873,24 @@ function M.getCleanHitResult(hitResult)
 		local bInitialOverlap = {}
 		local Time = {}
 		local Distance = {}
-		local Location = {}
-		local ImpactPoint = {}
-		local Normal = {}
-		local ImpactNormal = {}
+		local Location = {} --M.get_struct_object("ScriptStruct /Script/CoreUObject.Vector", false)
+		local ImpactPoint = {} --M.get_struct_object("ScriptStruct /Script/CoreUObject.Vector", false)
+		local Normal = {} --M.get_struct_object("ScriptStruct /Script/CoreUObject.Vector", false)
+		local ImpactNormal = {} --M.get_struct_object("ScriptStruct /Script/CoreUObject.Vector", false)
 		local PhysMat = {}
 		local HitActor = {}
 		local HitComponent = {}
 		local HitBoneName = {}
+		local BoneName = {}
 		local HitItem = {}
 		local ElementIndex = {}
 		local FaceIndex = {}
-		local TraceStart = {}
-		local TraceEnd = {}
+		local TraceStart = {} --M.get_struct_object("ScriptStruct /Script/CoreUObject.Vector", false)
+		local TraceEnd = {} --M.get_struct_object("ScriptStruct /Script/CoreUObject.Vector", false)
 
 		--static void BreakHitResult(const struct FHitResult& Hit, bool* bBlockingHit, bool* bInitialOverlap, float* Time, float* Distance, struct FVector* Location, struct FVector* ImpactPoint, struct FVector* Normal, struct FVector* ImpactNormal, class UPhysicalMaterial** PhysMat, class AActor** HitActor, class UPrimitiveComponent** HitComponent, class FName* HitBoneName, class FName* BoneName, int32* HitItem, int32* ElementIndex, int32* FaceIndex, struct FVector* TraceStart, struct FVector* TraceEnd);
 		local success = pcall(function()
-			Statics:BreakHitResult(hitResult, bBlockingHit, bInitialOverlap, Time, Distance, Location, ImpactPoint, Normal, ImpactNormal, PhysMat, HitActor, HitComponent, HitBoneName, HitItem, ElementIndex, FaceIndex, TraceStart, TraceEnd )
+			Statics:BreakHitResult(hitResult, bBlockingHit, bInitialOverlap, Time, Distance, Location, ImpactPoint, Normal, ImpactNormal, PhysMat, HitActor, HitComponent, HitBoneName, BoneName, HitItem, ElementIndex, FaceIndex, TraceStart, TraceEnd )
 		end)
 		if not success then
 			--M.print("BreakHitResult failed, falling back to hitResult fields", LogLevel.Warning)
@@ -3899,8 +4137,9 @@ function get_cvar_int(cvar)
     end
 end
 function M.get_cvar_int(cvar)
-	get_cvar_int(cvar)
+	return get_cvar_int(cvar)
 end
+
 function set_cvar_int(cvar, value)
     local console_manager = uevr.api:get_console_manager()
 
@@ -4060,26 +4299,28 @@ M.initUEVR(uevr)
 -- function on_client_restart(newPawn)
 -- 	uevrUtils.print("Pawn changed to " .. newPawn:get_full_name())
 -- end
-hook_function("Class /Script/Engine.PlayerController", "ClientRestart", true, nil,
-	function(fn, obj, locals, result)
-		if on_client_restart ~= nil or hasUEVRCallbacks("on_client_restart") then --don't bother doing anything if nothing is listening
-			if on_client_restart ~= nil then
-				on_client_restart(locals.NewPawn)
+if disableHookFunctions ~= true then
+	print("Hooking PlayerController ClientRestart function to detect pawn changes")
+	hook_function("Class /Script/Engine.PlayerController", "ClientRestart", true, nil,
+		function(fn, obj, locals, result)
+			if on_client_restart ~= nil or hasUEVRCallbacks("on_client_restart") then --don't bother doing anything if nothing is listening
+				if on_client_restart ~= nil then
+					on_client_restart(locals.NewPawn)
+				end
+				executeUEVRCallbacks("on_client_restart", locals.NewPawn)
 			end
-			executeUEVRCallbacks("on_client_restart", locals.NewPawn)
+
+		-- print("ClientRestart called", locals, result, locals.NewPawn:get_class():get_full_name(), obj:get_class():get_full_name() )
+		-- if locals.NewPawn ~= nil and locals.NewPawn:get_class():get_full_name() == "BlueprintGeneratedClass /Game/Core/Player/BP_PlayerCharacter.BP_PlayerCharacter_C" then
+		-- 	pawn = locals.NewPawn
+		-- end
+		-- if locals.NewPawn ~= nil and locals.NewPawn:get_class():get_full_name() == "BlueprintGeneratedClass /Game/Development/Vehicles/BP_MoskvichDrivable.BP_MoskvichDrivable_C" then
+		-- 	print("Player in vehicle")
+		-- 	--isInCar = true
+		-- end
 		end
-
-	-- print("ClientRestart called", locals, result, locals.NewPawn:get_class():get_full_name(), obj:get_class():get_full_name() )
-	-- if locals.NewPawn ~= nil and locals.NewPawn:get_class():get_full_name() == "BlueprintGeneratedClass /Game/Core/Player/BP_PlayerCharacter.BP_PlayerCharacter_C" then
-	-- 	pawn = locals.NewPawn
-	-- end
-	-- if locals.NewPawn ~= nil and locals.NewPawn:get_class():get_full_name() == "BlueprintGeneratedClass /Game/Development/Vehicles/BP_MoskvichDrivable.BP_MoskvichDrivable_C" then
-	-- 	print("Player in vehicle")
-	-- 	--isInCar = true
-	-- end
-	end
-, true)
-
+	, true)
+end
 
 return M
 

@@ -60,6 +60,16 @@ function M.exists()
     return next(inputHandlerAnimID) ~= nil
 end
 
+local function forEachUniqueTarget(callback)
+	local handledTargets = {}
+	for _, target in pairs(inputHandlerAnimID) do
+		if target ~= nil and not handledTargets[target] then
+			handledTargets[target] = true
+			callback(target)
+		end
+	end
+end
+
 local createInputHandler = doOnce(function()
 	attachments.registerOnGripAnimationCallback(function(gripAnimation, gripHand)
 		M.print("Grip animation changed to " .. (gripAnimation and tostring(gripAnimation) or "None") .. " for " .. (gripHand == Handed.Left and "Left" or "Right") .. " hand", LogLevel.Debug)
@@ -116,20 +126,21 @@ function M.updateAnimationState(hand)
 		M.print("Is holding attachment: " .. tostring(isHoldingAttachment), LogLevel.Debug)
 
 		if isHoldingAttachment then
-			for id, target in pairs(inputHandlerAnimID) do
+			forEachUniqueTarget(function(target)
 				local handStr = hand == Handed.Left and "left" or "right"
 				animation.resetAnimation(handStr.."_"..target, handStr.."_grip_weapon" .. attachmentExtension, true) --forces an update regardless of current state
 				animation.resetAnimation(handStr.."_"..target, handStr.."_trigger_weapon" .. attachmentExtension, true) --forces an update regardless of current state
 				animation.pose(handStr .. "_" .. target, "grip_" .. handStr .. "_weapon" .. attachmentExtension)
-			end
+			end)
 		else
-			for id, target in pairs(inputHandlerAnimID) do
+			forEachUniqueTarget(function(target)
 				local handStr = hand == Handed.Left and "left" or "right"
 				animation.pose(handStr .. "_" .. target, "open_" .. handStr)
-			end
+			end)
 		end
 	end
 end
+M.updateAnimationState = uevrUtils.profiler:wrap("Hand Animations: updateAnimationState", M.updateAnimationState)
 
 function M.handleInputForHands(state, rightAttachment, leftAttachment, overrideTrigger, allowAutoHandle)
 	if allowAutoHandle ~= true then
@@ -142,7 +153,7 @@ function M.handleInputForHands(state, rightAttachment, leftAttachment, overrideT
 
 	if overrideTrigger == nil then overrideTrigger = false end
 	local animDuration = 0.1
-	for id, target in pairs(inputHandlerAnimID) do
+	forEachUniqueTarget(function(target)
 		for hand = Handed.Left, Handed.Right do
 			local handStr = hand == Handed.Right and "right" or "left"
 			--do not use ternary operators like this. If right attachment is nil then it will always pick leftAttachment for Handed.Right == true
@@ -168,7 +179,7 @@ function M.handleInputForHands(state, rightAttachment, leftAttachment, overrideT
 				animation.updateAnimation(handStr.."_"..target, handStr.."_grip_weapon" .. attachmentExtension, isButtonPressed, {duration=animDuration})
 			end
 		end
-	end
+	end)
 end
 
 --deprecated
@@ -189,7 +200,7 @@ function M.handleInput(state, attachment, hand, overrideTrigger, allowAutoHandle
 	local weaponHandStr = isRightHanded and "right" or "left"
 	local offHandStr = isRightHanded and "left" or "right"
 	local animDuration = 0.1
-	for id, target in pairs(inputHandlerAnimID) do
+	forEachUniqueTarget(function(target)
 		local offhandTriggerValue = (isRightHanded or overrideTrigger) and state.Gamepad.bLeftTrigger or state.Gamepad.bRightTrigger
 		animation.updateAnimation(offHandStr.."_"..target, offHandStr.."_trigger", offhandTriggerValue > 100, {duration=animDuration})
 
@@ -219,7 +230,7 @@ function M.handleInput(state, attachment, hand, overrideTrigger, allowAutoHandle
 				animation.updateAnimation(weaponHandStr.."_"..target, weaponHandStr.."_grip_weapon" .. attachmentExtension, true, {duration=animDuration})
 			end
 		end
-	end
+	end)
 end
 
 uevrUtils.registerUEVRCallback("on_module_montage_change", function(montageObject, montageName, label, animInstance)
