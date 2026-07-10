@@ -2,8 +2,10 @@
 --[[
     This module allows you call any function in the game's SDK without limitations such
     as the TArray issue that may exist in native lua calls. Notice that this module itself
-    does not require the rest of uevrUtils in order to be used in your project. The function
-    takes any valid uevr/unreal objects and structures with or without uevrUtils.
+    does not require the rest of uevrUtils in order to be used in your project. 
+    The executeFunction function takes any valid uevr/unreal objects and structures with or without uevrUtils.
+    In addition to the getFunction call you can also get any property of an object using
+    the getProperty function. 
 
     Can be called Asynchronously or Synchronously
     Examples:
@@ -17,7 +19,11 @@
         local ignoreActors = {pawn}
         local foundComponents = {}
     
-        -- Asynchronous call
+        -- ############# Asynchronous call ##############
+        --   This is what the API version looks like in KismetSystemLibrary
+        --     static bool SphereOverlapComponents(const class UObject* WorldContextObject, const struct FVector& SpherePos, float SphereRadius, const TArray<EObjectTypeQuery>& ObjectTypes, class UClass* ComponentClassFilter, const TArray<class AActor*>& ActorsToIgnore, TArray<class UPrimitiveComponent*>* OutComponents);
+        --   This is the equivalent call using the plugin
+        -- ##############################################
         local resultCallback = plugin.executeFunctionAsync(kismet_system_library, "SphereOverlapComponents", uevrUtils.get_world(), location, radius, objectTypes, classFilter, ignoreActors, foundComponents)
         resultCallback(function(result)
             local components = result.OutComponents or {}
@@ -27,15 +33,34 @@
             end
         end)
 
-        -- Synchronous call
+        -- ############# Synchronous call ##############
+        --   This is what the API version looks like in KismetSystemLibrary
+        --     static bool SphereOverlapComponents(const class UObject* WorldContextObject, const struct FVector& SpherePos, float SphereRadius, const TArray<EObjectTypeQuery>& ObjectTypes, class UClass* ComponentClassFilter, const TArray<class AActor*>& ActorsToIgnore, TArray<class UPrimitiveComponent*>* OutComponents);
+        --   This is the equivalent call using the plugin. Notice result.OutComponents uses the exact name that the API returns. 
+        --   If the function returns a value then result.ReturnValue will be set to the returned value.
+        -- ##############################################
         local result = plugin.executeFunction(kismet_system_library, "SphereOverlapComponents", uevrUtils.get_world(), location, radius, objectTypes, classFilter, ignoreActors, foundComponents)
         if result ~= nil then
-            local components = result.OutComponents or {}
-            for i = 1, #components do
-                local comp = components[i]
-                print("Component:", comp:get_full_name())
+            if result.ReturnValue == true then
+                local components = result.OutComponents or {}
+                for i = 1, #components do
+                    local comp = components[i]
+                    print("Component:", comp:get_full_name())
+                end
             end
         end
+
+        -- ############# GetProperty example ##############
+        --   In the API, the ActionMappings property is a TArray of FInputActionKeyMapping structs. 
+        --      TArray<struct FInputActionKeyMapping>         ActionMappings;                                    // 0x0090(0x0010)(Edit, ZeroConstructor, Config, NativeAccessSpecifierPrivate)
+	    -- ##############################################
+        local inputSettings = uevrUtils.find_default_instance("Class /Script/Engine.InputSettings")
+        local result = plugin.getProperty(inputSettings, "ActionMappings")
+        for i, mappingData in ipairs(result) do
+            local gameKey = mappingData["Key"]["KeyName"]
+            print("Mapping found for key:", mappingData["ActionName"], gameKey)
+        end
+
 
 ]]--
 local M = {}
