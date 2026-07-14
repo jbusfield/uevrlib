@@ -1263,7 +1263,7 @@ uevrUtils.setInterval(200, function()
 		if isHidden ~= wereHidden then
 			wereHidden = isHidden
 			M.hideHands(isHidden or false)
-			print("Hand visibility changed from hands: isHidden=" .. tostring(isHidden))
+			M.print("Hand visibility changed from hands: isHidden=" .. tostring(isHidden))
 		end
 	end
 end)
@@ -1411,7 +1411,6 @@ local function restoreHandSnapshot(handed)
 end
 
 local function attachHandToTarget(handed, parentAttachment, socketName, attachType, loc, rot)
-	print(loc, rot)
 	for name, components in pairs(handComponents) do
 		local handObj = uevrUtils.getValid(components[handed])
 		if handObj ~= nil then

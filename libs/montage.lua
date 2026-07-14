@@ -929,7 +929,7 @@ function M.playMontage(montageName, speed)
 		local className = parameters["montagelist"][montageName]["class_name"]
 		if className ~= nil then
 			--this should be get_class so it caches
-			local montage = uevrUtils.find_required_object(className)
+			local montage = uevrUtils.get_class(className)
 			if montage ~= nil then
 				local result = pawn:PlayAnimMontage(montage, speed or 1.0, uevrUtils.fname_from_string(""))
 			end
@@ -939,6 +939,12 @@ end
 -- Returns recent montages as a newline-delimited string
 function M.getRecentMontagesAsString()
     return table.concat(recentMontages, "\n")
+end
+function M.getMontageClassName(montageName)
+	if parameters ~= nil and montageName ~= nil and montageName ~= "" and parameters["montagelist"][montageName] ~= nil then
+		return parameters["montagelist"][montageName]["class_name"]
+	end
+	return nil
 end
 
 hands.registerIsAnimatingFromMeshCallback(function(hand)

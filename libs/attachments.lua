@@ -181,6 +181,7 @@ local attachmentNameCache = {}
 local attachmentOverrideChildLookup = {}
 local attachmentOverrideParentLookup = {}
 local attachmentStrippedChildLookup = {}
+local attachmentStrippedKeyCanonicalChildLookup = {}
 local attachmentStripLengths = {}
 local attachmentNameLookupDirty = true
 local invalidateAttachmentNameLookups
@@ -783,6 +784,7 @@ invalidateAttachmentNameLookups = function()
 	attachmentOverrideChildLookup = {}
 	attachmentOverrideParentLookup = {}
 	attachmentStrippedChildLookup = {}
+	attachmentStrippedKeyCanonicalChildLookup = {}
 	attachmentStripLengths = {}
 	attachmentNameLookupDirty = true
 end
@@ -791,6 +793,7 @@ local function rebuildAttachmentNameLookups()
 	attachmentOverrideChildLookup = {}
 	attachmentOverrideParentLookup = {}
 	attachmentStrippedChildLookup = {}
+	attachmentStrippedKeyCanonicalChildLookup = {}
 	attachmentStripLengths = {}
 
 	for i = 1, #attachmentOffsets do
@@ -817,6 +820,9 @@ local function rebuildAttachmentNameLookups()
 			end
 			local strippedChildName = string.sub(childName, 1, -stripChildSuffixLength - 1)
 			attachmentStrippedChildLookup[stripChildSuffixLength][strippedChildName] = childName
+			if offset["any_parent"] == true then
+				attachmentStrippedKeyCanonicalChildLookup[strippedChildName] = childName
+			end
 		end
 	end
 
@@ -846,6 +852,10 @@ local function getStrippedChildname(childName)
 		local strippedChildName = string.sub(childName, 1, -stripChildSuffixLength - 1)
 		local existingChildName = attachmentStrippedChildLookup[stripChildSuffixLength][strippedChildName]
 		if existingChildName ~= nil then
+			local canonicalChildName = attachmentStrippedKeyCanonicalChildLookup[strippedChildName]
+			if canonicalChildName ~= nil and canonicalChildName ~= existingChildName then
+				return canonicalChildName
+			end
 			return existingChildName
 		end
 	end

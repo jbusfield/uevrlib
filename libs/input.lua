@@ -47,7 +47,9 @@ local parameters = {
 	optimizeBodyRotationCalculations = true,
 	optimizeBodyLocationCalculations = true,
 	pawnRotationModeDisableRotation = false,
-	usePawnControlRotation = 1
+	pawnRotationModeDisableInEarlyUpdate = false,
+	usePawnControlRotation = 1,
+	cameraResetAction = 1
 }
 
 local isDisabled = false
@@ -147,6 +149,10 @@ end
 
 local function isRotationModeRotationDisabled()
 	return status.rotationModeRotationDisabled or (getParameter("pawnRotationModeDisableRotation") == true)
+end
+
+local function isRotationModeEarlyUpdateDisabled()
+	return status.rotationModeEarlyUpdateDisabled or (getParameter("pawnRotationModeDisableInEarlyUpdate") == true)
 end
 
 function M.setBodyMeshOverride(meshList)
@@ -303,11 +309,16 @@ local cameraComponent = {
 		--print("Camera Component Reset called")
 		if uevrUtils.getValid(self.component) ~= nil  then
 			if self.component.AttachParent ~= nil then
-				print("Resetting camera component world transform to parent transform")
-				-- local rotation = self.component.AttachParent:K2_GetComponentRotation()
-				-- local location = self.component.AttachParent:K2_GetComponentLocation()
-				-- self.component:K2_SetWorldRotation(rotation,false,reusable_hit_result,false)
-				-- self.component:K2_SetWorldLocation(location,false,reusable_hit_result,false)
+				local cameraResetAction = getParameter("cameraResetAction")
+				if cameraResetAction == 2 then
+					M.print("Resetting camera component world transform to parent transform")
+					local rotation = self.component.AttachParent:K2_GetComponentRotation()
+					local location = self.component.AttachParent:K2_GetComponentLocation()
+					self.component:K2_SetWorldRotation(rotation,false,reusable_hit_result,false)
+					self.component:K2_SetWorldLocation(location,false,reusable_hit_result,false)
+				else
+					M.print("Not resetting camera component world transform on reset")
+				end
 			end
 			if self.originalState ~= nil and self.component.bUsePawnControlRotation ~= nil then
 				self.component.bUsePawnControlRotation = self.originalState
@@ -520,22 +531,21 @@ updatePawnSettings = uevrUtils.profiler:wrap("updatePawnSettings", updatePawnSet
 -- 	--updatePawnSettings()
 -- end)
 
-local function updateAim()
+-- Im setting this to true for legacy purposes to be backwards compatible with old configs
+-- I have a feeling though that this should default to false. Atomic Heart needs this to be false for correct pickup on chests.
+local playerControllerRotationFollowsBody = true
+function M.setPlayerControllerRotationFollowsBody(followsBody)
+	playerControllerRotationFollowsBody = followsBody
+end
+local function setPlayerControllerRotation(followsBody)
+	if followsBody == nil then followsBody = false end
 	local pawn = status.pawn
-	if aimCameraOverride ~= true and cameraComponent:updateAim() == true then
-		-- if (aimRotationOffset.Pitch == nil or aimRotationOffset.Pitch == 0) and (aimRotationOffset.Yaw == nil or aimRotationOffset.Yaw == 0) and (aimRotationOffset.Roll == nil or aimRotationOffset.Roll == 0) then
-		-- 	cameraComponent:setRotation(zeroRotator)
-		-- else
-		-- 	cameraComponent:setRotation(aimRotationOffset)
-		-- end
-		--cameraComponent:setRotation(getAimOffsetAdjustedRotation(uevrUtils.rotator(0,0,0)))
-		--	print(pawn, rootComponent, decoupledYaw, bodyRotationOffset)
+
+	if followsBody then
 		if pawn ~= nil and decoupledYaw ~= nil and pawn.Controller ~= nil then
 			pawn.Controller:SetControlRotation(uevrUtils.rotator(0, decoupledYaw + bodyRotationOffset, 0))
 		end
 	else
-		--if camera component isnt handling it then use the old way
-		--This way wont work for most games because yaw is ignored in most games but it does work for Hello Neighbor
 		local aimMethod = getAimMethod() --getParameter("aimMethod")
 		if aimMethod ~= M.AimMethod.UEVR then
 			local rotation = nil
@@ -555,6 +565,62 @@ local function updateAim()
 				pawn.Controller:SetControlRotation(rotation) --because the previous booleans were set, aiming with the hand or head doesnt affect the rotation of the pawn
 			end
 		end
+	end
+end
+
+local function updateAim()
+	local pawn = status.pawn
+	if aimCameraOverride ~= true and cameraComponent:updateAim() == true then
+		
+		setPlayerControllerRotation(playerControllerRotationFollowsBody)
+		-- if (aimRotationOffset.Pitch == nil or aimRotationOffset.Pitch == 0) and (aimRotationOffset.Yaw == nil or aimRotationOffset.Yaw == 0) and (aimRotationOffset.Roll == nil or aimRotationOffset.Roll == 0) then
+		-- 	cameraComponent:setRotation(zeroRotator)
+		-- else
+		-- 	cameraComponent:setRotation(aimRotationOffset)
+		-- end
+		--cameraComponent:setRotation(getAimOffsetAdjustedRotation(uevrUtils.rotator(0,0,0)))
+		--	print(pawn, rootComponent, decoupledYaw, bodyRotationOffset)
+
+		-- if pawn ~= nil and decoupledYaw ~= nil and pawn.Controller ~= nil then
+		-- 	pawn.Controller:SetControlRotation(uevrUtils.rotator(0, decoupledYaw + bodyRotationOffset, 0))
+		-- end
+
+		-- if pawn ~= nil and decoupledYaw ~= nil and pawn.Controller ~= nil then
+		-- 	-- local rotation = uevrUtils.rotator(0, decoupledYaw + bodyRotationOffset, 0)
+		-- 	-- if inputTestOffset ~= nil then
+		-- 	-- 	print("INPUT TEST OFFSET", inputTestOffset)
+		-- 	-- 	rotation = kismet_math_library:ComposeRotators(rotation, inputTestOffset)
+		-- 	-- end
+		-- 	local aimMethod = getAimMethod() --getParameter("aimMethod")
+		-- 	local controllerID = aimMethod == M.AimMethod.LEFT_CONTROLLER and 0 or (aimMethod == M.AimMethod.HEAD and 2 or 1)
+		-- 	local rotation = controllers.getControllerRotation(controllerID)
+		-- 	rotation = getAimOffsetAdjustedRotation(rotation) --things like gunstock may adjust the rotation
+		-- 	pawn.Controller:SetControlRotation(rotation)
+		-- end
+	else
+		setPlayerControllerRotation(false)
+
+		-- --if camera component isnt handling it then use the old way
+		-- --This way wont work for most games because yaw is ignored in most games but it does work for Hello Neighbor
+		-- local aimMethod = getAimMethod() --getParameter("aimMethod")
+		-- if aimMethod ~= M.AimMethod.UEVR then
+		-- 	local rotation = nil
+		-- 	if aimMethod == M.AimMethod.RIGHT_WEAPON then
+		-- 		rotation = (weaponRotation ~= nil and weaponRotation.right ~= nil) and weaponRotation.right or controllers.getControllerRotation(Handed.Right)
+		-- 	elseif aimMethod == M.AimMethod.LEFT_WEAPON then
+		-- 		rotation = (weaponRotation ~= nil and weaponRotation.left ~= nil) and weaponRotation.left or controllers.getControllerRotation(Handed.Left)
+		-- 	else
+		-- 		local controllerID = aimMethod == M.AimMethod.LEFT_CONTROLLER and 0 or (aimMethod == M.AimMethod.HEAD and 2 or 1)
+		-- 		rotation = controllers.getControllerRotation(controllerID)
+		-- 		--only use aim offset adjust if aimMethod is left or right controller
+		-- 		if aimMethod == M.AimMethod.LEFT_CONTROLLER or aimMethod == M.AimMethod.RIGHT_CONTROLLER then
+		-- 			rotation = getAimOffsetAdjustedRotation(rotation) --things like gunstock may adjust the rotation
+		-- 		end
+		-- 	end
+		-- 	if pawn ~= nil and pawn.Controller ~= nil and pawn.Controller.SetControlRotation ~= nil and rotation ~= nil then
+		-- 		pawn.Controller:SetControlRotation(rotation) --because the previous booleans were set, aiming with the hand or head doesnt affect the rotation of the pawn
+		-- 	end
+		-- end
 	end
 
 	-- --if camera component isnt handling it then use the old way
@@ -1318,14 +1384,14 @@ getVRCameraOffsets = uevrUtils.profiler:wrap("getVRCameraOffsets", getVRCameraOf
 uevr.params.sdk.callbacks.on_early_calculate_stereo_view_offset(function(device, view_index, world_to_meters, position, rotation, is_double)
 	if not isDisabled then --and getParameter("aimMethod") ~= M.AimMethod.UEVR then
 		--print(optimizeBodyYawCalculations == false, getParameter("optimizeBodyRotationCalculations") ~= true, view_index)
-		if lateYaw == false and (optimizeBodyYawCalculations == false or getParameter("optimizeBodyRotationCalculations") ~= true or view_index == 1) then
+		if isRotationModeEarlyUpdateDisabled() == false and lateYaw == false and (optimizeBodyYawCalculations == false or getParameter("optimizeBodyRotationCalculations") ~= true or view_index == 0) then
 			updateBodyYaw()
 		end
-		if getParameter("optimizeBodyLocationCalculations") ~= true or view_index == 1 then
+		if getParameter("optimizeBodyLocationCalculations") ~= true or view_index == 0 then
 			updatePawnPositionRoomscale(world_to_meters)
 		end
 
-		if lateYaw == false and view_index == 1 then
+		if lateYaw == false and view_index == 0 then
 			updateMeshRelativePosition()
 		end
 
@@ -1467,7 +1533,7 @@ local function reset()
 	bodyRotationOffset = 0
 	lastBodyYawUpdateTime = nil
 	bodyMesh = nil
-	localPawn = nil
+	--localPawn = nil
 	cameraComponent:reset()
 	resetPawnSettings()
 	updateMeshRelativePosition(true)

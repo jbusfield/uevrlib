@@ -119,6 +119,7 @@ local function getConfigWidgets(m_paramManager)
 				selections = {"None"},
 				initialValue = 1
 			},
+			{ widgetType = "indent", width = 10} ,
 			{
 				widgetType = "combo",
 				id = widgetPrefix .. "usePawnControlRotation",
@@ -127,6 +128,14 @@ local function getConfigWidgets(m_paramManager)
 				initialValue = 1,
 				width = 100
 			},
+			{
+				widgetType = "combo",
+				id = widgetPrefix .. "cameraResetAction",
+				label = "On Camera Deactivation",
+				selections = {"Do not reset location and rotation", "Set to parent's location and rotation"}, --  "Zero location and rotation"},
+				initialValue = 1,
+			},
+			{ widgetType = "unindent", width = 10} ,
         {
             widgetType = "end_group",
         },
@@ -226,6 +235,13 @@ local function getConfigWidgets(m_paramManager)
 					id = widgetPrefix .. "pawnRotationModeDisableRotation",
 					label = "Disable Rotation",
 					initialValue = configDefaults["pawnRotationModeDisableRotation"]
+				},
+				{ widgetType = "same_line"},
+				{
+					widgetType = "checkbox",
+					id = widgetPrefix .. "pawnRotationModeDisableInEarlyUpdate",
+					label = "Disable In Early Update",
+					initialValue = configDefaults["pawnRotationModeDisableInEarlyUpdate"]
 				},
 				{
 					widgetType = "slider_float",
@@ -438,7 +454,9 @@ local function updateUIState(key)
     elseif key == "adjustForEyeOffset" then
         configui.hideWidget(widgetPrefix .. "eyeOffset", not configui.getValue(exKey))
 	elseif key == "aimCameraList" then
-		 configui.hideWidget(widgetPrefix .. "usePawnControlRotation", configui.getValue(exKey) == 1)
+		print("@@@@@@@@@@@@@@@@@")
+		configui.hideWidget(widgetPrefix .. "usePawnControlRotation", configui.getValue(exKey) == 1)
+		configui.hideWidget(widgetPrefix .. "cameraResetAction", configui.getValue(exKey) == 1)
     end
 end
 
@@ -540,6 +558,10 @@ configui.onUpdate(widgetPrefix .. "pawnRotationModeDisableRotation", function(va
 	updateSetting("pawnRotationModeDisableRotation", value)
 end)
 
+configui.onUpdate(widgetPrefix .. "pawnRotationModeDisableInEarlyUpdate", function(value)
+	updateSetting("pawnRotationModeDisableInEarlyUpdate", value)
+end)
+
 configui.onUpdate(widgetPrefix .. "optimizeBodyLocationCalculations", function(value)
 	updateSetting("optimizeBodyLocationCalculations", value)
 end)
@@ -633,12 +655,17 @@ configui.onUpdate(widgetPrefix .. "usePawnControlRotation", function(value)
 	updateSetting("usePawnControlRotation", value)
 end)
 
+configui.onUpdate(widgetPrefix .. "cameraResetAction", function(value)
+	updateSetting("cameraResetAction", value)
+end)
+
 
 
 configui.onUpdate(widgetPrefix .. "aimCameraList", function(value)
 	--get the camera name from the selection
 	local cameraName = pawnCameraList[value]
 	updateSetting("aimCamera", cameraName)
+	updateUIState("aimCameraList")
 end)
 
 

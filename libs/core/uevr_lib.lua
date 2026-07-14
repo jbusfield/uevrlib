@@ -11,7 +11,7 @@ end
 function M.find_required_object(name)
     local obj = uevr.api:find_uobject(name)
     if not obj then
-        M.print("Cannot find " .. name)
+        print("Cannot find " .. name)
         return nil
     end
 

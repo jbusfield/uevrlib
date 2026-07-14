@@ -1,4 +1,4 @@
-
+-- Contributers: ideas and inspiration for this module courtesy of gwizdek
 --[[
     This module allows you call any function in the game's SDK without limitations such
     as the TArray issue that may exist in native lua calls. Notice that this module itself
@@ -7,7 +7,8 @@
     In addition to the getFunction call you can also get any property of an object using
     the getProperty function. 
 
-    Can be called Asynchronously or Synchronously
+    executeFunction can be called Asynchronously or Synchronously
+
     Examples:
         local plugin = require("libs/core/plugin")
 
@@ -19,23 +20,10 @@
         local ignoreActors = {pawn}
         local foundComponents = {}
     
-        -- ############# Asynchronous call ##############
-        --   This is what the API version looks like in KismetSystemLibrary
-        --     static bool SphereOverlapComponents(const class UObject* WorldContextObject, const struct FVector& SpherePos, float SphereRadius, const TArray<EObjectTypeQuery>& ObjectTypes, class UClass* ComponentClassFilter, const TArray<class AActor*>& ActorsToIgnore, TArray<class UPrimitiveComponent*>* OutComponents);
-        --   This is the equivalent call using the plugin
-        -- ##############################################
-        local resultCallback = plugin.executeFunctionAsync(kismet_system_library, "SphereOverlapComponents", uevrUtils.get_world(), location, radius, objectTypes, classFilter, ignoreActors, foundComponents)
-        resultCallback(function(result)
-            local components = result.OutComponents or {}
-            for i = 1, #components do
-                local comp = components[i]
-                print("Component:", comp:get_full_name())
-            end
-        end)
-
         -- ############# Synchronous call ##############
         --   This is what the API version looks like in KismetSystemLibrary
         --     static bool SphereOverlapComponents(const class UObject* WorldContextObject, const struct FVector& SpherePos, float SphereRadius, const TArray<EObjectTypeQuery>& ObjectTypes, class UClass* ComponentClassFilter, const TArray<class AActor*>& ActorsToIgnore, TArray<class UPrimitiveComponent*>* OutComponents);
+        --
         --   This is the equivalent call using the plugin. Notice result.OutComponents uses the exact name that the API returns. 
         --   If the function returns a value then result.ReturnValue will be set to the returned value.
         -- ##############################################
@@ -50,8 +38,23 @@
             end
         end
 
+        -- ############# Asynchronous call ##############
+        --   This is what the API version looks like in KismetSystemLibrary
+        --     static bool SphereOverlapComponents(const class UObject* WorldContextObject, const struct FVector& SpherePos, float SphereRadius, const TArray<EObjectTypeQuery>& ObjectTypes, class UClass* ComponentClassFilter, const TArray<class AActor*>& ActorsToIgnore, TArray<class UPrimitiveComponent*>* OutComponents);
+        --
+        --   This is the equivalent asynchronous call using the plugin
+        -- ##############################################
+        local resultCallback = plugin.executeFunctionAsync(kismet_system_library, "SphereOverlapComponents", uevrUtils.get_world(), location, radius, objectTypes, classFilter, ignoreActors, foundComponents)
+        resultCallback(function(result)
+            local components = result.OutComponents or {}
+            for i = 1, #components do
+                local comp = components[i]
+                print("Component:", comp:get_full_name())
+            end
+        end)
+
         -- ############# GetProperty example ##############
-        --   In the API, the ActionMappings property is a TArray of FInputActionKeyMapping structs. 
+        --   This is what the API version of ActionMappings looks like
         --      TArray<struct FInputActionKeyMapping>         ActionMappings;                                    // 0x0090(0x0010)(Edit, ZeroConstructor, Config, NativeAccessSpecifierPrivate)
 	    -- ##############################################
         local inputSettings = uevrUtils.find_default_instance("Class /Script/Engine.InputSettings")
@@ -84,7 +87,7 @@ local function convertInputStruct(arg)
 		if childProperty == nil then
 			--ValueStr = string.format("%s %s %s\n\t%s", UEVR_UStruct.static_class(Value):get_full_name(), Value, Value:get_struct(), "<Empty>")
 			print("!!!Empty structure childProperty found", arg)
----@diagnostic disable-next-line: cast-local-type
+            ---@diagnostic disable-next-line: cast-local-type
             out = string.format("%s", "")
 		else
 			while childProperty ~= nil do
@@ -136,49 +139,6 @@ end
 function M.convertInputParams(argsArray)
     convertInputParams(argsArray)
 end
-
--- function M.executeFunction(callerObject, functionName, ...)
--- 	local argsArray = {...}
--- 	-- The last item in the array is the callback function, get it and remove it from the argsArray
--- 	local callback = nil
--- 	if #argsArray > 0 and type(argsArray[#argsArray]) == "function" then
--- 		callback = argsArray[#argsArray]
--- 		table.remove(argsArray, #argsArray)
--- 	end
-
--- 	convertInputParams(argsArray)
-
--- 	local data =
--- 	{
--- 		debug = M.showDebug,
--- 		caller_object = callerObject:get_address(),
--- 		function_name = functionName,
--- 		params = argsArray
--- 	}
---     if M.showDebug then print("ExecuteFunction dispatching for function:\n", functionName, json.dump_string(data)) end
--- 	local callID = "ExecuteFunction_" .. guid()
--- 	pendingExecuteFunctionCallbacks[callID] = callback
--- 	uevr.api:dispatch_custom_event(callID, json.dump_string(data))
--- end
-
--- local function convertData(dataType, dataValue)
---     if dataType == "ObjectProperty" then 
---         return uevr.api:to_uobject(dataValue)
---     else
---         return dataValue
---     end
--- end
--- local function convertResultData(inData)
---     local outData = {}
---     for key, data in inData do
---         outData[key] = {}
---         if type(data) == "table" then
-
---         else
---             outData[key] = convertData(data.type, data.value)
---         end
---     end
--- end
 
 local function convertResultDataType(dataType, dataValue)
     if dataType == "ObjectProperty" then
@@ -261,19 +221,6 @@ local function printTableStructure(tbl, indent)
         end
     end
 end
--- uevr.sdk.callbacks.on_lua_event(function(eventName, eventData)
---     if M.showDebug then print("--------- ExecuteFunction raw return value -------------:\n", eventData) end
--- 	if pendingExecuteFunctionCallbacks[eventName] ~= nil then
---         local result = M.convertResultData(json.load_string(eventData))
---         if M.showDebug then
---             print("--------- ExecuteFunction Converted structure -------------")
---             printTableStructure(result)
---         end
---         pendingExecuteFunctionCallbacks[eventName](result)
--- 		pendingExecuteFunctionCallbacks[eventName] = nil
---     end
--- end)
-
 
 local AsyncRegistry = {}
 
