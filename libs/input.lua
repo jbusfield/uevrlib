@@ -28,7 +28,7 @@ local parameters = {
     smoothTurnSpeed = 50,
     pawnPositionMode = M.PawnPositionMode.FOLLOWS,
     pawnRotationMode = M.PawnRotationMode.RIGHT_CONTROLLER,
-	pawnRotationLockedSmoothTime = 0.36,
+	pawnRotationLockedSmoothTime = 0.0,
     pawnPositionSweepMovement = true,
     pawnPositionAnimationScale = 0.2,
     headOffset = {X=0,Y=0,Z=0},
